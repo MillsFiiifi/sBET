@@ -159,10 +159,7 @@ function RegisterForm() {
 
               <div className="space-y-1.5">
                 <label htmlFor="phone" className="text-sm font-medium text-foreground">
-                  Mobile money number{' '}
-                  <span className="text-xs text-muted-foreground font-normal">
-                    (for withdrawals)
-                  </span>
+                  Mobile money number
                 </label>
                 <Input
                   id="phone"
@@ -174,9 +171,10 @@ function RegisterForm() {
                   className="h-11 bg-secondary border-border"
                   pattern="^(?:\+?233|0)\d{9}$"
                   autoComplete="tel"
+                  required
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Optional — we'll auto-fill it when you withdraw later.
+                  We use this when paying out withdrawals.
                 </p>
               </div>
 

@@ -314,10 +314,12 @@ export const hockeyMatches: Match[] = [
   },
 ]
 
-// All sports data
+// All sports data — basketball intentionally returns no mock matches.
+// When the Odds API has nothing to return for basketball, the public feed
+// stays empty rather than showing demo NBA fixtures.
 export const allSportsData = {
   football: footballMatches,
-  basketball: basketballMatches,
+  basketball: [],
   tennis: tennisMatches,
   hockey: hockeyMatches,
   baseball: upcomingMatches.slice(0, 2),

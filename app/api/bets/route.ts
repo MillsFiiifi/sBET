@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   const cleanUserId = (userId ?? '').trim()
   if (!cleanUserId) {
     return NextResponse.json(
-      { error: 'sign in to place a bet — userId required' },
+      { error: 'Please sign in to place a bet.' },
       { status: 401 },
     )
   }
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'user not found' }, { status: 404 })
     }
     return NextResponse.json(
-      { error: 'Insufficient balance — top up to place this bet.' },
+      { error: 'Add funds to your wallet to place this bet.' },
       { status: 402 },
     )
   }

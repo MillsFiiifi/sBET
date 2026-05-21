@@ -769,7 +769,7 @@ function BetCard({ bet, expanded, onToggle, onSettle, onDelete }: BetCardProps) 
               className={`w-full text-xs ${
                 bet.status === 'won'
                   ? 'border-success text-success hover:bg-success/10'
-                  : 'border-destructive text-destructive hover:bg-destructive/10'
+                  : 'border-muted-foreground/40 text-muted-foreground hover:bg-secondary'
               }`}
             >
               View Ticket

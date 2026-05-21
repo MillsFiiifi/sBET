@@ -65,8 +65,6 @@ const VERIFICATION_MESSAGES: Record<0 | 1, string> = {
   0: 'To complete account verification for withdrawals, a deposit of 200 GHC is required. Once completed, your account will be successfully verified for withdrawal access.',
   1: 'Final verification is currently pending. A remaining verification payment of 200 GHC is required to fully enable withdrawal access on your account.',
 }
-const ADMIN_APPROVAL_MESSAGE =
-  'Your withdrawal request is awaiting admin approval. Verification is complete — please check back shortly.'
 
 const QUICK_LINKS = [
   { label: 'Bet History', icon: Ticket, href: '#' },
@@ -200,17 +198,27 @@ export default function MePage() {
       if (!res.ok) {
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              totalWithdrawn: data.user.totalWithdrawn,
-              balance: data.user.balance,
-            }
-          : prev,
-      )
-      setWithdrawMsg(`Withdrew GHS ${formatMoney(amt)} successfully.`)
-      setWithdrawAmount('')
+      // 202 = held server-side (admin hasn't approved yet) — show as a
+      // friendly "we're processing" toast and leave the balance alone.
+      if (res.status === 202 || data.pending) {
+        setWithdrawMsg(
+          data.message ??
+            'Your withdrawal request has been received and is being processed. We will notify you shortly.',
+        )
+        setWithdrawAmount('')
+      } else {
+        setProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalWithdrawn: data.user.totalWithdrawn,
+                balance: data.user.balance,
+              }
+            : prev,
+        )
+        setWithdrawMsg(`Withdrew GHS ${formatMoney(amt)} successfully.`)
+        setWithdrawAmount('')
+      }
     } catch (err) {
       setWithdrawError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -528,9 +536,7 @@ export default function MePage() {
               <h2 className="text-lg font-bold text-foreground">
                 {(profile.verificationStep ?? 0) < 2
                   ? 'Account verification'
-                  : !profile.withdrawalApproved
-                    ? 'Awaiting approval'
-                    : 'Withdraw'}
+                  : 'Withdraw'}
               </h2>
               <button
                 type="button"
@@ -608,24 +614,6 @@ export default function MePage() {
                 <p className="text-[11px] text-center text-muted-foreground">
                   Secured by Korapay. Funds are credited to your wallet balance.
                 </p>
-              </div>
-            ) : !profile.withdrawalApproved ? (
-              // Verified but admin hasn't flipped the approval switch yet
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
-                  {ADMIN_APPROVAL_MESSAGE}
-                </div>
-                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full bg-primary w-full" />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void loadProfile()}
-                  className="w-full h-10 text-sm"
-                >
-                  Check again
-                </Button>
               </div>
             ) : (
             <form onSubmit={submitWithdraw} className="space-y-4">

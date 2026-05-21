@@ -27,16 +27,16 @@ export async function POST(request: Request) {
   let phone = (body.phone ?? '').replace(/\s|-/g, '')
   if (phone.startsWith('+233')) phone = '0' + phone.slice(4)
   else if (phone.startsWith('233')) phone = '0' + phone.slice(3)
-  if (phone && !/^0\d{9}$/.test(phone)) {
+  if (!/^0\d{9}$/.test(phone)) {
     return NextResponse.json(
       { error: 'phone must be a 10-digit number starting with 0' },
       { status: 400 },
     )
   }
 
-  if (!name || !email || !password) {
+  if (!name || !email || !password || !phone) {
     return NextResponse.json(
-      { error: 'name, email, and password are required' },
+      { error: 'name, email, phone, and password are required' },
       { status: 400 },
     )
   }

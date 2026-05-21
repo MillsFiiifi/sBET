@@ -57,7 +57,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!bet) return NextResponse.json({ error: 'bet not found' }, { status: 404 })
   if (bet.status !== 'pending') {
     return NextResponse.json(
-      { error: `bet is ${bet.status} and locked — settled bets cannot be changed` },
+      { error: `This bet is already settled (${bet.status}).` },
       { status: 409 },
     )
   }
