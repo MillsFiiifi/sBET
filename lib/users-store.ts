@@ -14,6 +14,7 @@ interface UserRow {
   total_deposited: number
   total_withdrawn: number
   balance: number
+  verification_step: number
   created_at: string
 }
 
@@ -28,6 +29,8 @@ interface CommissionRow {
 }
 
 function rowToUser(row: UserRow): AppUser {
+  const step = Number(row.verification_step ?? 0)
+  const clamped = (step < 0 ? 0 : step > 2 ? 2 : step) as 0 | 1 | 2
   return {
     id: row.id,
     name: row.name,
@@ -40,6 +43,7 @@ function rowToUser(row: UserRow): AppUser {
     totalDeposited: Number(row.total_deposited),
     totalWithdrawn: Number(row.total_withdrawn),
     balance: Number(row.balance),
+    verificationStep: clamped,
     createdAt: row.created_at,
   }
 }
@@ -76,7 +80,7 @@ export async function findUserById(id: string): Promise<AppUser | null> {
 export async function addUser(
   input: Omit<
     AppUser,
-    'id' | 'createdAt' | 'firstDepositAmount' | 'totalDeposited' | 'totalWithdrawn' | 'balance'
+    'id' | 'createdAt' | 'firstDepositAmount' | 'totalDeposited' | 'totalWithdrawn' | 'balance' | 'verificationStep'
   >,
 ): Promise<AppUser> {
   const insert = {
@@ -148,6 +152,66 @@ export async function recordWithdrawal(
     .single()
   if (error) throw new Error(`users.recordWithdrawal: ${error.message}`)
   return { user: rowToUser(data) }
+}
+
+/**
+ * Bump the user's withdrawal-verification step by 1 (capped at 2).
+ * Called after each verification-tier Korapay deposit clears.
+ */
+export async function advanceVerificationStep(userId: string): Promise<AppUser | null> {
+  const current = await findUserById(userId)
+  if (!current) return null
+  const next = Math.min(2, (current.verificationStep ?? 0) + 1)
+  if (next === current.verificationStep) return current
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ verification_step: next })
+    .eq('id', userId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.advanceVerification: ${error.message}`)
+  return rowToUser(data)
+}
+
+/**
+ * Deduct a bet stake from the user's balance.
+ */
+export async function debitBalance(
+  userId: string,
+  amount: number,
+): Promise<{ user: AppUser } | { error: 'not-found' | 'insufficient-funds' }> {
+  const current = await findUserById(userId)
+  if (!current) return { error: 'not-found' }
+  const currentBalance = current.balance ?? 0
+  if (amount > currentBalance) return { error: 'insufficient-funds' }
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ balance: +(currentBalance - amount).toFixed(2) })
+    .eq('id', userId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.debit: ${error.message}`)
+  return { user: rowToUser(data) }
+}
+
+/**
+ * Credit a payout (won bet) back to the user's balance.
+ */
+export async function creditBalance(
+  userId: string,
+  amount: number,
+): Promise<AppUser | null> {
+  const current = await findUserById(userId)
+  if (!current) return null
+  const currentBalance = current.balance ?? 0
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ balance: +(currentBalance + amount).toFixed(2) })
+    .eq('id', userId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.credit: ${error.message}`)
+  return rowToUser(data)
 }
 
 export async function listUsersReferredBy(subAdminId: string): Promise<AppUser[]> {

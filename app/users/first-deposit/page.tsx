@@ -10,10 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
 
+import { KORAPAY_SDK_SRC, type KorapaySuccess } from '@/lib/korapay-client'
+
 const KORAPAY_PUBLIC_KEY = process.env.NEXT_PUBLIC_KORAPAY_PUBLIC_KEY ?? ''
 const MIN_FIRST_DEPOSIT = 200
-const KORAPAY_SDK_SRC =
-  'https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js'
 
 interface UserProfile {
   id: string
@@ -36,31 +36,6 @@ interface DepositResponse {
     balance: number
   }
   isFirstDeposit: boolean
-}
-
-interface KorapaySuccess {
-  reference: string
-  amount?: number
-  status?: string
-}
-
-declare global {
-  interface Window {
-    Korapay?: {
-      initialize: (config: {
-        key: string
-        reference: string
-        amount: number
-        currency: string
-        customer: { name: string; email: string }
-        notification_url?: string
-        onClose?: () => void
-        onSuccess?: (data: KorapaySuccess) => void
-        onFailed?: (data: { reason?: string }) => void
-      }) => void
-      close?: () => void
-    }
-  }
 }
 
 function DepositForm() {

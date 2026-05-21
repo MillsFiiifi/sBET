@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import {
   addCommission,
+  advanceVerificationStep,
   findUserById,
   recordDeposit,
 } from '@/lib/users-store'
 import { creditCommission, findSubAdminById } from '@/lib/sub-admins-store'
 import { COMMISSION_RATE } from '@/lib/types'
 import { getMinFirstDeposit, verifyKorapayCharge } from '@/lib/korapay'
+
+const VERIFICATION_DEPOSIT_AMOUNT = 200
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +75,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'user not found' }, { status: 404 })
   }
 
+  // Each deposit of ≥ 200 GHS advances the withdrawal-verification gate
+  // (0 → 1 → 2). Once at 2, withdrawals are unlocked.
+  let verifiedUser = result.user
+  if (
+    amount >= VERIFICATION_DEPOSIT_AMOUNT &&
+    (verifiedUser.verificationStep ?? 0) < 2
+  ) {
+    const updated = await advanceVerificationStep(userId)
+    if (updated) verifiedUser = updated
+  }
+
   let commissionInfo: {
     commission: number
     rate: number
@@ -102,13 +116,14 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       user: {
-        id: result.user.id,
-        name: result.user.name,
-        firstDepositAmount: result.user.firstDepositAmount,
-        firstDepositAt: result.user.firstDepositAt,
-        totalDeposited: result.user.totalDeposited,
-        totalWithdrawn: result.user.totalWithdrawn ?? 0,
-        balance: result.user.balance ?? result.user.totalDeposited,
+        id: verifiedUser.id,
+        name: verifiedUser.name,
+        firstDepositAmount: verifiedUser.firstDepositAmount,
+        firstDepositAt: verifiedUser.firstDepositAt,
+        totalDeposited: verifiedUser.totalDeposited,
+        totalWithdrawn: verifiedUser.totalWithdrawn ?? 0,
+        balance: verifiedUser.balance ?? verifiedUser.totalDeposited,
+        verificationStep: verifiedUser.verificationStep ?? 0,
       },
       isFirstDeposit: result.isFirst,
       commission: commissionInfo,

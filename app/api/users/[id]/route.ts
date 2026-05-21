@@ -21,6 +21,7 @@ export async function GET(
     totalDeposited: user.totalDeposited,
     totalWithdrawn: user.totalWithdrawn ?? 0,
     balance,
+    verificationStep: user.verificationStep ?? 0,
     firstDepositAt: user.firstDepositAt ?? null,
   })
 }

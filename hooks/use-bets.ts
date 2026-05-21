@@ -2,10 +2,20 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { BetSelection, PlacedBet } from '@/lib/types'
+import { getUserId } from '@/lib/user-session'
 
 export type { PlacedBet }
 
-export function useBets() {
+interface UseBetsOptions {
+  /**
+   * When provided, only loads / mutates this user's bets. Defaults to the
+   * currently logged-in user from localStorage. Passing 'admin' disables
+   * the userId filter (the GET endpoint then requires admin cookie auth).
+   */
+  scope?: string | 'admin'
+}
+
+export function useBets(options: UseBetsOptions = {}) {
   const [bets, setBets] = useState<PlacedBet[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -14,7 +24,9 @@ export function useBets() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/bets', { cache: 'no-store' })
+      const userId = options.scope === 'admin' ? null : (options.scope ?? getUserId())
+      const url = userId ? `/api/bets?userId=${encodeURIComponent(userId)}` : '/api/bets'
+      const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { bets: PlacedBet[] }
       setBets(data.bets)
@@ -23,17 +35,18 @@ export function useBets() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [options.scope])
 
   const placeBet = useCallback(
     async (selections: BetSelection[], stake: number): Promise<PlacedBet | null> => {
       setLoading(true)
       setError(null)
       try {
+        const userId = options.scope && options.scope !== 'admin' ? options.scope : getUserId()
         const res = await fetch('/api/bets', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ selections, stake }),
+          body: JSON.stringify({ selections, stake, userId }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
@@ -47,11 +60,11 @@ export function useBets() {
         setLoading(false)
       }
     },
-    [],
+    [options.scope],
   )
 
   const settleBet = useCallback(
-    async (id: string, status: 'won' | 'lost' | 'pending'): Promise<PlacedBet | null> => {
+    async (id: string, status: 'won' | 'lost'): Promise<PlacedBet | null> => {
       setError(null)
       try {
         const res = await fetch(`/api/bets/${id}`, {

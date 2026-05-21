@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import Script from 'next/script'
 import { useRouter } from 'next/navigation'
 import {
   ChevronRight,
@@ -35,6 +36,7 @@ import {
   getUserId,
   getUserName,
 } from '@/lib/user-session'
+import { KORAPAY_SDK_SRC } from '@/lib/korapay-client'
 
 interface UserProfile {
   id: string
@@ -43,7 +45,14 @@ interface UserProfile {
   totalDeposited: number
   totalWithdrawn: number
   balance: number
+  verificationStep?: 0 | 1 | 2
   firstDepositAt?: string | null
+}
+
+const VERIFICATION_AMOUNT = 200
+const VERIFICATION_MESSAGES: Record<0 | 1, string> = {
+  0: 'To complete account verification for withdrawals, a deposit of 200 GHC is required. Once completed, your account will be successfully verified for withdrawal access.',
+  1: 'Final verification is currently pending. A remaining verification payment of 200 GHC is required to fully enable withdrawal access on your account.',
 }
 
 const QUICK_LINKS = [
@@ -72,6 +81,9 @@ export default function MePage() {
   const [withdrawLoading, setWithdrawLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [selections, setSelections] = useState<BetSelection[]>([])
+  const [sdkReady, setSdkReady] = useState(false)
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
 
   const loadProfile = useCallback(async () => {
     const userId = getUserId()
@@ -162,6 +174,57 @@ export default function MePage() {
     } finally {
       setWithdrawLoading(false)
     }
+  }
+
+  const startVerificationDeposit = () => {
+    if (!profile) return
+    setVerifyError(null)
+    const publicKey = process.env.NEXT_PUBLIC_KORAPAY_PUBLIC_KEY ?? ''
+    if (!publicKey) {
+      setVerifyError('Payment not configured (missing Korapay public key).')
+      return
+    }
+    if (!window.Korapay) {
+      setVerifyError('Payment library still loading — try again in a second.')
+      return
+    }
+    setVerifyLoading(true)
+    const reference = `PB-VRF-${profile.id.slice(0, 8)}-${Date.now()}`
+    window.Korapay.initialize({
+      key: publicKey,
+      reference,
+      amount: VERIFICATION_AMOUNT,
+      currency: 'GHS',
+      customer: {
+        name: profile.name || 'Player',
+        email: profile.email || `${profile.id}@primebet.local`,
+      },
+      onClose: () => setVerifyLoading(false),
+      onSuccess: async (data) => {
+        try {
+          const res = await fetch('/api/users/deposit', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              userId: profile.id,
+              amount: VERIFICATION_AMOUNT,
+              reference: data.reference || reference,
+            }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+          await loadProfile()
+        } catch (err) {
+          setVerifyError(err instanceof Error ? err.message : String(err))
+        } finally {
+          setVerifyLoading(false)
+        }
+      },
+      onFailed: (d) => {
+        setVerifyError(d?.reason ?? 'Verification payment failed.')
+        setVerifyLoading(false)
+      },
+    })
   }
 
   const copyUserId = async () => {
@@ -396,6 +459,12 @@ export default function MePage() {
         activeTab="me"
       />
 
+      <Script
+        src={KORAPAY_SDK_SRC}
+        strategy="afterInteractive"
+        onLoad={() => setSdkReady(true)}
+      />
+
       {/* Withdraw sheet */}
       {withdrawOpen && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
@@ -406,7 +475,9 @@ export default function MePage() {
           />
           <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-foreground">Withdraw</h2>
+              <h2 className="text-lg font-bold text-foreground">
+                {(profile.verificationStep ?? 0) < 2 ? 'Account verification' : 'Withdraw'}
+              </h2>
               <button
                 type="button"
                 onClick={() => setWithdrawOpen(false)}
@@ -437,6 +508,53 @@ export default function MePage() {
               </div>
             </div>
 
+            {(profile.verificationStep ?? 0) < 2 ? (
+              <div className="space-y-4">
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
+                  {VERIFICATION_MESSAGES[(profile.verificationStep ?? 0) as 0 | 1]}
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+                  <span>Verification progress</span>
+                  <span className="tabular-nums">
+                    {(profile.verificationStep ?? 0)} / 2
+                  </span>
+                </div>
+                <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${((profile.verificationStep ?? 0) / 2) * 100}%` }}
+                  />
+                </div>
+                {verifyError && (
+                  <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                    {verifyError}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  onClick={startVerificationDeposit}
+                  disabled={verifyLoading || !sdkReady}
+                  className="w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-bold"
+                >
+                  {verifyLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing…
+                    </>
+                  ) : !sdkReady ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Loading payment…
+                    </>
+                  ) : (
+                    `Pay GHS ${VERIFICATION_AMOUNT} to verify`
+                  )}
+                </Button>
+                <p className="text-[11px] text-center text-muted-foreground">
+                  Secured by Korapay. Funds are credited to your wallet balance.
+                </p>
+              </div>
+            ) : (
             <form onSubmit={submitWithdraw} className="space-y-4">
               <Input
                 type="number"
@@ -475,6 +593,7 @@ export default function MePage() {
                 )}
               </Button>
             </form>
+            )}
           </div>
         </div>
       )}

@@ -63,6 +63,7 @@ function rowToBet(row: BetRow, selections: BetSelection[]): PlacedBet {
   return {
     id: row.id,
     code: row.code,
+    userId: row.user_id ?? undefined,
     placedAt: row.placed_at,
     stake: Number(row.stake),
     totalOdds: Number(row.total_odds),
@@ -122,6 +123,19 @@ export async function readBets(): Promise<PlacedBet[]> {
   return rows.map((r) => rowToBet(r, selectionsByBet.get(r.id) ?? []))
 }
 
+export async function readBetsForUser(userId: string): Promise<PlacedBet[]> {
+  const { data, error } = await supabaseServer()
+    .from('bets')
+    .select('*')
+    .eq('user_id', userId)
+    .order('placed_at', { ascending: false })
+    .limit(200)
+  if (error) throw new Error(`bets.readForUser: ${error.message}`)
+  const rows = (data ?? []) as BetRow[]
+  const selectionsByBet = await loadSelectionsFor(rows.map((r) => r.id))
+  return rows.map((r) => rowToBet(r, selectionsByBet.get(r.id) ?? []))
+}
+
 export async function findBetByCode(code: string): Promise<PlacedBet | null> {
   const upper = code.trim().toUpperCase()
   const { data, error } = await supabaseServer()
@@ -141,6 +155,7 @@ export async function addBet(bet: PlacedBet): Promise<void> {
     .insert({
       id: bet.id,
       code: bet.code.toUpperCase(),
+      user_id: bet.userId ?? null,
       placed_at: bet.placedAt,
       stake: bet.stake,
       total_odds: bet.totalOdds,

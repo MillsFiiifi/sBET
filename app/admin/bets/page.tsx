@@ -7,7 +7,7 @@ import {
   ChevronUp,
   Loader2,
   Trash2,
-  RotateCcw,
+  Lock,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -77,7 +77,7 @@ export default function AdminBetsPage() {
     })
   }
 
-  const handleSettle = async (id: string, status: 'won' | 'lost' | 'pending') => {
+  const handleSettle = async (id: string, status: 'won' | 'lost') => {
     setBusyFor(id, true)
     try {
       const res = await fetch(`/api/bets/${id}`, {
@@ -431,7 +431,7 @@ function BetActions({
 }: {
   bet: PlacedBet
   busy: boolean
-  onSettle: (s: 'won' | 'lost' | 'pending') => void
+  onSettle: (s: 'won' | 'lost') => void
   onDelete: () => void
 }) {
   return (
@@ -446,29 +446,29 @@ function BetActions({
             onClick={() => onSettle('won')}
             disabled={busy}
             className="h-7 text-xs px-2 bg-success/20 text-success hover:bg-success/30 border border-success/30"
+            title="Pay out the player and lock this bet"
           >
-            Won
+            Cashout
           </Button>
           <Button
             size="sm"
             onClick={() => onSettle('lost')}
             disabled={busy}
             className="h-7 text-xs px-2 bg-destructive/20 text-destructive hover:bg-destructive/30 border border-destructive/30"
+            title="Mark as lost and lock this bet"
           >
-            Lost
+            Lock it
           </Button>
         </>
       ) : (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => onSettle('pending')}
-          disabled={busy}
-          className="h-7 text-xs px-2"
-          title="Reopen"
+        // Once settled, the bet is locked — no reopen, no further changes.
+        <span
+          className="h-7 text-[11px] px-2 flex items-center gap-1 rounded-md border border-border bg-secondary/40 text-muted-foreground"
+          title="Settled bets are locked"
         >
-          <RotateCcw className="w-3 h-3" />
-        </Button>
+          <Lock className="w-3 h-3" />
+          Locked
+        </span>
       )}
       <Button
         size="sm"

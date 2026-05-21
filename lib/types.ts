@@ -100,6 +100,7 @@ export interface AppUser {
   totalDeposited: number
   totalWithdrawn?: number
   balance?: number
+  verificationStep?: 0 | 1 | 2
   createdAt: string
 }
 
@@ -118,6 +119,7 @@ export const COMMISSION_RATE = 0.6 // 60% of first deposit
 export interface PlacedBet {
   id: string
   code: string
+  userId?: string | null
   placedAt: string
   stake: number
   totalOdds: number

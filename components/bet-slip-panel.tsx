@@ -359,7 +359,7 @@ interface BetHistoryProps {
   mode: 'open' | 'settled'
   bets: PlacedBet[]
   allBets: PlacedBet[]
-  onSettle: (id: string, status: 'won' | 'lost' | 'pending') => void
+  onSettle: (id: string, status: 'won' | 'lost') => void
   onDelete: (id: string) => void
 }
 
@@ -539,7 +539,7 @@ interface BetCardProps {
   bet: PlacedBet
   expanded: boolean
   onToggle: () => void
-  onSettle: (status: 'won' | 'lost' | 'pending') => void
+  onSettle: (status: 'won' | 'lost') => void
   onDelete: () => void
 }
 
@@ -700,43 +700,10 @@ function BetCard({ bet, expanded, onToggle, onSettle, onDelete }: BetCardProps) 
             </p>
           )}
 
-          {/* Action row */}
-          {bet.status === 'pending' ? (
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={() => onSettle('won')}
-                className="flex-1 bg-success/20 text-success hover:bg-success/30 border border-success/30"
-              >
-                Mark Won
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => onSettle('lost')}
-                className="flex-1 bg-destructive/20 text-destructive hover:bg-destructive/30 border border-destructive/30"
-              >
-                Mark Lost
-              </Button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onSettle('pending')}
-                className="flex-1 text-xs"
-              >
-                Reopen
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={onDelete}
-                className="text-xs text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
-            </div>
+          {bet.status !== 'pending' && (
+            <p className="text-[11px] text-muted-foreground text-center">
+              This bet is settled and locked.
+            </p>
           )}
         </div>
       )}
