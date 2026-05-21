@@ -1,121 +1,215 @@
-import path from 'path'
 import { randomUUID } from 'crypto'
 import type { AppUser, Commission } from '@/lib/types'
-import { readJsonArray, writeJsonArray } from '@/lib/json-store'
+import { supabaseServer } from '@/lib/supabase'
 
-const DATA_DIR = path.join(process.cwd(), 'data')
-const USERS_FILE = path.join(DATA_DIR, 'users.json')
-const COMMISSIONS_FILE = path.join(DATA_DIR, 'commissions.json')
-
-export async function readUsers(): Promise<AppUser[]> {
-  return readJsonArray<AppUser>(USERS_FILE)
+interface UserRow {
+  id: string
+  name: string
+  email: string
+  password_hash: string
+  referred_by_code: string | null
+  referred_by_sub_admin_id: string | null
+  first_deposit_amount: number
+  first_deposit_at: string | null
+  total_deposited: number
+  total_withdrawn: number
+  balance: number
+  created_at: string
 }
 
-async function writeUsers(all: AppUser[]): Promise<void> {
-  await writeJsonArray(USERS_FILE, all)
+interface CommissionRow {
+  id: string
+  sub_admin_id: string
+  user_id: string
+  deposit_amount: number
+  commission_amount: number
+  rate: number
+  created_at: string
+}
+
+function rowToUser(row: UserRow): AppUser {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    passwordHash: row.password_hash,
+    referredByCode: row.referred_by_code ?? undefined,
+    referredBySubAdminId: row.referred_by_sub_admin_id ?? undefined,
+    firstDepositAmount: Number(row.first_deposit_amount),
+    firstDepositAt: row.first_deposit_at ?? undefined,
+    totalDeposited: Number(row.total_deposited),
+    totalWithdrawn: Number(row.total_withdrawn),
+    balance: Number(row.balance),
+    createdAt: row.created_at,
+  }
+}
+
+export async function readUsers(): Promise<AppUser[]> {
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`users.readAll: ${error.message}`)
+  return (data ?? []).map(rowToUser)
 }
 
 export async function findUserByEmail(email: string): Promise<AppUser | null> {
-  const all = await readUsers()
-  const lower = email.toLowerCase()
-  return all.find((u) => u.email.toLowerCase() === lower) ?? null
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .select('*')
+    .eq('email', email.trim().toLowerCase())
+    .maybeSingle()
+  if (error) throw new Error(`users.findByEmail: ${error.message}`)
+  return data ? rowToUser(data) : null
 }
 
 export async function findUserById(id: string): Promise<AppUser | null> {
-  const all = await readUsers()
-  const user = all.find((u) => u.id === id) ?? null
-  if (user && user.balance === undefined) {
-    return { ...user, balance: user.totalDeposited - (user.totalWithdrawn ?? 0) }
-  }
-  return user
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw new Error(`users.findById: ${error.message}`)
+  return data ? rowToUser(data) : null
 }
 
 export async function addUser(
-  input: Omit<AppUser, 'id' | 'createdAt' | 'firstDepositAmount' | 'totalDeposited' | 'totalWithdrawn' | 'balance'>,
+  input: Omit<
+    AppUser,
+    'id' | 'createdAt' | 'firstDepositAmount' | 'totalDeposited' | 'totalWithdrawn' | 'balance'
+  >,
 ): Promise<AppUser> {
-  const all = await readUsers()
-  const user: AppUser = {
-    ...input,
-    id: randomUUID(),
-    createdAt: new Date().toISOString(),
-    firstDepositAmount: 0,
-    totalDeposited: 0,
-    totalWithdrawn: 0,
-    balance: 0,
+  const insert = {
+    name: input.name,
+    email: input.email.trim().toLowerCase(),
+    password_hash: input.passwordHash,
+    referred_by_code: input.referredByCode ?? null,
+    referred_by_sub_admin_id: input.referredBySubAdminId ?? null,
   }
-  all.unshift(user)
-  await writeUsers(all)
-  return user
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .insert(insert)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.add: ${error.message}`)
+  return rowToUser(data)
 }
 
 export async function recordDeposit(
   userId: string,
   amount: number,
 ): Promise<{ user: AppUser; isFirst: boolean } | null> {
-  const all = await readUsers()
-  const idx = all.findIndex((u) => u.id === userId)
-  if (idx === -1) return null
-  const user = all[idx]
-  const isFirst = !user.firstDepositAt
-  const currentBalance = user.balance ?? user.totalDeposited - (user.totalWithdrawn ?? 0)
-  const next: AppUser = {
-    ...user,
-    firstDepositAmount: isFirst ? amount : user.firstDepositAmount,
-    firstDepositAt: user.firstDepositAt ?? new Date().toISOString(),
-    totalDeposited: +(user.totalDeposited + amount).toFixed(2),
-    totalWithdrawn: user.totalWithdrawn ?? 0,
-    balance: +(currentBalance + amount).toFixed(2),
+  const current = await findUserById(userId)
+  if (!current) return null
+
+  const isFirst = !current.firstDepositAt
+  const currentBalance = current.balance ?? 0
+  const newBalance = +(currentBalance + amount).toFixed(2)
+  const newTotal = +(current.totalDeposited + amount).toFixed(2)
+
+  const patch: Record<string, unknown> = {
+    total_deposited: newTotal,
+    balance: newBalance,
   }
-  all[idx] = next
-  await writeUsers(all)
-  return { user: next, isFirst }
+  if (isFirst) {
+    patch.first_deposit_amount = amount
+    patch.first_deposit_at = new Date().toISOString()
+  }
+
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update(patch)
+    .eq('id', userId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.recordDeposit: ${error.message}`)
+  return { user: rowToUser(data), isFirst }
 }
 
 export async function recordWithdrawal(
   userId: string,
   amount: number,
 ): Promise<{ user: AppUser } | { error: 'not-found' | 'insufficient-funds' | 'no-deposit' }> {
-  const all = await readUsers()
-  const idx = all.findIndex((u) => u.id === userId)
-  if (idx === -1) return { error: 'not-found' }
-  const user = all[idx]
-  if (!user.firstDepositAt) return { error: 'no-deposit' }
-  const currentBalance = user.balance ?? user.totalDeposited - (user.totalWithdrawn ?? 0)
+  const current = await findUserById(userId)
+  if (!current) return { error: 'not-found' }
+  if (!current.firstDepositAt) return { error: 'no-deposit' }
+  const currentBalance = current.balance ?? 0
+  const currentWithdrawn = current.totalWithdrawn ?? 0
   if (amount > currentBalance) return { error: 'insufficient-funds' }
-  const next: AppUser = {
-    ...user,
-    totalWithdrawn: +((user.totalWithdrawn ?? 0) + amount).toFixed(2),
-    balance: +(currentBalance - amount).toFixed(2),
-  }
-  all[idx] = next
-  await writeUsers(all)
-  return { user: next }
+
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({
+      total_withdrawn: +(currentWithdrawn + amount).toFixed(2),
+      balance: +(currentBalance - amount).toFixed(2),
+    })
+    .eq('id', userId)
+    .select('*')
+    .single()
+  if (error) throw new Error(`users.recordWithdrawal: ${error.message}`)
+  return { user: rowToUser(data) }
 }
 
 export async function listUsersReferredBy(subAdminId: string): Promise<AppUser[]> {
-  const all = await readUsers()
-  return all.filter((u) => u.referredBySubAdminId === subAdminId)
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .select('*')
+    .eq('referred_by_sub_admin_id', subAdminId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`users.listReferredBy: ${error.message}`)
+  return (data ?? []).map(rowToUser)
 }
 
-// Commissions
+// ─── Commissions ────────────────────────────────────────────────────────────
+
+function rowToCommission(row: CommissionRow): Commission {
+  return {
+    id: row.id,
+    subAdminId: row.sub_admin_id,
+    userId: row.user_id,
+    depositAmount: Number(row.deposit_amount),
+    commission: Number(row.commission_amount),
+    rate: Number(row.rate),
+    createdAt: row.created_at,
+  }
+}
 
 export async function readCommissions(): Promise<Commission[]> {
-  return readJsonArray<Commission>(COMMISSIONS_FILE)
+  const { data, error } = await supabaseServer()
+    .from('commissions')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`commissions.readAll: ${error.message}`)
+  return (data ?? []).map(rowToCommission)
 }
 
-export async function addCommission(c: Omit<Commission, 'id' | 'createdAt'>): Promise<Commission> {
-  const all = await readCommissions()
-  const record: Commission = {
-    ...c,
-    id: randomUUID(),
-    createdAt: new Date().toISOString(),
-  }
-  all.unshift(record)
-  await writeJsonArray(COMMISSIONS_FILE, all)
-  return record
+export async function addCommission(
+  c: Omit<Commission, 'id' | 'createdAt'>,
+): Promise<Commission> {
+  const { data, error } = await supabaseServer()
+    .from('commissions')
+    .insert({
+      id: randomUUID(),
+      sub_admin_id: c.subAdminId,
+      user_id: c.userId,
+      deposit_amount: c.depositAmount,
+      commission_amount: c.commission,
+      rate: c.rate,
+    })
+    .select('*')
+    .single()
+  if (error) throw new Error(`commissions.add: ${error.message}`)
+  return rowToCommission(data)
 }
 
-export async function listCommissionsForSubAdmin(subAdminId: string): Promise<Commission[]> {
-  const all = await readCommissions()
-  return all.filter((c) => c.subAdminId === subAdminId)
+export async function listCommissionsForSubAdmin(
+  subAdminId: string,
+): Promise<Commission[]> {
+  const { data, error } = await supabaseServer()
+    .from('commissions')
+    .select('*')
+    .eq('sub_admin_id', subAdminId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`commissions.listForSubAdmin: ${error.message}`)
+  return (data ?? []).map(rowToCommission)
 }

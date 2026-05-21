@@ -1,54 +1,137 @@
-import path from 'path'
-import { randomUUID } from 'crypto'
 import type { Match } from '@/lib/types'
-import { readJsonArray, writeJsonArray } from '@/lib/json-store'
+import { supabaseServer } from '@/lib/supabase'
 
-const FILE = path.join(process.cwd(), 'data', 'custom-matches.json')
+interface CustomMatchRow {
+  id: string
+  sport: string
+  league: string
+  country: string
+  home_team: string
+  away_team: string
+  home_score: number | null
+  away_score: number | null
+  minute: string | null
+  start_time: string | null
+  start_time_utc: string | null
+  is_live: boolean
+  odds_home: number
+  odds_draw: number
+  odds_away: number
+  created_at: string
+}
+
+function rowToMatch(row: CustomMatchRow): Match {
+  return {
+    id: row.id,
+    league: row.league,
+    country: row.country,
+    homeTeam: row.home_team,
+    awayTeam: row.away_team,
+    homeScore: row.home_score ?? undefined,
+    awayScore: row.away_score ?? undefined,
+    minute: row.minute ?? undefined,
+    startTime: row.start_time ?? undefined,
+    startTimeISO: row.start_time_utc ?? undefined,
+    isLive: row.is_live,
+    odds: {
+      home: Number(row.odds_home),
+      draw: Number(row.odds_draw),
+      away: Number(row.odds_away),
+    },
+    sport: row.sport,
+    custom: true,
+  }
+}
+
+function matchToRow(input: Omit<Match, 'id' | 'custom'> & { sport: string }) {
+  return {
+    sport: input.sport,
+    league: input.league,
+    country: input.country ?? '',
+    home_team: input.homeTeam,
+    away_team: input.awayTeam,
+    home_score: input.homeScore ?? null,
+    away_score: input.awayScore ?? null,
+    minute: input.minute ?? null,
+    start_time: input.startTime ?? null,
+    start_time_utc: input.startTimeISO ?? null,
+    is_live: input.isLive,
+    odds_home: input.odds.home,
+    odds_draw: input.odds.draw,
+    odds_away: input.odds.away,
+  }
+}
 
 export async function readCustomMatches(): Promise<Match[]> {
-  return readJsonArray<Match>(FILE)
+  const { data, error } = await supabaseServer()
+    .from('custom_matches')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`customMatches.readAll: ${error.message}`)
+  return ((data ?? []) as CustomMatchRow[]).map(rowToMatch)
 }
 
 export async function readCustomMatchesForSport(sport: string): Promise<Match[]> {
-  const all = await readCustomMatches()
-  const s = sport.toLowerCase()
-  return all.filter((m) => (m.sport ?? 'football').toLowerCase() === s)
+  const { data, error } = await supabaseServer()
+    .from('custom_matches')
+    .select('*')
+    .eq('sport', sport.toLowerCase())
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`customMatches.readForSport: ${error.message}`)
+  return ((data ?? []) as CustomMatchRow[]).map(rowToMatch)
 }
 
 export async function addCustomMatch(
   input: Omit<Match, 'id' | 'custom'> & { sport: string },
 ): Promise<Match> {
-  const all = await readCustomMatches()
-  const match: Match = {
-    ...input,
-    id: `custom-${randomUUID()}`,
-    custom: true,
-  }
-  all.unshift(match)
-  await writeJsonArray(FILE, all)
-  return match
+  const { data, error } = await supabaseServer()
+    .from('custom_matches')
+    .insert(matchToRow(input))
+    .select('*')
+    .single()
+  if (error) throw new Error(`customMatches.add: ${error.message}`)
+  return rowToMatch(data as CustomMatchRow)
 }
 
 export async function updateCustomMatch(
   id: string,
   patch: Partial<Match>,
 ): Promise<Match | null> {
-  const all = await readCustomMatches()
-  const idx = all.findIndex((m) => m.id === id)
-  if (idx === -1) return null
-  const { id: _id, custom: _custom, ...rest } = patch
-  void _id
-  void _custom
-  const next: Match = { ...all[idx], ...rest, id: all[idx].id, custom: true }
-  all[idx] = next
-  await writeJsonArray(FILE, all)
-  return next
+  const dbPatch: Record<string, unknown> = {}
+  if (patch.league !== undefined) dbPatch.league = patch.league
+  if (patch.country !== undefined) dbPatch.country = patch.country
+  if (patch.homeTeam !== undefined) dbPatch.home_team = patch.homeTeam
+  if (patch.awayTeam !== undefined) dbPatch.away_team = patch.awayTeam
+  if (patch.homeScore !== undefined) dbPatch.home_score = patch.homeScore
+  if (patch.awayScore !== undefined) dbPatch.away_score = patch.awayScore
+  if (patch.minute !== undefined) dbPatch.minute = patch.minute
+  if (patch.startTime !== undefined) dbPatch.start_time = patch.startTime
+  if (patch.startTimeISO !== undefined) dbPatch.start_time_utc = patch.startTimeISO
+  if (patch.isLive !== undefined) dbPatch.is_live = patch.isLive
+  if (patch.sport !== undefined) dbPatch.sport = patch.sport
+  if (patch.odds) {
+    dbPatch.odds_home = patch.odds.home
+    dbPatch.odds_draw = patch.odds.draw
+    dbPatch.odds_away = patch.odds.away
+  }
+
+  if (Object.keys(dbPatch).length === 0) return null
+
+  const { data, error } = await supabaseServer()
+    .from('custom_matches')
+    .update(dbPatch)
+    .eq('id', id)
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`customMatches.update: ${error.message}`)
+  return data ? rowToMatch(data as CustomMatchRow) : null
 }
 
 export async function deleteCustomMatch(id: string): Promise<boolean> {
-  const all = await readCustomMatches()
-  const next = all.filter((m) => m.id !== id)
-  if (next.length === all.length) return false
-  await writeJsonArray(FILE, next)
-  return true
+  const { error, count } = await supabaseServer()
+    .from('custom_matches')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+  if (error) throw new Error(`customMatches.delete: ${error.message}`)
+  return (count ?? 0) > 0
 }
