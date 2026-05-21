@@ -187,24 +187,24 @@ export default function MePage() {
   if (!profile) {
     return (
       <div className="min-h-screen bg-background flex flex-col pb-20">
-        <div className="bg-gradient-to-br from-[#1c1512] to-[#2a2018] px-6 pt-12 pb-16 text-center">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-[#2ecc71]/20 border-2 border-[#2ecc71] flex items-center justify-center">
-            <Wallet className="w-9 h-9 text-[#2ecc71]" />
+        <div className="px-6 pt-12 pb-16 text-center">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/15 border-2 border-primary flex items-center justify-center">
+            <Wallet className="w-9 h-9 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Welcome to Prime Bet</h1>
-          <p className="text-white/60 text-sm mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-1">Welcome to Prime Bet</h1>
+          <p className="text-muted-foreground text-sm mb-6">
             Sign in to view your balance and wallet.
           </p>
           <div className="flex gap-3 max-w-sm mx-auto">
             <Link
               href="/login"
-              className="flex-1 py-3 rounded-xl border-2 border-[#2ecc71] text-[#2ecc71] font-bold text-center hover:bg-[#2ecc71]/10 transition-colors"
+              className="flex-1 py-3 rounded-xl border-2 border-primary text-primary font-bold text-center hover:bg-primary/10 transition-colors"
             >
               Login
             </Link>
             <Link
               href="/register"
-              className="flex-1 py-3 rounded-xl bg-[#2ecc71] text-white font-bold text-center hover:bg-[#27ae60] transition-colors"
+              className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-center hover:bg-primary/90 transition-colors"
             >
               Register
             </Link>
@@ -216,29 +216,31 @@ export default function MePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] dark:bg-background flex flex-col pb-20 xl:pb-0 max-w-lg mx-auto w-full shadow-sm overflow-x-hidden">
-      {/* Profile header — gradient hero */}
-      <header className="bg-gradient-to-br from-[#1c1512] via-[#241a14] to-[#2a2018] text-white relative">
-        <div className="px-3 sm:px-4 pt-5 pb-4 flex items-center gap-2.5 sm:gap-3">
+    <div className="min-h-screen bg-background flex flex-col pb-20 xl:pb-0 max-w-lg mx-auto w-full overflow-x-hidden">
+      {/* Profile header — clean, matches site */}
+      <header className="bg-card border-b border-border">
+        <div className="px-3 sm:px-4 pt-4 pb-4 flex items-center gap-2.5 sm:gap-3">
           <div className="relative shrink-0">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-[#2ecc71] to-[#27ae60] flex items-center justify-center text-lg sm:text-xl font-bold text-white shadow-lg">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary flex items-center justify-center text-lg sm:text-xl font-bold text-primary-foreground">
               {profile.name.charAt(0).toUpperCase()}
             </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-[#2ecc71] border-2 border-[#1c1512]" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-primary border-2 border-card" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p className="font-bold text-base sm:text-lg truncate">{profile.name}</p>
-              <Shield className="w-4 h-4 text-[#2ecc71] shrink-0" />
+              <p className="font-bold text-base sm:text-lg text-foreground truncate">
+                {profile.name}
+              </p>
+              <Shield className="w-4 h-4 text-primary shrink-0" />
             </div>
             <button
               type="button"
               onClick={copyUserId}
-              className="flex items-center gap-1 text-[11px] sm:text-xs text-white/50 hover:text-white/80 transition-colors max-w-full"
+              className="flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground transition-colors max-w-full"
             >
               <span className="font-mono truncate">ID: {profile.id.slice(0, 8)}…</span>
               {copied ? (
-                <Check className="w-3 h-3 text-[#2ecc71] shrink-0" />
+                <Check className="w-3 h-3 text-primary shrink-0" />
               ) : (
                 <Copy className="w-3 h-3 shrink-0" />
               )}
@@ -246,77 +248,77 @@ export default function MePage() {
           </div>
           <Link
             href="/"
-            className="text-xs text-[#2ecc71] font-semibold hover:underline shrink-0 px-2.5 sm:px-3 py-1.5 rounded-full border border-[#2ecc71]/40 hover:bg-[#2ecc71]/10 transition-colors"
+            className="text-xs text-primary font-semibold hover:underline shrink-0 px-2.5 sm:px-3 py-1.5 rounded-full border border-primary/40 hover:bg-primary/10 transition-colors"
           >
             Home
           </Link>
         </div>
-
-        {/* Balance card */}
-        <div className="px-3 sm:px-4 pb-5">
-          <div className="rounded-2xl bg-black/30 border border-white/10 backdrop-blur p-3.5 sm:p-4">
-            <div className="flex items-center justify-between mb-1 gap-2">
-              <span className="text-[11px] uppercase tracking-wide text-white/50 font-semibold truncate">
-                Total Balance
-              </span>
-              <button
-                type="button"
-                onClick={() => setBalanceHidden((v) => !v)}
-                className="shrink-0 p-1 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                aria-label={balanceHidden ? 'Show balance' : 'Hide balance'}
-              >
-                {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums mb-4 truncate">
-              {balanceHidden ? '••••••' : `GHS ${balance.toFixed(2)}`}
-            </p>
-
-            <div className="flex gap-2">
-              <Link
-                href={depositHref}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-[#2ecc71] hover:bg-[#27ae60] text-white font-bold text-sm transition-colors shadow-sm min-w-0"
-              >
-                <Wallet className="w-4 h-4 shrink-0" strokeWidth={2.25} />
-                <span className="truncate">Deposit</span>
-              </Link>
-              <button
-                type="button"
-                onClick={handleWithdraw}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-[#2ecc71] bg-transparent text-[#2ecc71] hover:bg-[#2ecc71]/10 font-bold text-sm transition-colors min-w-0"
-              >
-                <Banknote className="w-4 h-4 shrink-0" strokeWidth={2.25} />
-                <span className="truncate">Withdraw</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Stats row */}
-          <div className="grid grid-cols-2 gap-2 mt-3">
-            <div className="rounded-xl bg-white/5 border border-white/10 p-2.5 sm:p-3 min-w-0">
-              <div className="flex items-center gap-1.5 text-white/50 text-[10px] uppercase tracking-wide font-semibold">
-                <TrendingUp className="w-3 h-3 text-[#2ecc71] shrink-0" />
-                <span className="truncate">Deposited</span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-white tabular-nums mt-1 truncate">
-                {balanceHidden ? '••••' : `GHS ${profile.totalDeposited.toFixed(2)}`}
-              </p>
-            </div>
-            <div className="rounded-xl bg-white/5 border border-white/10 p-2.5 sm:p-3 min-w-0">
-              <div className="flex items-center gap-1.5 text-white/50 text-[10px] uppercase tracking-wide font-semibold">
-                <TrendingDown className="w-3 h-3 text-amber-400 shrink-0" />
-                <span className="truncate">Withdrawn</span>
-              </div>
-              <p className="text-sm sm:text-base font-bold text-white tabular-nums mt-1 truncate">
-                {balanceHidden ? '••••' : `GHS ${profile.totalWithdrawn.toFixed(2)}`}
-              </p>
-            </div>
-          </div>
-        </div>
       </header>
 
+      {/* Balance card */}
+      <section className="px-3 sm:px-4 pt-4">
+        <div className="rounded-2xl bg-card border border-border p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-1 gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold truncate">
+              Total Balance
+            </span>
+            <button
+              type="button"
+              onClick={() => setBalanceHidden((v) => !v)}
+              className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              aria-label={balanceHidden ? 'Show balance' : 'Hide balance'}
+            >
+              {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums mb-4 truncate">
+            {balanceHidden ? '••••••' : `GHS ${balance.toFixed(2)}`}
+          </p>
+
+          <div className="flex gap-2">
+            <Link
+              href={depositHref}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm transition-colors min-w-0"
+            >
+              <Wallet className="w-4 h-4 shrink-0" strokeWidth={2.25} />
+              <span className="truncate">Deposit</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleWithdraw}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-primary bg-transparent text-primary hover:bg-primary/10 font-bold text-sm transition-colors min-w-0"
+            >
+              <Banknote className="w-4 h-4 shrink-0" strokeWidth={2.25} />
+              <span className="truncate">Withdraw</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <div className="rounded-xl bg-card border border-border p-2.5 sm:p-3 min-w-0">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] uppercase tracking-wide font-semibold">
+              <TrendingUp className="w-3 h-3 text-primary shrink-0" />
+              <span className="truncate">Deposited</span>
+            </div>
+            <p className="text-sm sm:text-base font-bold text-foreground tabular-nums mt-1 truncate">
+              {balanceHidden ? '••••' : `GHS ${profile.totalDeposited.toFixed(2)}`}
+            </p>
+          </div>
+          <div className="rounded-xl bg-card border border-border p-2.5 sm:p-3 min-w-0">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] uppercase tracking-wide font-semibold">
+              <TrendingDown className="w-3 h-3 text-amber-500 shrink-0" />
+              <span className="truncate">Withdrawn</span>
+            </div>
+            <p className="text-sm sm:text-base font-bold text-foreground tabular-nums mt-1 truncate">
+              {balanceHidden ? '••••' : `GHS ${profile.totalWithdrawn.toFixed(2)}`}
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Quick links */}
-      <section className="-mt-3 mx-2.5 sm:mx-3 mb-3 relative z-10">
+      <section className="px-3 sm:px-4 pt-3">
         <div className="grid grid-cols-3 bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
           {QUICK_LINKS.map((item, i) => {
             const Icon = item.icon
@@ -328,7 +330,7 @@ export default function MePage() {
                   i > 0 ? 'border-l border-border' : ''
                 }`}
               >
-                <Icon className="w-5 h-5 text-[#2ecc71] shrink-0" />
+                <Icon className="w-5 h-5 text-primary shrink-0" />
                 <span className="text-[10px] sm:text-[11px] text-center leading-tight font-medium text-foreground line-clamp-2">
                   {item.label}
                   {'badge' in item && item.badge ? ` (${item.badge})` : ''}
@@ -340,7 +342,7 @@ export default function MePage() {
       </section>
 
       {/* Menu list */}
-      <main className="flex-1 px-2.5 sm:px-3">
+      <main className="flex-1 px-3 sm:px-4 pt-3">
         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
           <ul className="divide-y divide-border">
             {MENU_ITEMS.map((item) => {
@@ -416,7 +418,7 @@ export default function MePage() {
             </div>
 
             <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-secondary/60 border border-border">
-              <div className="w-10 h-10 rounded-full bg-[#2ecc71]/20 border-2 border-[#2ecc71] flex items-center justify-center text-sm font-bold text-[#2ecc71] shrink-0">
+              <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0">
                 {profile.name.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
@@ -462,7 +464,7 @@ export default function MePage() {
               <Button
                 type="submit"
                 disabled={withdrawLoading || balance <= 0}
-                className="w-full h-11 border-2 border-[#2ecc71] bg-transparent text-[#2ecc71] hover:bg-[#2ecc71]/10 font-bold"
+                className="w-full h-11 border-2 border-primary bg-transparent text-primary hover:bg-primary/10 font-bold"
               >
                 {withdrawLoading ? (
                   <>

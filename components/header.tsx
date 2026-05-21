@@ -9,12 +9,13 @@ import { getUserId } from '@/lib/user-session'
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isDark, setIsDark] = useState(true)
+  const [isDark, setIsDark] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
 
   useEffect(() => {
     setUserId(getUserId())
+    setIsDark(document.documentElement.classList.contains('dark'))
   }, [])
 
   useEffect(() => {
@@ -43,8 +44,9 @@ export function Header() {
   }, [userId])
 
   const toggleTheme = () => {
-    setIsDark(!isDark)
-    document.documentElement.classList.toggle('light')
+    const next = !isDark
+    setIsDark(next)
+    document.documentElement.classList.toggle('dark', next)
   }
 
   const depositHref = userId
