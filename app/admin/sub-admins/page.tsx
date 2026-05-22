@@ -7,6 +7,7 @@ import {
   ToggleRight,
   Trash2,
   Search,
+  Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -87,6 +88,33 @@ export default function AdminSubAdminsPage() {
     }
   }
 
+  const handleMarkPaid = async (row: SubAdminRow) => {
+    if (row.commissionBalance <= 0) return
+    if (
+      !confirm(
+        `Mark GHS ${row.commissionBalance.toFixed(2)} as paid to "${row.name}"? This clears their unpaid balance to 0. Lifetime earnings stay on record.`,
+      )
+    ) {
+      return
+    }
+    setBusyFor(row.id, true)
+    try {
+      const res = await fetch(`/api/admin/sub-admins/${row.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ clearCommissionBalance: true }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setRows((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, commissionBalance: 0 } : r)),
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusyFor(row.id, false)
+    }
+  }
+
   const handleDelete = async (row: SubAdminRow) => {
     if (
       !confirm(
@@ -112,8 +140,9 @@ export default function AdminSubAdminsPage() {
       referrals: acc.referrals + r.referrals,
       deposits: acc.deposits + r.withDeposit,
       paid: acc.paid + r.totalCommissionEarned,
+      outstanding: acc.outstanding + r.commissionBalance,
     }),
-    { referrals: 0, deposits: 0, paid: 0 },
+    { referrals: 0, deposits: 0, paid: 0, outstanding: 0 },
   )
 
   return (
@@ -127,11 +156,12 @@ export default function AdminSubAdminsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Tile label="Partners" value={rows.length.toString()} />
         <Tile label="Approved" value={rows.filter((r) => r.approved).length.toString()} />
         <Tile label="Referred users" value={totals.referrals.toString()} />
-        <Tile label="Total commissions" value={totals.paid.toFixed(2)} />
+        <Tile label="Outstanding (GHS)" value={totals.outstanding.toFixed(2)} highlight />
+        <Tile label="All-time paid (GHS)" value={totals.paid.toFixed(2)} />
       </div>
 
       <div className="flex gap-3">
@@ -212,6 +242,19 @@ export default function AdminSubAdminsPage() {
                     {r.totalCommissionEarned.toFixed(2)}
                   </p>
                   <div className="flex items-center gap-1.5">
+                    {r.commissionBalance > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMarkPaid(r)}
+                        disabled={busy.has(r.id)}
+                        className="h-7 px-2 text-xs gap-1 text-success border-success/40 hover:bg-success/10"
+                        title={`Mark GHS ${r.commissionBalance.toFixed(2)} as paid`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Mark paid</span>
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -251,13 +294,35 @@ export default function AdminSubAdminsPage() {
   )
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
+function Tile({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string
+  value: string
+  highlight?: boolean
+}) {
   return (
-    <div className="bg-card border border-border rounded-xl p-3">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+    <div
+      className={`rounded-xl p-3 border ${
+        highlight ? 'bg-success/10 border-success/30' : 'bg-card border-border'
+      }`}
+    >
+      <p
+        className={`text-[10px] uppercase tracking-wide font-semibold ${
+          highlight ? 'text-success' : 'text-muted-foreground'
+        }`}
+      >
         {label}
       </p>
-      <p className="text-xl font-bold tabular-nums mt-1">{value}</p>
+      <p
+        className={`text-xl font-bold tabular-nums mt-1 ${
+          highlight ? 'text-success' : ''
+        }`}
+      >
+        {value}
+      </p>
     </div>
   )
 }

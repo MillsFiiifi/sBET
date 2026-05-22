@@ -9,16 +9,28 @@ interface Params {
 
 export async function PATCH(request: Request, { params }: Params) {
   const { id } = await params
-  let body: { approved?: boolean }
+  let body: { approved?: boolean; clearCommissionBalance?: boolean }
   try {
-    body = (await request.json()) as { approved?: boolean }
+    body = (await request.json()) as {
+      approved?: boolean
+      clearCommissionBalance?: boolean
+    }
   } catch {
     return NextResponse.json({ error: 'invalid json' }, { status: 400 })
   }
-  if (typeof body.approved !== 'boolean') {
-    return NextResponse.json({ error: 'approved must be boolean' }, { status: 400 })
+
+  const patch: { approved?: boolean; commissionBalance?: number } = {}
+  if (typeof body.approved === 'boolean') patch.approved = body.approved
+  // Clears the unpaid balance to 0 once the admin has paid the sub-admin
+  // out-of-band. totalCommissionEarned stays intact so the lifetime ledger
+  // is preserved.
+  if (body.clearCommissionBalance === true) patch.commissionBalance = 0
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'no valid fields to update' }, { status: 400 })
   }
-  const updated = await updateSubAdmin(id, { approved: body.approved })
+
+  const updated = await updateSubAdmin(id, patch)
   if (!updated) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json({
     subAdmin: {
@@ -26,6 +38,8 @@ export async function PATCH(request: Request, { params }: Params) {
       name: updated.name,
       email: updated.email,
       approved: updated.approved,
+      commissionBalance: updated.commissionBalance,
+      totalCommissionEarned: updated.totalCommissionEarned,
     },
   })
 }
