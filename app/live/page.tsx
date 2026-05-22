@@ -8,25 +8,17 @@ import {
   Wallet,
   RefreshCw,
   Radio,
-  Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MatchList } from '@/components/match-list'
 import { BetSlip } from '@/components/bet-slip'
 import { MobileNav } from '@/components/mobile-nav'
 import { useMatches } from '@/hooks/use-matches'
-import { allSportsData, sports } from '@/lib/mock-data'
+import { sports } from '@/lib/mock-data'
 import { removeSelectionById, toggleSelection } from '@/lib/bet-slip-utils'
 import { getUserId } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
-import type { BetSelection, Match } from '@/lib/types'
-
-function getDemoLiveMatches(sport: string): Match[] {
-  const all = (allSportsData as Record<string, Match[]>)[sport] ?? []
-  return all
-    .filter((m) => m.isLive)
-    .map((m) => ({ ...m, demo: true, id: `demo-${m.id}` }))
-}
+import type { BetSelection } from '@/lib/types'
 
 export default function LivePage() {
   const [selectedBets, setSelectedBets] = useState<BetSelection[]>([])
@@ -36,18 +28,8 @@ export default function LivePage() {
   const [balance, setBalance] = useState<number | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
-  const { matches, loading, source, reason, refresh } = useMatches(activeSport)
-  const realLive = useMemo(() => matches.filter((m) => m.isLive), [matches])
-
-  // Demo fallback: when the real API returns 0 in-play events, fill in mock
-  // live matches so users can still see the live UI working. Clearly tagged.
-  const displayLive = useMemo(() => {
-    if (realLive.length > 0) return realLive
-    if (loading) return []
-    return getDemoLiveMatches(activeSport)
-  }, [realLive, loading, activeSport])
-
-  const isShowingDemo = displayLive.length > 0 && displayLive.every((m) => m.demo)
+  const { matches, loading, refresh } = useMatches(activeSport)
+  const displayLive = useMemo(() => matches.filter((m) => m.isLive), [matches])
 
   // Leagues sidebar/chips, derived from the live matches actually being shown
   const liveLeagues = useMemo(() => {
@@ -356,24 +338,6 @@ export default function LivePage() {
                     {l.name} ({l.count})
                   </button>
                 ))}
-              </div>
-            )}
-
-            {/* Banners */}
-            {isShowingDemo && (
-              <div className="mb-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-100 dark:text-amber-200 flex items-start gap-2">
-                <Info className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>
-                  No real matches are in-play right now. Showing{' '}
-                  <span className="font-semibold">demo live matches</span> so you can
-                  preview the live betting UI. Real games appear automatically when
-                  they kick off.
-                </span>
-              </div>
-            )}
-            {source === 'mock' && !isShowingDemo && (
-              <div className="mb-3 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground">
-                Showing demo data ({reason ?? 'API unavailable'}).
               </div>
             )}
 

@@ -226,7 +226,7 @@ export default function SportsPage() {
               />
             ) : (
               <div className="bg-card border border-border rounded-xl p-8 text-center">
-                <p className="text-muted-foreground">No matches found for this sport</p>
+                <p className="text-muted-foreground">No matches.</p>
               </div>
             )}
           </main>

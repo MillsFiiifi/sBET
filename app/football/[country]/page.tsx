@@ -31,7 +31,7 @@ export default function CountryFootballPage({ params }: PageProps) {
   const [userId, setUserId] = useState<string | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
 
-  const { matches, loading, source, reason } = useMatches('football')
+  const { matches, loading } = useMatches('football')
 
   useEffect(() => {
     setUserId(getUserId())
@@ -252,12 +252,6 @@ export default function CountryFootballPage({ params }: PageProps) {
               </div>
             )}
 
-            {source === 'mock' && (
-              <div className="mb-4 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground">
-                Showing demo data ({reason ?? 'API unavailable'}).
-              </div>
-            )}
-
             {loading ? (
               <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground flex items-center justify-center">
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -265,9 +259,7 @@ export default function CountryFootballPage({ params }: PageProps) {
               </div>
             ) : filtered.length === 0 ? (
               <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
-                {countryMatches.length === 0
-                  ? `No upcoming matches for ${country.name} right now.`
-                  : `No matches in ${activeLeague}.`}
+                No matches.
               </div>
             ) : (
               <MatchList

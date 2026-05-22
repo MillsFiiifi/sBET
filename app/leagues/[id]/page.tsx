@@ -23,7 +23,7 @@ export default function LeagueDetailPage({ params }: PageProps) {
   if (!meta) notFound()
 
   const [selectedBets, setSelectedBets] = useState<BetSelection[]>([])
-  const { matches, loading, source, reason } = useMatches(meta.sport)
+  const { matches, loading } = useMatches(meta.sport)
 
   const filtered = matches.filter((m) =>
     meta.matchFilters.some((f) => m.league.toLowerCase().includes(f.toLowerCase())),
@@ -97,12 +97,6 @@ export default function LeagueDetailPage({ params }: PageProps) {
               </div>
             </div>
 
-            {source === 'mock' && (
-              <div className="mb-4 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground">
-                Showing demo data ({reason ?? 'API unavailable'}).
-              </div>
-            )}
-
             <div className="flex items-center gap-2 mb-3">
               <Trophy className="w-4 h-4 text-primary" />
               <h3 className="font-semibold text-foreground">Matches</h3>
@@ -115,7 +109,7 @@ export default function LeagueDetailPage({ params }: PageProps) {
               </div>
             ) : filtered.length === 0 ? (
               <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
-                No upcoming matches for {meta.name} right now.
+                No matches.
               </div>
             ) : (
               <MatchList

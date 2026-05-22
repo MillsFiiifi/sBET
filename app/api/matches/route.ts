@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getMatchesForSport, supportedSports } from '@/lib/api/odds'
 import { readCustomMatchesForSport } from '@/lib/custom-matches-store'
-import { allSportsData } from '@/lib/mock-data'
 import { deriveMarketBook } from '@/lib/markets'
 import type { Match } from '@/lib/types'
 
@@ -60,31 +59,18 @@ export async function GET(request: Request) {
 
   try {
     const apiMatches = await getMatchesForSport(sport)
-    if (apiMatches.length === 0) {
-      const fallback = hydrateAll(
-        (allSportsData as Record<string, Match[]>)[sport] ?? [],
-      )
-      return NextResponse.json({
-        source: customMatches.length > 0 ? 'mixed-mock' : 'mock',
-        reason: 'no upcoming events from provider',
-        matches: maybeFilter([...customMatches, ...fallback]),
-        customCount: customMatches.length,
-      })
-    }
     return NextResponse.json({
       source: customMatches.length > 0 ? 'mixed' : 'odds-api',
+      reason: apiMatches.length === 0 ? 'no upcoming events from provider' : undefined,
       matches: maybeFilter([...customMatches, ...hydrateAll(apiMatches)]),
       customCount: customMatches.length,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    const fallback = hydrateAll(
-      (allSportsData as Record<string, Match[]>)[sport] ?? [],
-    )
     return NextResponse.json({
-      source: customMatches.length > 0 ? 'mixed-mock' : 'mock',
+      source: 'odds-api',
       reason: message,
-      matches: maybeFilter([...customMatches, ...fallback]),
+      matches: maybeFilter(customMatches),
       customCount: customMatches.length,
     })
   }

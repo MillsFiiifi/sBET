@@ -18,7 +18,7 @@ export default function HomePage() {
   const [activeSport, setActiveSport] = useState('football')
   const [selections, setSelections] = useState<BetSelection[]>([])
 
-  const { matches, liveMatches, upcomingMatches, loading, error, source, reason } =
+  const { matches, liveMatches, upcomingMatches, loading, error } =
     useMatches(activeSport, { todayOnly: true })
 
   const handleToggleSelection = (sel: BetSelection) =>
@@ -45,17 +45,6 @@ export default function HomePage() {
               <PromoCarousel />
             </div>
 
-            {source === 'mock' && (
-              <div className="mt-4 p-3 rounded-lg bg-secondary border border-border text-xs text-muted-foreground flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                <span>
-                  Showing demo data ({reason ?? 'API unavailable'}). Add{' '}
-                  <code className="font-mono">ODDS_API_KEY</code> in{' '}
-                  <code className="font-mono">.env.local</code> for live odds.
-                </span>
-              </div>
-            )}
-
             {error && (
               <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -77,7 +66,7 @@ export default function HomePage() {
                   Loading matches…
                 </div>
               ) : liveMatches.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No live matches right now.</p>
+                <p className="text-sm text-muted-foreground py-4">No live matches.</p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
                   {liveMatches.map((match) => (
@@ -111,7 +100,7 @@ export default function HomePage() {
                 </div>
               ) : upcomingMatches.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">
-                  No games scheduled for today.
+                  No matches.
                 </p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">

@@ -281,9 +281,7 @@ export default function FootballPage() {
               </div>
             ) : filteredMatches.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                {showLiveOnly
-                  ? 'No live matches right now.'
-                  : 'No matches match your filters.'}
+                {showLiveOnly ? 'No live matches.' : 'No matches.'}
               </p>
             ) : (
               <MatchList
