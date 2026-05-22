@@ -124,9 +124,6 @@ function RegisterForm() {
                       {referralCode}
                     </span>
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Your partner earns 60% on every deposit you make.
-                  </p>
                 </div>
               </div>
             )}
