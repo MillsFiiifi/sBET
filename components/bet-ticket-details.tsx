@@ -86,8 +86,8 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
             <X className="w-6 h-6" strokeWidth={2.5} />
           </button>
 
-          {/* Headline */}
-          <div className="mt-12 sm:mt-16 text-center">
+          {/* Headline — pushed down slightly */}
+          <div className="mt-16 sm:mt-20 text-center">
             <p className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight drop-shadow-lg">
               YOU WON
             </p>
@@ -96,19 +96,20 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
             </p>
           </div>
 
-          {/* Big trophy with glow */}
-          <div className="relative flex-1 w-full max-w-[30rem] sm:max-w-[36rem] mt-4 sm:mt-6 min-h-0">
+          {/* Bigger trophy — no max-width cap, tighter top margin gives it
+              more vertical room. */}
+          <div className="relative flex-1 w-full mt-1 sm:mt-2 min-h-0">
             <Image
               src="/won_trophy_image.png"
               alt="Trophy"
               fill
               priority
-              className="object-contain drop-shadow-[0_0_40px_rgba(255,200,0,0.45)]"
+              className="object-contain drop-shadow-[0_0_50px_rgba(255,200,0,0.55)]"
             />
           </div>
 
           {/* Verify code — inline, single line */}
-          <p className="mt-2 text-sm sm:text-base text-white text-center">
+          <p className="mt-1 text-sm sm:text-base text-white text-center">
             <span className="font-medium text-white/80">Verify Code: </span>
             <span className="font-mono font-bold tracking-wider tabular-nums">
               {verificationCode}
@@ -116,7 +117,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
           </p>
 
           {/* Action buttons container — Details (left), Show Off (right) */}
-          <div className="mt-4 mb-3 w-full max-w-sm flex gap-3">
+          <div className="mt-3 mb-3 w-full max-w-sm flex gap-3">
             <Button
               type="button"
               onClick={() => setShowTrophy(false)}
