@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { ArrowLeft, Home, Headphones, X, Sparkles, Check, Trophy, Share2 } from 'lucide-react'
 import type { PlacedBet } from '@/lib/types'
@@ -18,10 +19,23 @@ interface BetTicketDetailsProps {
 }
 
 /**
- * Sportybet-style ticket details view. Won tickets show a larger trophy
- * embedded on the ticket itself — no splash overlay.
+ * Won tickets get a big Congratulations + trophy splash first. Tap to
+ * dismiss (or it auto-fades after 2 minutes). The ticket layout below
+ * is unchanged.
  */
 export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDetailsProps) {
+  const [showTrophy, setShowTrophy] = useState(bet.status === 'won')
+
+  useEffect(() => {
+    if (open) setShowTrophy(bet.status === 'won')
+  }, [open, bet.id, bet.status])
+
+  useEffect(() => {
+    if (!open || !showTrophy) return
+    const t = setTimeout(() => setShowTrophy(false), 120_000)
+    return () => clearTimeout(t)
+  }, [open, showTrophy])
+
   if (!open) return null
 
   const settled = bet.status !== 'pending'
@@ -47,6 +61,50 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
+      {/* ─── Won celebration splash (bigger trophy) ─── */}
+      {won && showTrophy && (
+        <button
+          type="button"
+          onClick={() => setShowTrophy(false)}
+          aria-label="Tap to view ticket"
+          className="absolute inset-0 z-10 flex flex-col items-center px-6 pt-6 sm:pt-10 bg-background/90 backdrop-blur-md animate-in fade-in duration-300"
+        >
+          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+            You won big
+          </p>
+          <p className="mt-2 text-3xl sm:text-4xl font-extrabold text-success tabular-nums">
+            GHS {formatMoney(totalReturn)}
+          </p>
+          <p className="mt-2 text-base sm:text-lg font-bold text-foreground">
+            Congratulations{userName ? `, ${userName}` : ''}!
+          </p>
+
+          {/* Big trophy */}
+          <div className="relative flex-1 w-full max-w-[28rem] sm:max-w-[34rem] mt-3 sm:mt-4 min-h-0">
+            <Image
+              src="/won_trophy_image.png"
+              alt="Trophy"
+              fill
+              priority
+              className="object-contain drop-shadow-2xl"
+            />
+          </div>
+
+          <div className="mt-3 px-4 py-2 rounded-xl bg-card border border-primary/40 shadow-sm">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center">
+              Verification Code
+            </p>
+            <p className="text-xl font-extrabold font-mono tracking-[0.3em] text-primary text-center">
+              {ticketId}
+            </p>
+          </div>
+
+          <p className="mt-3 pb-6 text-[11px] text-muted-foreground">
+            Tap to view ticket
+          </p>
+        </button>
+      )}
+
       {/* ─── Green app header (brand) ─── */}
       <header className="bg-primary text-primary-foreground">
         <div className="max-w-md mx-auto w-full px-4 h-14 flex items-center justify-between gap-3">
