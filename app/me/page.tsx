@@ -134,20 +134,33 @@ export default function MePage() {
     return () => window.removeEventListener('focus', onFocus)
   }, [loadProfile])
 
+  const balance = profile?.balance ?? 0
+  const hasDeposited = !!profile?.firstDepositAt
+  // Guard: a user with no deposit or no balance has nothing to withdraw,
+  // so we never open the withdraw modal for them.
+  const canWithdraw = hasDeposited && balance > 0
+  const noFundsMessage = !hasDeposited
+    ? 'Make your first deposit before you can withdraw.'
+    : 'You have no balance to withdraw.'
+  const [noFundsBanner, setNoFundsBanner] = useState<string | null>(null)
+
   // If the page was linked with ?withdraw=1 (e.g. from the home page button),
-  // auto-open the withdraw modal as soon as the profile is available.
-  // Read window.location directly so we don't need a Suspense wrapper.
+  // auto-open the withdraw modal as soon as the profile is available — but
+  // only when the user actually has funds to withdraw.
   useEffect(() => {
     if (typeof window === 'undefined' || !profile) return
     if (new URLSearchParams(window.location.search).get('withdraw') === '1') {
+      if (!canWithdraw) {
+        setNoFundsBanner(noFundsMessage)
+        return
+      }
       setWithdrawMsg(null)
       setWithdrawError(null)
       setWithdrawAmount('')
       setWithdrawOpen(true)
     }
-  }, [profile])
+  }, [profile, canWithdraw, noFundsMessage])
 
-  const balance = profile?.balance ?? 0
   const depositHref = profile
     ? `/users/first-deposit?userId=${profile.id}`
     : '/register'
@@ -156,6 +169,11 @@ export default function MePage() {
     if (typeof console !== 'undefined') {
       console.log('[withdraw] click → opening modal, profile:', profile?.id, 'step:', profile?.verificationStep)
     }
+    if (!canWithdraw) {
+      setNoFundsBanner(noFundsMessage)
+      return
+    }
+    setNoFundsBanner(null)
     setWithdrawMsg(null)
     setWithdrawError(null)
     setWithdrawAmount('')
@@ -407,6 +425,19 @@ export default function MePage() {
               <span className="truncate">Withdraw</span>
             </button>
           </div>
+          {noFundsBanner && (
+            <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground flex items-start justify-between gap-2">
+              <span>{noFundsBanner}</span>
+              <button
+                type="button"
+                onClick={() => setNoFundsBanner(null)}
+                aria-label="Dismiss"
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Stats row */}
