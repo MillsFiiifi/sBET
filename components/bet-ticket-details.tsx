@@ -320,9 +320,30 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
                         {s.match.league} · Game ID: {s.matchId.slice(0, 6)}
                       </span>
                     </p>
-                    <p className="text-sm font-bold text-foreground truncate mt-0.5">
-                      {s.match.homeTeam} <span className="text-muted-foreground font-normal">v</span>{' '}
-                      {s.match.awayTeam}
+                    <p className="text-sm font-bold text-foreground truncate mt-0.5 flex items-center gap-1.5">
+                      {s.match.homeFlagUrl && (
+                        <Image
+                          src={s.match.homeFlagUrl}
+                          alt=""
+                          width={18}
+                          height={18}
+                          unoptimized
+                          className="w-[18px] h-[18px] rounded-sm object-cover shrink-0"
+                        />
+                      )}
+                      <span className="truncate">{s.match.homeTeam}</span>
+                      <span className="text-muted-foreground font-normal">v</span>
+                      {s.match.awayFlagUrl && (
+                        <Image
+                          src={s.match.awayFlagUrl}
+                          alt=""
+                          width={18}
+                          height={18}
+                          unoptimized
+                          className="w-[18px] h-[18px] rounded-sm object-cover shrink-0"
+                        />
+                      )}
+                      <span className="truncate">{s.match.awayTeam}</span>
                     </p>
                     {settled && (s.match.homeScore !== undefined || s.match.awayScore !== undefined) && (
                       <p className="text-xs text-muted-foreground mt-0.5">

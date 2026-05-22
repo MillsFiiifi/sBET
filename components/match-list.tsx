@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp, ExternalLink, Lock } from 'lucide-react'
 import { Match, BetSelection } from '@/lib/types'
@@ -191,8 +192,18 @@ function MatchRow({
           className="flex-1 min-w-0 hover:opacity-80"
         >
           <div className="flex items-center justify-between mb-1 gap-2">
-            <span className="font-medium text-foreground text-sm sm:text-base truncate">
-              {match.homeTeam}
+            <span className="font-medium text-foreground text-sm sm:text-base truncate flex items-center gap-1.5 min-w-0">
+              {match.homeFlagUrl && (
+                <Image
+                  src={match.homeFlagUrl}
+                  alt=""
+                  width={20}
+                  height={20}
+                  unoptimized
+                  className="w-5 h-5 rounded-sm object-cover shrink-0"
+                />
+              )}
+              <span className="truncate">{match.homeTeam}</span>
             </span>
             {match.isLive && (
               <span className="font-bold text-foreground shrink-0 tabular-nums">
@@ -201,8 +212,18 @@ function MatchRow({
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-foreground text-sm sm:text-base truncate">
-              {match.awayTeam}
+            <span className="font-medium text-foreground text-sm sm:text-base truncate flex items-center gap-1.5 min-w-0">
+              {match.awayFlagUrl && (
+                <Image
+                  src={match.awayFlagUrl}
+                  alt=""
+                  width={20}
+                  height={20}
+                  unoptimized
+                  className="w-5 h-5 rounded-sm object-cover shrink-0"
+                />
+              )}
+              <span className="truncate">{match.awayTeam}</span>
             </span>
             {match.isLive && (
               <span className="font-bold text-foreground shrink-0 tabular-nums">

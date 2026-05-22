@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp, ExternalLink, Lock } from 'lucide-react'
 import type { Match, BetSelection } from '@/lib/types'
@@ -77,9 +78,20 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center text-[11px] font-bold shrink-0">
-                {match.homeTeam.substring(0, 2).toUpperCase()}
-              </div>
+              {match.homeFlagUrl ? (
+                <Image
+                  src={match.homeFlagUrl}
+                  alt=""
+                  width={32}
+                  height={32}
+                  unoptimized
+                  className="w-8 h-8 rounded-full object-cover shrink-0 bg-secondary"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center text-[11px] font-bold shrink-0">
+                  {match.homeTeam.substring(0, 2).toUpperCase()}
+                </div>
+              )}
               <span className="font-medium text-sm truncate">{match.homeTeam}</span>
             </div>
             {match.isLive && (
@@ -91,9 +103,20 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center text-[11px] font-bold shrink-0">
-                {match.awayTeam.substring(0, 2).toUpperCase()}
-              </div>
+              {match.awayFlagUrl ? (
+                <Image
+                  src={match.awayFlagUrl}
+                  alt=""
+                  width={32}
+                  height={32}
+                  unoptimized
+                  className="w-8 h-8 rounded-full object-cover shrink-0 bg-secondary"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-secondary rounded-full flex items-center justify-center text-[11px] font-bold shrink-0">
+                  {match.awayTeam.substring(0, 2).toUpperCase()}
+                </div>
+              )}
               <span className="font-medium text-sm truncate">{match.awayTeam}</span>
             </div>
             {match.isLive && (

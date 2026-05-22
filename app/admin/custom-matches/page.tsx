@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Loader2, CircleAlert, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, Loader2, CircleAlert, CheckCircle2, Upload, X } from 'lucide-react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { sports } from '@/lib/mock-data'
@@ -13,6 +14,8 @@ interface CreateForm {
   country: string
   homeTeam: string
   awayTeam: string
+  homeFlagUrl: string
+  awayFlagUrl: string
   isLive: boolean
   startTime: string
   minute: string
@@ -29,6 +32,8 @@ const blankForm: CreateForm = {
   country: '',
   homeTeam: '',
   awayTeam: '',
+  homeFlagUrl: '',
+  awayFlagUrl: '',
   isLive: false,
   startTime: '',
   minute: "1'",
@@ -48,6 +53,8 @@ export default function AdminCustomMatchesPage() {
 
   const [form, setForm] = useState<CreateForm>(blankForm)
   const [creating, setCreating] = useState(false)
+  // Per-side upload state for flag images
+  const [uploadingSide, setUploadingSide] = useState<'home' | 'away' | null>(null)
 
   const load = async () => {
     try {
@@ -69,6 +76,23 @@ export default function AdminCustomMatchesPage() {
   const update = <K extends keyof CreateForm>(k: K, v: CreateForm[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }))
 
+  const uploadFlag = async (side: 'home' | 'away', file: File) => {
+    setError(null)
+    setUploadingSide(side)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch('/api/admin/upload-flag', { method: 'POST', body })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      update(side === 'home' ? 'homeFlagUrl' : 'awayFlagUrl', data.url as string)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUploadingSide(null)
+    }
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -81,6 +105,8 @@ export default function AdminCustomMatchesPage() {
         country: form.country,
         homeTeam: form.homeTeam,
         awayTeam: form.awayTeam,
+        homeFlagUrl: form.homeFlagUrl || undefined,
+        awayFlagUrl: form.awayFlagUrl || undefined,
         isLive: form.isLive,
         ...(form.isLive
           ? {
@@ -236,6 +262,13 @@ export default function AdminCustomMatchesPage() {
               required
               className="bg-secondary"
             />
+            <FlagPicker
+              label={form.homeTeam || 'Home'}
+              url={form.homeFlagUrl}
+              uploading={uploadingSide === 'home'}
+              onPick={(f) => void uploadFlag('home', f)}
+              onClear={() => update('homeFlagUrl', '')}
+            />
           </div>
 
           <div>
@@ -246,6 +279,13 @@ export default function AdminCustomMatchesPage() {
               placeholder="Asante Kotoko"
               required
               className="bg-secondary"
+            />
+            <FlagPicker
+              label={form.awayTeam || 'Away'}
+              url={form.awayFlagUrl}
+              uploading={uploadingSide === 'away'}
+              onPick={(f) => void uploadFlag('away', f)}
+              onClear={() => update('awayFlagUrl', '')}
             />
           </div>
 
@@ -411,6 +451,69 @@ function Label({ children }: { children: React.ReactNode }) {
   )
 }
 
+interface FlagPickerProps {
+  label: string
+  url: string
+  uploading: boolean
+  onPick: (file: File) => void
+  onClear: () => void
+}
+
+function FlagPicker({ label, url, uploading, onPick, onClear }: FlagPickerProps) {
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="w-10 h-10 rounded-md bg-secondary border border-border flex items-center justify-center overflow-hidden shrink-0">
+        {url ? (
+          <Image
+            src={url}
+            alt={`${label} flag`}
+            width={40}
+            height={40}
+            unoptimized
+            className="w-10 h-10 object-cover"
+          />
+        ) : (
+          <Upload className="w-4 h-4 text-muted-foreground" />
+        )}
+      </div>
+      <label className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 px-3 rounded-md bg-secondary border border-border text-xs cursor-pointer hover:bg-secondary/70 transition-colors">
+        {uploading ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Uploading…
+          </>
+        ) : (
+          <>
+            <Upload className="w-3.5 h-3.5" />
+            {url ? 'Replace flag' : 'Upload flag'}
+          </>
+        )}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) onPick(f)
+            e.target.value = ''
+          }}
+          disabled={uploading}
+        />
+      </label>
+      {url && !uploading && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Remove flag"
+          className="w-8 h-8 rounded-md border border-border text-muted-foreground hover:text-destructive hover:border-destructive/40 flex items-center justify-center"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface ExistingMatchRowProps {
   match: Match
   busy: boolean
@@ -470,8 +573,30 @@ function ExistingMatchRow({ match, busy, onDelete, onPatch }: ExistingMatchRowPr
               </>
             )}
           </div>
-          <p className="font-medium text-sm truncate">
-            {match.homeTeam} vs {match.awayTeam}
+          <p className="font-medium text-sm truncate flex items-center gap-1.5">
+            {match.homeFlagUrl && (
+              <Image
+                src={match.homeFlagUrl}
+                alt=""
+                width={20}
+                height={20}
+                unoptimized
+                className="w-5 h-5 rounded-sm object-cover shrink-0"
+              />
+            )}
+            <span className="truncate">{match.homeTeam}</span>
+            <span className="text-muted-foreground">vs</span>
+            {match.awayFlagUrl && (
+              <Image
+                src={match.awayFlagUrl}
+                alt=""
+                width={20}
+                height={20}
+                unoptimized
+                className="w-5 h-5 rounded-sm object-cover shrink-0"
+              />
+            )}
+            <span className="truncate">{match.awayTeam}</span>
           </p>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 flex-wrap">
             {match.isLive ? (

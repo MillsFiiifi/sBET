@@ -19,6 +19,9 @@ export interface Match {
   sport?: string
   custom?: boolean
   demo?: boolean
+  /** Public image URLs for team flags / crests, set by admin on custom matches. */
+  homeFlagUrl?: string
+  awayFlagUrl?: string
 }
 
 export interface OverUnderLine {

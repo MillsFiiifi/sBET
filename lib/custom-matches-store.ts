@@ -8,6 +8,8 @@ interface CustomMatchRow {
   country: string
   home_team: string
   away_team: string
+  home_flag_url: string | null
+  away_flag_url: string | null
   home_score: number | null
   away_score: number | null
   minute: string | null
@@ -101,6 +103,8 @@ function rowToMatch(row: CustomMatchRow): Match {
     country: row.country,
     homeTeam: row.home_team,
     awayTeam: row.away_team,
+    homeFlagUrl: row.home_flag_url ?? undefined,
+    awayFlagUrl: row.away_flag_url ?? undefined,
     homeScore: row.home_score ?? undefined,
     awayScore: row.away_score ?? undefined,
     minute: tickingMinute(row),
@@ -124,6 +128,8 @@ function matchToRow(input: Omit<Match, 'id' | 'custom'> & { sport: string }) {
     country: input.country ?? '',
     home_team: input.homeTeam,
     away_team: input.awayTeam,
+    home_flag_url: input.homeFlagUrl ?? null,
+    away_flag_url: input.awayFlagUrl ?? null,
     home_score: input.homeScore ?? null,
     away_score: input.awayScore ?? null,
     minute: input.minute ?? null,
@@ -181,6 +187,8 @@ export async function updateCustomMatch(
   if (patch.country !== undefined) dbPatch.country = patch.country
   if (patch.homeTeam !== undefined) dbPatch.home_team = patch.homeTeam
   if (patch.awayTeam !== undefined) dbPatch.away_team = patch.awayTeam
+  if (patch.homeFlagUrl !== undefined) dbPatch.home_flag_url = patch.homeFlagUrl || null
+  if (patch.awayFlagUrl !== undefined) dbPatch.away_flag_url = patch.awayFlagUrl || null
   if (patch.homeScore !== undefined) dbPatch.home_score = patch.homeScore
   if (patch.awayScore !== undefined) dbPatch.away_score = patch.awayScore
   if (patch.minute !== undefined) {
