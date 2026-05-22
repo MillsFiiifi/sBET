@@ -18,13 +18,18 @@ function RegisterForm() {
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [referralCode, setReferralCode] = useState('')
+  // Lazy-init from ?ref= so the real referral code is on the field at first
+  // paint — no demo flash, no useEffect tick.
+  const [referralCode, setReferralCode] = useState(() =>
+    (params.get('ref') ?? '').toUpperCase(),
+  )
   const [acceptTerms, setAcceptTerms] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Keep the field in sync if the ref param changes mid-page (e.g. router swap).
   useEffect(() => {
     const ref = params.get('ref')
     if (ref) setReferralCode(ref.toUpperCase())
@@ -259,7 +264,7 @@ function RegisterForm() {
                 <Input
                   id="referral"
                   type="text"
-                  placeholder="ABC123"
+                  placeholder=""
                   value={referralCode}
                   onChange={(e) =>
                     setReferralCode(
