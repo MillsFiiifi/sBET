@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { readSubAdmins } from '@/lib/sub-admins-store'
 import { readUsers, readCommissions } from '@/lib/users-store'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  // Admin-only: sub-admins must not see the platform's 40% share or any
+  // cross-partner data.
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value
+  if (!(await isValidSessionCookie(token))) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
   const [subAdmins, users, commissions] = await Promise.all([
     readSubAdmins(),
     readUsers(),

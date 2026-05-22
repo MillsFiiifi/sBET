@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { deleteSubAdmin, updateSubAdmin } from '@/lib/sub-admins-store'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +9,17 @@ interface Params {
   params: Promise<{ id: string }>
 }
 
+async function requireAdmin(): Promise<NextResponse | null> {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value
+  if (!(await isValidSessionCookie(token))) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+  return null
+}
+
 export async function PATCH(request: Request, { params }: Params) {
+  const denied = await requireAdmin()
+  if (denied) return denied
   const { id } = await params
   let body: { approved?: boolean; clearCommissionBalance?: boolean }
   try {
@@ -45,6 +57,8 @@ export async function PATCH(request: Request, { params }: Params) {
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
+  const denied = await requireAdmin()
+  if (denied) return denied
   const { id } = await params
   const ok = await deleteSubAdmin(id)
   if (!ok) return NextResponse.json({ error: 'not found' }, { status: 404 })
