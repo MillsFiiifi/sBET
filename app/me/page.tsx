@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Script from 'next/script'
 import { useRouter } from 'next/navigation'
@@ -97,6 +97,8 @@ export default function MePage() {
   const [sdkReady, setSdkReady] = useState(false)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
+  // Dedup: never credit the same Korapay reference twice within a session.
+  const submittedRefs = useRef<Set<string>>(new Set())
 
   const loadProfile = useCallback(async () => {
     const userId = getUserId()
@@ -269,6 +271,12 @@ export default function MePage() {
       },
       onClose: () => setVerifyLoading(false),
       onSuccess: async (data) => {
+        const ref = data.reference || reference
+        if (submittedRefs.current.has(ref)) {
+          // Korapay double-fired onSuccess for the same payment — ignore.
+          return
+        }
+        submittedRefs.current.add(ref)
         try {
           const res = await fetch('/api/users/deposit', {
             method: 'POST',
@@ -276,11 +284,14 @@ export default function MePage() {
             body: JSON.stringify({
               userId: profile.id,
               amount: VERIFICATION_AMOUNT,
-              reference: data.reference || reference,
+              reference: ref,
             }),
           })
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+          if (!res.ok) {
+            submittedRefs.current.delete(ref)
+            throw new Error(json.error ?? `HTTP ${res.status}`)
+          }
           await loadProfile()
         } catch (err) {
           setVerifyError(err instanceof Error ? err.message : String(err))

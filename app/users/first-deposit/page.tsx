@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -51,6 +51,10 @@ function DepositForm() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
   const [sdkReady, setSdkReady] = useState(false)
+  // Track Korapay references we've already submitted, so a double-fire of
+  // onSuccess (Korapay quirk / React strict mode / user double-tap) doesn't
+  // credit the same deposit twice.
+  const submittedRefs = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!userId) {
@@ -81,13 +85,20 @@ function DepositForm() {
 
   const creditOnServer = useCallback(
     async (reference: string, amt: number) => {
+      // Dedup: refuse to send the same reference twice for this session.
+      if (submittedRefs.current.has(reference)) return
+      submittedRefs.current.add(reference)
       const res = await fetch('/api/users/deposit', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ userId, amount: amt, reference }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      if (!res.ok) {
+        // Allow a retry if the request actually failed.
+        submittedRefs.current.delete(reference)
+        throw new Error(data.error ?? `HTTP ${res.status}`)
+      }
       saveUserSession(userId)
       setResult(data as DepositResponse)
     },

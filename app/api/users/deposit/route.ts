@@ -13,6 +13,15 @@ const VERIFICATION_DEPOSIT_AMOUNT = 200
 
 export const dynamic = 'force-dynamic'
 
+// In-memory dedup for Korapay references within a single serverless instance.
+// Catches the most common double-credit causes: Korapay double-firing
+// onSuccess, React Strict Mode dev double-render, fast user double-tap.
+// PROPER FIX requires a schema-level unique constraint on a payment ledger
+// table — flag for follow-up; this guard is best-effort, not bulletproof
+// across cold starts.
+const processedRefs = new Set<string>()
+const MAX_REFS_CACHED = 5000
+
 export async function POST(request: Request) {
   let body: { userId?: string; amount?: number; reference?: string }
   try {
@@ -67,6 +76,22 @@ export async function POST(request: Request) {
         },
         { status: 402 },
       )
+    }
+  }
+
+  // Reject the same reference twice (best-effort, per-instance).
+  if (reference) {
+    if (processedRefs.has(reference)) {
+      return NextResponse.json(
+        { error: 'this payment has already been credited', duplicate: true },
+        { status: 409 },
+      )
+    }
+    processedRefs.add(reference)
+    // Bound the set so it can't grow unbounded on a long-running instance.
+    if (processedRefs.size > MAX_REFS_CACHED) {
+      const first = processedRefs.values().next().value
+      if (first) processedRefs.delete(first)
     }
   }
 
