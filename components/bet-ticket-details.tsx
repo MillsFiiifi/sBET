@@ -52,11 +52,11 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
     minute: '2-digit',
   })
   const ticketId = bet.code
-  // 17-character verification code, deterministic per bet.
-  // Format: PB-XXXXXX-YYYYYYYY (2 + 1 + 6 + 1 + 7 = 17), built from the
-  // public ticket code + a slice of the bet UUID for added entropy.
+  // 17-character alphanumeric verification code, deterministic per bet.
+  // Derived from the bet UUID for entropy + padded with the public code
+  // so collisions can't happen even with weird IDs.
   const idHex = bet.id.replace(/-/g, '').toUpperCase()
-  const verificationCode = `PB-${ticketId.padEnd(6, '0').slice(0, 6)}-${idHex.slice(0, 7).padEnd(7, '0')}`
+  const verificationCode = `${idHex}${ticketId}0000000000`.slice(0, 17)
 
   const shareWin = () => {
     void navigator.share?.({
@@ -73,58 +73,63 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {/* ─── Won celebration splash (bigger trophy, opaque) ─── */}
+      {/* ─── Won celebration splash (SportyBet-style) ─── */}
       {won && showTrophy && (
-        <div
-          className="absolute inset-0 z-10 flex flex-col items-center px-6 pt-6 sm:pt-10 bg-background animate-in fade-in duration-300"
-        >
-          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-            You won big
-          </p>
-          <p className="mt-2 text-3xl sm:text-4xl font-extrabold text-success tabular-nums">
-            GHS {formatMoney(totalReturn)}
-          </p>
-          <p className="mt-2 text-base sm:text-lg font-bold text-foreground">
-            Congratulations{userName ? `, ${userName}` : ''}!
-          </p>
+        <div className="absolute inset-0 z-10 flex flex-col items-center px-5 sm:px-6 bg-black/90 animate-in fade-in duration-300">
+          {/* Close button — top right */}
+          <button
+            type="button"
+            onClick={() => setShowTrophy(false)}
+            aria-label="Close"
+            className="absolute top-3 right-3 sm:top-4 sm:right-4 w-9 h-9 rounded-full flex items-center justify-center text-white/90 hover:bg-white/10 transition-colors"
+          >
+            <X className="w-6 h-6" strokeWidth={2.5} />
+          </button>
 
-          {/* Big trophy */}
-          <div className="relative flex-1 w-full max-w-[28rem] sm:max-w-[34rem] mt-3 sm:mt-4 min-h-0">
+          {/* Headline */}
+          <div className="mt-12 sm:mt-16 text-center">
+            <p className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight drop-shadow-lg">
+              YOU WON
+            </p>
+            <p className="mt-2 text-3xl sm:text-4xl font-bold text-white tabular-nums drop-shadow-md">
+              GHS {formatMoney(totalReturn)}
+            </p>
+          </div>
+
+          {/* Big trophy with glow */}
+          <div className="relative flex-1 w-full max-w-[30rem] sm:max-w-[36rem] mt-4 sm:mt-6 min-h-0">
             <Image
               src="/won_trophy_image.png"
               alt="Trophy"
               fill
               priority
-              className="object-contain drop-shadow-2xl"
+              className="object-contain drop-shadow-[0_0_40px_rgba(255,200,0,0.45)]"
             />
           </div>
 
-          {/* Verification code container — 17 chars */}
-          <div className="mt-3 w-full max-w-sm px-4 py-3 rounded-xl bg-card border border-primary/40 shadow-sm">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground text-center">
-              Verification Code
-            </p>
-            <p className="mt-1 text-base sm:text-lg font-extrabold font-mono tracking-[0.15em] text-primary text-center tabular-nums">
+          {/* Verify code — inline, single line */}
+          <p className="mt-2 text-sm sm:text-base text-white text-center">
+            <span className="font-medium text-white/80">Verify Code: </span>
+            <span className="font-mono font-bold tracking-wider tabular-nums">
               {verificationCode}
-            </p>
-          </div>
+            </span>
+          </p>
 
           {/* Action buttons container — Details (left), Show Off (right) */}
-          <div className="mt-3 mb-2 w-full max-w-sm flex gap-3 p-2 rounded-xl bg-card border border-border shadow-sm">
+          <div className="mt-4 mb-3 w-full max-w-sm flex gap-3">
             <Button
               type="button"
               onClick={() => setShowTrophy(false)}
               variant="outline"
-              className="flex-1 h-11 border-2 border-primary text-primary hover:bg-primary/10 font-bold"
+              className="flex-1 h-12 border-2 border-success text-success bg-transparent hover:bg-success/10 font-bold text-base"
             >
               Details
             </Button>
             <Button
               type="button"
               onClick={shareWin}
-              className="flex-1 h-11 bg-amber-400 hover:bg-amber-500 text-black font-bold gap-1.5"
+              className="flex-1 h-12 bg-success hover:bg-success/90 text-white font-bold text-base gap-1.5"
             >
-              <Share2 className="w-4 h-4" />
               Show Off
             </Button>
           </div>
