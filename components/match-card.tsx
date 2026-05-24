@@ -63,10 +63,16 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
             </span>
           )}
           {match.isLive ? (
-            <span className="flex items-center gap-1.5 font-semibold text-live">
-              <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse-live" />
-              LIVE {match.minute}
-            </span>
+            match.minute === 'HT' ? (
+              <span className="font-bold uppercase tracking-wide text-amber-500">
+                HALFTIME
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 font-semibold text-live">
+                <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse-live" />
+                LIVE {match.minute}
+              </span>
+            )
           ) : (
             <span className="text-muted-foreground font-medium">{match.startTime}</span>
           )}

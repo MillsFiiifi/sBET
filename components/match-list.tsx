@@ -161,10 +161,16 @@ function MatchRow({
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           {match.isLive ? (
-            <span className="px-2 py-0.5 bg-live/20 text-live text-[10px] sm:text-xs font-semibold rounded animate-pulse-live flex items-center gap-1 shrink-0">
-              <span className="w-1.5 h-1.5 bg-live rounded-full" />
-              LIVE {match.minute}
-            </span>
+            match.minute === 'HT' ? (
+              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] sm:text-xs font-bold uppercase tracking-wide rounded shrink-0">
+                Halftime
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 bg-live/20 text-live text-[10px] sm:text-xs font-semibold rounded animate-pulse-live flex items-center gap-1 shrink-0">
+                <span className="w-1.5 h-1.5 bg-live rounded-full" />
+                LIVE {match.minute}
+              </span>
+            )
           ) : (
             <span className="text-xs sm:text-sm text-muted-foreground">{match.startTime}</span>
           )}
