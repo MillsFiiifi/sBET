@@ -129,3 +129,44 @@ export async function listAllPayments(opts?: {
   const all = ((data ?? []) as PaymentRow[]).map(rowToRecord)
   return opts?.type ? all.filter((p) => p.type === opts.type) : all
 }
+
+export async function findPaymentById(id: string): Promise<PaymentRecord | null> {
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw new Error(`payments.findById: ${error.message}`)
+  return data ? rowToRecord(data as PaymentRow) : null
+}
+
+/**
+ * Flip a failed/pending payment row to success and stamp who resolved it.
+ * Returns the updated record, or null if the row didn't exist.
+ */
+export async function markPaymentResolved(
+  id: string,
+  note?: string,
+): Promise<PaymentRecord | null> {
+  const existing = await findPaymentById(id)
+  if (!existing) return null
+  const mergedMeta = {
+    ...existing.metadata,
+    type: existing.type,
+    adminResolved: true,
+    resolvedAt: new Date().toISOString(),
+    resolutionNote: note || undefined,
+  }
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .update({
+      status: 'success',
+      verified_at: new Date().toISOString(),
+      metadata: mergedMeta,
+    })
+    .eq('id', id)
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`payments.markResolved: ${error.message}`)
+  return data ? rowToRecord(data as PaymentRow) : null
+}

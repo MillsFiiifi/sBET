@@ -29,6 +29,14 @@ export async function GET() {
       (typeof p.metadata?.source === 'string' && p.metadata.source) || null
     const note =
       (typeof p.metadata?.note === 'string' && p.metadata.note) || null
+    const failureReason =
+      (typeof p.metadata?.failureReason === 'string' && p.metadata.failureReason) ||
+      null
+    const paidAmount =
+      typeof p.metadata?.paidAmount === 'number'
+        ? (p.metadata.paidAmount as number)
+        : null
+    const adminResolved = p.metadata?.adminResolved === true
     return {
       id: p.id,
       reference: p.reference,
@@ -38,6 +46,9 @@ export async function GET() {
       status: p.status,
       source, // 'admin_credit' | null
       note,
+      failureReason,
+      paidAmount,
+      adminResolved,
       createdAt: p.createdAt,
       user: u
         ? {

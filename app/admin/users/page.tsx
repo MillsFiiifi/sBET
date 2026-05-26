@@ -19,6 +19,7 @@ interface AdminUserRow {
   id: string
   name: string
   email: string
+  phone: string | null
   verificationStep: 0 | 1 | 2
   withdrawalApproved: boolean
   balance: number
@@ -28,13 +29,13 @@ interface AdminUserRow {
   createdAt: string
 }
 
-type Filter = 'all' | 'awaiting' | 'approved' | 'unverified'
+type Filter = 'all' | 'depositors' | 'awaiting' | 'approved' | 'unverified'
 
-export default function AdminWithdrawalsPage() {
+export default function AdminPlayersPage() {
   const [users, setUsers] = useState<AdminUserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('awaiting')
+  const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState<Set<string>>(new Set())
   const [creditingId, setCreditingId] = useState<string | null>(null)
@@ -63,7 +64,9 @@ export default function AdminWithdrawalsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return users.filter((u) => {
-      if (filter === 'awaiting') {
+      if (filter === 'depositors') {
+        if (!u.firstDepositAt) return false
+      } else if (filter === 'awaiting') {
         if (!(u.verificationStep === 2 && !u.withdrawalApproved)) return false
       } else if (filter === 'approved') {
         if (!u.withdrawalApproved) return false
@@ -74,6 +77,7 @@ export default function AdminWithdrawalsPage() {
         if (
           !u.name.toLowerCase().includes(q) &&
           !u.email.toLowerCase().includes(q) &&
+          !(u.phone?.toLowerCase().includes(q) ?? false) &&
           !u.id.toLowerCase().includes(q)
         )
           return false
@@ -85,6 +89,7 @@ export default function AdminWithdrawalsPage() {
   const counts = useMemo(
     () => ({
       all: users.length,
+      depositors: users.filter((u) => !!u.firstDepositAt).length,
       awaiting: users.filter(
         (u) => u.verificationStep === 2 && !u.withdrawalApproved,
       ).length,
@@ -164,11 +169,12 @@ export default function AdminWithdrawalsPage() {
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold">Withdrawals</h1>
+        <h1 className="text-2xl font-bold">Players</h1>
         <p className="text-sm text-muted-foreground">
-          A player can only withdraw after they've completed verification
-          (paid both 200 GHS deposits) <em>and</em> you've toggled approval
-          here. Use the filters to find players awaiting your decision.
+          Every registered user. Use <strong>Credit</strong> to top up a
+          balance manually (e.g. when Paystack failed but the user paid).
+          Withdrawal approval requires verification (both 200 GHS deposits)
+          and a manual <strong>Approve</strong>.
         </p>
       </div>
 
@@ -179,6 +185,16 @@ export default function AdminWithdrawalsPage() {
       )}
 
       <div className="flex flex-wrap gap-2 items-center">
+        <FilterPill
+          active={filter === 'all'}
+          onClick={() => setFilter('all')}
+          label={`All (${counts.all})`}
+        />
+        <FilterPill
+          active={filter === 'depositors'}
+          onClick={() => setFilter('depositors')}
+          label={`Depositors (${counts.depositors})`}
+        />
         <FilterPill
           active={filter === 'awaiting'}
           onClick={() => setFilter('awaiting')}
@@ -194,17 +210,12 @@ export default function AdminWithdrawalsPage() {
           onClick={() => setFilter('unverified')}
           label={`Unverified (${counts.unverified})`}
         />
-        <FilterPill
-          active={filter === 'all'}
-          onClick={() => setFilter('all')}
-          label={`All (${counts.all})`}
-        />
 
         <div className="ml-auto relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search name, email, ID"
+            placeholder="Search name, email, phone, ID"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 h-9 text-sm"
@@ -240,13 +251,29 @@ export default function AdminWithdrawalsPage() {
                     </div>
                     <p className="text-xs text-muted-foreground truncate">
                       {u.email}
+                      {u.phone && (
+                        <span className="ml-2 text-muted-foreground">· {u.phone}</span>
+                      )}
                     </p>
-                    <p className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1 tabular-nums">
+                    <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 tabular-nums">
                       <span>Balance: GHS {formatMoney(u.balance)}</span>
-                      <span>·</span>
+                      <span className="text-border">·</span>
                       <span>Deposited: GHS {formatMoney(u.totalDeposited)}</span>
-                      <span>·</span>
+                      <span className="text-border">·</span>
                       <span>Withdrawn: GHS {formatMoney(u.totalWithdrawn)}</span>
+                      <span className="text-border">·</span>
+                      <span>Joined {formatJoined(u.createdAt)}</span>
+                      {u.firstDepositAt ? (
+                        <>
+                          <span className="text-border">·</span>
+                          <span>1st deposit {formatJoined(u.firstDepositAt)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-border">·</span>
+                          <span className="text-amber-600">Never deposited</span>
+                        </>
+                      )}
                     </p>
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
@@ -404,6 +431,18 @@ function FilterPill({
       {label}
     </button>
   )
+}
+
+function formatJoined(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  } catch {
+    return iso
+  }
 }
 
 function StepBadge({ step }: { step: 0 | 1 | 2 }) {

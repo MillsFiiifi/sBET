@@ -65,12 +65,48 @@ export async function POST(request: Request) {
     }
     const verify = await verifyPaystackCharge(reference)
     if (!verify.ok) {
+      // Log the failure to the ledger so the admin can see it on the
+      // Deposits page and credit-on-behalf when the user paid but
+      // verification didn't go through. Idempotent on `reference`.
+      try {
+        await recordPayment({
+          userId,
+          reference,
+          amount,
+          type: 'deposit',
+          status: 'failed',
+          provider: 'paystack',
+          metadata: {
+            failureReason: verify.error ?? 'verification failed',
+            paystackStatus: verify.status,
+          },
+        })
+      } catch (e) {
+        console.error('[deposit] failed-attempt ledger write failed:', e)
+      }
       return NextResponse.json(
         { error: verify.error ?? 'payment verification failed' },
         { status: 402 },
       )
     }
     if (verify.amount !== undefined && verify.amount < amount) {
+      try {
+        await recordPayment({
+          userId,
+          reference,
+          amount,
+          type: 'deposit',
+          status: 'failed',
+          provider: 'paystack',
+          metadata: {
+            failureReason: `amount mismatch (paid ${verify.amount}, claimed ${amount})`,
+            paystackStatus: verify.status,
+            paidAmount: verify.amount,
+          },
+        })
+      } catch (e) {
+        console.error('[deposit] mismatch ledger write failed:', e)
+      }
       return NextResponse.json(
         {
           error: `payment amount mismatch (paid ${verify.amount}, claiming ${amount})`,

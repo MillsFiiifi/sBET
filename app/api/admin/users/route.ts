@@ -21,6 +21,7 @@ export async function GET() {
       id: u.id,
       name: u.name,
       email: u.email,
+      phone: u.phone ?? null,
       verificationStep: u.verificationStep ?? 0,
       withdrawalApproved: u.withdrawalApproved ?? false,
       balance: u.balance ?? 0,

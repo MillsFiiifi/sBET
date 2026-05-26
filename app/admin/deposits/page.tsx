@@ -9,6 +9,8 @@ import {
   TrendingUp,
   Users,
   Receipt,
+  Check,
+  AlertTriangle,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -23,6 +25,9 @@ interface DepositRow {
   status: 'pending' | 'success' | 'failed' | 'cancelled'
   source: string | null
   note: string | null
+  failureReason: string | null
+  paidAmount: number | null
+  adminResolved: boolean
   createdAt: string
   user: {
     id: string
@@ -51,6 +56,7 @@ interface DepositsResponse {
 }
 
 type View = 'users' | 'transactions'
+type StatusFilter = 'all' | 'success' | 'failed' | 'pending'
 
 export default function AdminDepositsPage() {
   const [data, setData] = useState<DepositsResponse | null>(null)
@@ -58,6 +64,8 @@ export default function AdminDepositsPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [view, setView] = useState<View>('users')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [resolvingId, setResolvingId] = useState<string | null>(null)
 
   const load = async () => {
     setError(null)
@@ -80,8 +88,9 @@ export default function AdminDepositsPage() {
   const filteredDeposits = useMemo(() => {
     if (!data) return [] as DepositRow[]
     const q = search.trim().toLowerCase()
-    if (!q) return data.deposits
     return data.deposits.filter((d) => {
+      if (statusFilter !== 'all' && d.status !== statusFilter) return false
+      if (!q) return true
       return (
         d.reference.toLowerCase().includes(q) ||
         d.provider.toLowerCase().includes(q) ||
@@ -90,7 +99,47 @@ export default function AdminDepositsPage() {
         (d.user?.phone?.toLowerCase().includes(q) ?? false)
       )
     })
-  }, [data, search])
+  }, [data, search, statusFilter])
+
+  const statusCounts = useMemo(() => {
+    if (!data) return { all: 0, success: 0, failed: 0, pending: 0 }
+    return data.deposits.reduce(
+      (acc, d) => {
+        acc.all += 1
+        if (d.status === 'success') acc.success += 1
+        else if (d.status === 'failed' || d.status === 'cancelled') acc.failed += 1
+        else if (d.status === 'pending') acc.pending += 1
+        return acc
+      },
+      { all: 0, success: 0, failed: 0, pending: 0 },
+    )
+  }, [data])
+
+  const resolvePayment = async (paymentId: string, userName: string, amount: number) => {
+    if (
+      !confirm(
+        `Credit ${userName} GHS ${formatMoney(amount)} and mark this Paystack attempt as resolved?\n\nMake sure the user actually paid — this cannot be undone here.`,
+      )
+    ) {
+      return
+    }
+    setResolvingId(paymentId)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/payments/${paymentId}/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setResolvingId(null)
+    }
+  }
 
   const filteredRollup = useMemo(() => {
     if (!data) return [] as UserRollup[]
@@ -188,6 +237,33 @@ export default function AdminDepositsPage() {
         </div>
       </div>
 
+      {view === 'transactions' && (
+        <div className="flex flex-wrap gap-2">
+          <StatusPill
+            active={statusFilter === 'all'}
+            onClick={() => setStatusFilter('all')}
+            label={`All (${statusCounts.all})`}
+          />
+          <StatusPill
+            active={statusFilter === 'success'}
+            onClick={() => setStatusFilter('success')}
+            label={`Verified (${statusCounts.success})`}
+          />
+          <StatusPill
+            active={statusFilter === 'failed'}
+            onClick={() => setStatusFilter('failed')}
+            label={`Failed (${statusCounts.failed})`}
+            tone="bad"
+          />
+          <StatusPill
+            active={statusFilter === 'pending'}
+            onClick={() => setStatusFilter('pending')}
+            label={`Pending (${statusCounts.pending})`}
+            tone="warn"
+          />
+        </div>
+      )}
+
       <section className="bg-card border border-border rounded-xl overflow-hidden">
         {loading ? (
           <div className="px-4 py-10 text-center text-muted-foreground flex items-center justify-center gap-2 text-sm">
@@ -233,42 +309,85 @@ export default function AdminDepositsPage() {
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {filteredDeposits.map((d) => (
-              <li key={d.id} className="px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5 text-xs">
-                      <StatusBadge status={d.status} />
-                      <SourceBadge source={d.source} provider={d.provider} />
-                      <span className="font-mono text-[10px] text-muted-foreground truncate">
-                        {d.reference}
-                      </span>
-                    </div>
-                    <p className="text-sm font-medium truncate">
-                      {d.user ? d.user.name : 'Unknown user'}
-                      {d.user && (
-                        <span className="text-muted-foreground font-normal">
-                          {' · '}
-                          {d.user.email}
+            {filteredDeposits.map((d) => {
+              const isFailed = d.status === 'failed' || d.status === 'cancelled'
+              const isPending = d.status === 'pending'
+              const canResolve = (isFailed || isPending) && d.user
+              return (
+                <li key={d.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5 text-xs flex-wrap">
+                        <StatusBadge status={d.status} />
+                        <SourceBadge source={d.source} provider={d.provider} />
+                        <span className="font-mono text-[10px] text-muted-foreground truncate">
+                          {d.reference}
                         </span>
+                      </div>
+                      <p className="text-sm font-medium truncate">
+                        {d.user ? d.user.name : 'Unknown user'}
+                        {d.user && (
+                          <span className="text-muted-foreground font-normal">
+                            {' · '}
+                            {d.user.email}
+                          </span>
+                        )}
+                        {d.user?.phone && (
+                          <span className="text-muted-foreground font-normal">
+                            {' · '}
+                            {d.user.phone}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {formatDate(d.createdAt)}
+                        {d.note ? ` · ${d.note}` : ''}
+                      </p>
+                      <FailureReason metadata={d} />
+                    </div>
+                    <div className="text-right shrink-0 flex flex-col items-end gap-2">
+                      <div>
+                        <p
+                          className={`text-sm font-bold tabular-nums ${
+                            isFailed
+                              ? 'text-destructive'
+                              : isPending
+                                ? 'text-amber-600'
+                                : 'text-success'
+                          }`}
+                        >
+                          {isFailed ? '✕' : isPending ? '…' : '+'} GHS{' '}
+                          {formatMoney(d.amount)}
+                        </p>
+                        <p className="text-[10px] uppercase text-muted-foreground">
+                          {d.currency}
+                        </p>
+                      </div>
+                      {canResolve && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            resolvePayment(d.id, d.user!.name, d.amount)
+                          }
+                          disabled={resolvingId === d.id}
+                          className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                          title="Credit user this amount and mark this Paystack attempt as resolved"
+                        >
+                          {resolvingId === d.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <>
+                              <Check className="w-3 h-3 mr-1" />
+                              Credit &amp; resolve
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {formatDate(d.createdAt)}
-                      {d.note ? ` · ${d.note}` : ''}
-                    </p>
+                    </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-bold tabular-nums text-success">
-                      + GHS {formatMoney(d.amount)}
-                    </p>
-                    <p className="text-[10px] uppercase text-muted-foreground">
-                      {d.currency}
-                    </p>
-                  </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>
@@ -318,6 +437,57 @@ function ViewPill({
     >
       {label}
     </button>
+  )
+}
+
+function StatusPill({
+  active,
+  onClick,
+  label,
+  tone = 'neutral',
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  tone?: 'neutral' | 'bad' | 'warn'
+}) {
+  const activeCls =
+    tone === 'bad'
+      ? 'bg-destructive text-destructive-foreground'
+      : tone === 'warn'
+        ? 'bg-amber-500 text-white'
+        : 'bg-primary text-primary-foreground'
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+        active ? activeCls : 'bg-secondary text-foreground hover:bg-secondary/80'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function FailureReason({ metadata }: { metadata: DepositRow }) {
+  if (metadata.adminResolved) {
+    return (
+      <p className="text-[11px] text-success mt-0.5 flex items-center gap-1">
+        <Check className="w-3 h-3" /> Resolved by admin
+      </p>
+    )
+  }
+  if (!metadata.failureReason) return null
+  return (
+    <p className="text-[11px] text-destructive mt-0.5 flex items-center gap-1">
+      <AlertTriangle className="w-3 h-3 shrink-0" />
+      <span className="truncate">
+        {metadata.failureReason}
+        {metadata.paidAmount != null
+          ? ` (paid GHS ${formatMoney(metadata.paidAmount)})`
+          : ''}
+      </span>
+    </p>
   )
 }
 
