@@ -55,7 +55,9 @@ export async function GET(
       createdAt: p.createdAt,
       reference: p.reference,
       description: isDeposit
-        ? `Deposit via ${p.provider}`
+        ? p.metadata?.source === 'admin_credit'
+          ? 'Admin credit'
+          : `Deposit via ${p.provider}`
         : `Withdrawal to ${(p.metadata.network as string)?.toUpperCase?.() ?? 'mobile money'}`,
       meta: p.metadata,
     })

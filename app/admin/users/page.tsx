@@ -1,7 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Loader2, ShieldCheck, ShieldOff, CircleAlert } from 'lucide-react'
+import {
+  Search,
+  Loader2,
+  ShieldCheck,
+  ShieldOff,
+  CircleAlert,
+  Wallet,
+  X,
+  Check,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatMoney } from '@/lib/format-money'
@@ -28,6 +37,10 @@ export default function AdminWithdrawalsPage() {
   const [filter, setFilter] = useState<Filter>('awaiting')
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState<Set<string>>(new Set())
+  const [creditingId, setCreditingId] = useState<string | null>(null)
+  const [creditAmount, setCreditAmount] = useState('')
+  const [creditNote, setCreditNote] = useState('')
+  const [creditSubmitting, setCreditSubmitting] = useState(false)
 
   const load = async () => {
     setError(null)
@@ -80,6 +93,47 @@ export default function AdminWithdrawalsPage() {
     }),
     [users],
   )
+
+  const openCredit = (userId: string) => {
+    setCreditingId(userId)
+    setCreditAmount('')
+    setCreditNote('')
+    setError(null)
+  }
+
+  const cancelCredit = () => {
+    setCreditingId(null)
+    setCreditAmount('')
+    setCreditNote('')
+  }
+
+  const submitCredit = async (userId: string) => {
+    const amount = Number(creditAmount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a positive amount in GHS.')
+      return
+    }
+    setCreditSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/credit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ amount, note: creditNote }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      const newBalance = Number(data.user?.balance ?? 0)
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, balance: newBalance } : u)),
+      )
+      cancelCredit()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCreditSubmitting(false)
+    }
+  }
 
   const toggleApproval = async (userId: string, next: boolean) => {
     setBusy((p) => new Set(p).add(userId))
@@ -170,76 +224,156 @@ export default function AdminWithdrawalsPage() {
         ) : (
           <ul className="divide-y divide-border">
             {filtered.map((u) => (
-              <li
-                key={u.id}
-                className="px-4 py-3 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-semibold text-sm truncate">
-                      {u.name}
-                    </span>
-                    <StepBadge step={u.verificationStep} />
-                    {u.withdrawalApproved && (
-                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-success/30 text-success bg-success/10">
-                        Approved
+              <li key={u.id} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-semibold text-sm truncate">
+                        {u.name}
                       </span>
-                    )}
+                      <StepBadge step={u.verificationStep} />
+                      {u.withdrawalApproved && (
+                        <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-success/30 text-success bg-success/10">
+                          Approved
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {u.email}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1 tabular-nums">
+                      <span>Balance: GHS {formatMoney(u.balance)}</span>
+                      <span>·</span>
+                      <span>Deposited: GHS {formatMoney(u.totalDeposited)}</span>
+                      <span>·</span>
+                      <span>Withdrawn: GHS {formatMoney(u.totalWithdrawn)}</span>
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {u.email}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-3 mt-1 tabular-nums">
-                    <span>Balance: GHS {formatMoney(u.balance)}</span>
-                    <span>·</span>
-                    <span>Deposited: GHS {formatMoney(u.totalDeposited)}</span>
-                    <span>·</span>
-                    <span>Withdrawn: GHS {formatMoney(u.totalWithdrawn)}</span>
-                  </p>
-                </div>
-                <div className="shrink-0">
-                  {u.verificationStep < 2 ? (
-                    <span
-                      className="text-[11px] text-muted-foreground"
-                      title="Player hasn't completed both 200 GHS verification deposits yet."
-                    >
-                      Awaiting verification
-                    </span>
-                  ) : u.withdrawalApproved ? (
+                  <div className="shrink-0 flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => toggleApproval(u.id, false)}
-                      disabled={busy.has(u.id)}
-                      className="h-8 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+                      onClick={() => openCredit(u.id)}
+                      disabled={creditingId === u.id}
+                      className="h-8 text-xs border-primary/30 text-primary hover:bg-primary/10"
+                      title="Credit this user's account"
                     >
-                      {busy.has(u.id) ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <>
-                          <ShieldOff className="w-3 h-3 mr-1" />
-                          Revoke
-                        </>
-                      )}
+                      <Wallet className="w-3 h-3 mr-1" />
+                      Credit
                     </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => toggleApproval(u.id, true)}
-                      disabled={busy.has(u.id)}
-                      className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                    >
-                      {busy.has(u.id) ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <>
-                          <ShieldCheck className="w-3 h-3 mr-1" />
-                          Approve
-                        </>
-                      )}
-                    </Button>
-                  )}
+                    {u.verificationStep < 2 ? (
+                      <span
+                        className="text-[11px] text-muted-foreground"
+                        title="Player hasn't completed both 200 GHS verification deposits yet."
+                      >
+                        Awaiting verification
+                      </span>
+                    ) : u.withdrawalApproved ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => toggleApproval(u.id, false)}
+                        disabled={busy.has(u.id)}
+                        className="h-8 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+                      >
+                        {busy.has(u.id) ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <>
+                            <ShieldOff className="w-3 h-3 mr-1" />
+                            Revoke
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => toggleApproval(u.id, true)}
+                        disabled={busy.has(u.id)}
+                        className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        {busy.has(u.id) ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-3 h-3 mr-1" />
+                            Approve
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
+
+                {creditingId === u.id && (
+                  <div className="mt-3 p-3 rounded-lg border border-primary/30 bg-primary/5 flex flex-col sm:flex-row sm:items-end gap-2">
+                    <div className="flex-1 min-w-0">
+                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">
+                        Amount (GHS)
+                      </label>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={1}
+                        step="0.01"
+                        autoFocus
+                        value={creditAmount}
+                        onChange={(e) => setCreditAmount(e.target.value)}
+                        placeholder="e.g. 50"
+                        className="h-9 text-sm"
+                        disabled={creditSubmitting}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void submitCredit(u.id)
+                          if (e.key === 'Escape') cancelCredit()
+                        }}
+                      />
+                    </div>
+                    <div className="flex-[2] min-w-0">
+                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block mb-1">
+                        Note (optional)
+                      </label>
+                      <Input
+                        type="text"
+                        maxLength={200}
+                        value={creditNote}
+                        onChange={(e) => setCreditNote(e.target.value)}
+                        placeholder="e.g. Bonus for promo X"
+                        className="h-9 text-sm"
+                        disabled={creditSubmitting}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void submitCredit(u.id)
+                          if (e.key === 'Escape') cancelCredit()
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => submitCredit(u.id)}
+                        disabled={creditSubmitting || !creditAmount}
+                        className="h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                      >
+                        {creditSubmitting ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <>
+                            <Check className="w-3 h-3 mr-1" />
+                            Credit
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelCredit}
+                        disabled={creditSubmitting}
+                        className="h-9 text-xs"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

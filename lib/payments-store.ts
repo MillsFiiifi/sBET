@@ -110,3 +110,22 @@ export async function listPaymentsForUser(userId: string): Promise<PaymentRecord
   if (error) throw new Error(`payments.listForUser: ${error.message}`)
   return ((data ?? []) as PaymentRow[]).map(rowToRecord)
 }
+
+/**
+ * Admin list — every payment row, newest first. Filter by type client-side
+ * (the JSONB->>'type' filter isn't typed in supabase-js without escapes, so we
+ * just fetch and filter since this table stays small in the demo deployment).
+ */
+export async function listAllPayments(opts?: {
+  type?: PaymentType
+  limit?: number
+}): Promise<PaymentRecord[]> {
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(opts?.limit ?? 500)
+  if (error) throw new Error(`payments.listAll: ${error.message}`)
+  const all = ((data ?? []) as PaymentRow[]).map(rowToRecord)
+  return opts?.type ? all.filter((p) => p.type === opts.type) : all
+}
