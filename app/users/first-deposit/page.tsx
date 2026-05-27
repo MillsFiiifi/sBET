@@ -1,19 +1,15 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import Script from 'next/script'
-import { Loader2, ArrowLeft, Wallet, CheckCircle2, Info } from 'lucide-react'
+import { Loader2, ArrowLeft, Wallet, CheckCircle2, Info, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
 
-import { PAYSTACK_SDK_SRC, ghsToPesewas } from '@/lib/paystack-client'
-
-const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? ''
 const MIN_FIRST_DEPOSIT = 200
 
 interface UserProfile {
@@ -26,35 +22,21 @@ interface UserProfile {
   firstDepositAt?: string | null
 }
 
-interface DepositResponse {
-  user: {
-    id: string
-    name: string
-    firstDepositAmount: number
-    firstDepositAt: string
-    totalDeposited: number
-    totalWithdrawn: number
-    balance: number
-  }
-  isFirstDeposit: boolean
-}
-
 function DepositForm() {
   const router = useRouter()
   const params = useSearchParams()
   const userId = params.get('userId') ?? ''
+  const moolreStatus = params.get('moolre')
+  const moolreReason = params.get('reason')
 
   const [amount, setAmount] = useState('200')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<DepositResponse | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
-  const [sdkReady, setSdkReady] = useState(false)
-  // Track Paystack references we've already submitted, so a double-fire of
-  // the success callback (React strict mode / user double-tap) doesn't
-  // credit the same deposit twice.
-  const submittedRefs = useRef<Set<string>>(new Set())
+  // When the user comes back from Moolre with ?moolre=success we re-fetch
+  // the profile and show the success screen built from the fresh totals.
+  const [showSuccess, setShowSuccess] = useState(false)
 
   useEffect(() => {
     if (!userId) {
@@ -79,33 +61,32 @@ function DepositForm() {
     }
   }, [userId])
 
-  const isReturning = Boolean(profile?.firstDepositAt)
-  const headingTitle = isReturning ? 'Add funds to your wallet' : 'Make your first deposit'
+  // Handle the redirect back from Moolre. On success we save the session
+  // and flip the page to the success card; on failure we surface the
+  // reason (without clearing the form).
+  useEffect(() => {
+    if (!moolreStatus) return
+    if (moolreStatus === 'success') {
+      if (userId) saveUserSession(userId)
+      setShowSuccess(true)
+    } else if (moolreStatus === 'failed') {
+      setError(
+        moolreReason
+          ? `Payment failed: ${moolreReason}`
+          : 'Payment failed. Try again or contact support.',
+      )
+    }
+  }, [moolreStatus, moolreReason, userId])
+
+  const isReturning = Boolean(profile?.firstDepositAt) && !showSuccess
+  const headingTitle = showSuccess
+    ? 'Deposit successful'
+    : isReturning
+      ? 'Add funds to your wallet'
+      : 'Make your first deposit'
   const minAmount = MIN_FIRST_DEPOSIT
 
-  const creditOnServer = useCallback(
-    async (reference: string, amt: number) => {
-      // Dedup: refuse to send the same reference twice for this session.
-      if (submittedRefs.current.has(reference)) return
-      submittedRefs.current.add(reference)
-      const res = await fetch('/api/users/deposit', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId, amount: amt, reference }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        // Allow a retry if the request actually failed.
-        submittedRefs.current.delete(reference)
-        throw new Error(data.error ?? `HTTP ${res.status}`)
-      }
-      saveUserSession(userId)
-      setResult(data as DepositResponse)
-    },
-    [userId],
-  )
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     if (!userId) {
@@ -125,53 +106,34 @@ function DepositForm() {
       setError('Profile not loaded yet — wait a moment and try again.')
       return
     }
-    if (!PAYSTACK_PUBLIC_KEY) {
-      setError('Payment not configured (missing NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY).')
-      return
-    }
-    if (!window.PaystackPop) {
-      setError('Payment library still loading — try again in a second.')
-      return
-    }
 
     setLoading(true)
-    const reference = `PB-${profile.id.slice(0, 8)}-${Date.now()}`
-
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_PUBLIC_KEY,
-      email: profile.email || `${profile.id}@primebet.local`,
-      amount: ghsToPesewas(amt),
-      currency: 'GHS',
-      ref: reference,
-      metadata: { userId: profile.id, name: profile.name || 'Player' },
-      callback: (response) => {
-        // Paystack runs this synchronously after the iframe closes — fire
-        // the async server credit and let creditOnServer dedup any retries.
-        void (async () => {
-          try {
-            await creditOnServer(response.reference || reference, amt)
-          } catch (err) {
-            setError(err instanceof Error ? err.message : String(err))
-          } finally {
-            setLoading(false)
-          }
-        })()
-      },
-      onClose: () => {
-        setLoading(false)
-      },
-    })
-    handler.openIframe()
+    try {
+      const res = await fetch('/api/payments/moolre/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          amount: amt,
+          purpose: 'deposit',
+          returnPath: `/users/first-deposit?userId=${profile.id}`,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) {
+        throw new Error(data.error ?? `HTTP ${res.status}`)
+      }
+      // Full-page redirect to Moolre's hosted checkout. The user will pay
+      // on Moolre's page and be sent back to /users/first-deposit?moolre=…
+      window.location.href = data.url as string
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setLoading(false)
+    }
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Script
-        src={PAYSTACK_SDK_SRC}
-        strategy="afterInteractive"
-        onLoad={() => setSdkReady(true)}
-      />
-
       <header className="bg-card border-b border-border">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
           <Link
@@ -197,26 +159,22 @@ function DepositForm() {
       <main className="flex-1 flex items-start sm:items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-card rounded-2xl border border-border p-5 sm:p-8">
-            {result ? (
+            {showSuccess && profile ? (
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 mx-auto rounded-2xl bg-success/15 flex items-center justify-center">
                   <CheckCircle2 className="w-8 h-8 text-success" />
                 </div>
-                <h1 className="text-2xl font-bold">Deposit successful</h1>
+                <h1 className="text-2xl font-bold">{headingTitle}</h1>
                 <div className="bg-secondary rounded-lg p-4 text-left space-y-2">
                   <Row
-                    label="Amount"
-                    value={`GHS ${(result.user.firstDepositAmount || Number(amount)).toFixed(2)}`}
-                    bold
-                  />
-                  <Row
                     label="Total deposited"
-                    value={`GHS ${result.user.totalDeposited.toFixed(2)}`}
+                    value={`GHS ${formatMoney(profile.totalDeposited)}`}
                   />
                   <Row
                     label="New balance"
-                    value={`GHS ${formatMoney(result.user.balance)}`}
+                    value={`GHS ${formatMoney(profile.balance)}`}
                     tone="good"
+                    bold
                   />
                 </div>
                 <Button
@@ -263,7 +221,8 @@ function DepositForm() {
                   </div>
                   <h1 className="text-2xl font-bold text-foreground">{headingTitle}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pay securely with Paystack. Minimum deposit: GHS {MIN_FIRST_DEPOSIT}.
+                    Pay securely with Moolre (MTN, Telecel or AT Money).
+                    Minimum deposit: GHS {MIN_FIRST_DEPOSIT}.
                   </p>
                 </div>
 
@@ -285,53 +244,46 @@ function DepositForm() {
                   </div>
 
                   <div className="flex gap-2 flex-wrap">
-                    {['200', '300', '500', '1000'].map(
-                      (preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => setAmount(preset)}
-                          className={`flex-1 min-w-[60px] py-2 rounded-md text-sm font-medium transition-colors ${
-                            amount === preset
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-secondary text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          {preset}
-                        </button>
-                      ),
-                    )}
+                    {['200', '300', '500', '1000'].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setAmount(preset)}
+                        className={`flex-1 min-w-[60px] py-2 rounded-md text-sm font-medium transition-colors ${
+                          amount === preset
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
                   </div>
 
                   {error && (
-                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-                      {error}
+                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>{error}</span>
                     </div>
                   )}
 
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-foreground flex items-start gap-2">
-                    <Info className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="p-3 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
+                    <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                     <span>
-                      <strong>Paying with Telecel?</strong> The OTP only arrives if WhatsApp is
-                      open on that SIM. If you don&apos;t use WhatsApp on this number, pay with{' '}
-                      <strong>MTN</strong> instead — the code comes by SMS.
+                      You&apos;ll be redirected to Moolre to complete payment.
+                      Once paid, you&apos;ll come straight back here.
                     </span>
                   </div>
 
                   <Button
                     type="submit"
-                    disabled={loading || !sdkReady || !profile}
+                    disabled={loading || !profile}
                     className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Processing…
-                      </>
-                    ) : !sdkReady ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Loading payment…
+                        Redirecting…
                       </>
                     ) : (
                       `Pay GHS ${Number(amount || 0).toFixed(2)}`
@@ -339,7 +291,7 @@ function DepositForm() {
                   </Button>
 
                   <p className="text-center text-[11px] text-muted-foreground">
-                    Secured by Paystack · You can deposit later from your account
+                    Secured by Moolre · You can deposit later from your account
                   </p>
                 </form>
               </>

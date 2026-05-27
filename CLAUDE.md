@@ -21,7 +21,7 @@ Use PowerShell on Windows. No test framework is configured.
 - `ODDS_API_KEY` — without it, `/api/matches` returns `customMatches` only with `reason: "ODDS_API_KEY missing"`
 - `ADMIN_PASSWORD` — **unset disables the entire admin section** (proxy returns 503 / redirects to `/admin/login?disabled=1`)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — all server-side stores throw if the URL or service-role key is missing
-- `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`, `MIN_FIRST_DEPOSIT` — Paystack inline checkout + server-side verification
+- `MOOLRE_PUBLIC_KEY`, `MOOLRE_ACCOUNT_NUMBER`, `MIN_FIRST_DEPOSIT` — Moolre hosted-checkout (server-side only; `MOOLRE_PUBLIC_KEY` is the JWT shown on the Moolre profile page, sent as `X-Api-Pubkey`). `MOOLRE_PRIVATE_KEY` and `MOOLRE_SECRET_KEY` are reserved for the payouts API and webhook-signature verification respectively — not used yet.
 
 ## Architecture
 
@@ -92,4 +92,4 @@ The user-facing `/me/transactions` page (and `GET /api/users/[id]/transactions`)
 - shadcn/ui style is `new-york`, base color `neutral`, components under `components/ui/`, lucide icons. Use the existing aliases in `components.json` rather than adding new ones.
 - Tailwind v4 with `@tailwindcss/postcss` — CSS variables in `app/globals.css`, no `tailwind.config.*`.
 - `revalidate = 30` on `/api/matches`, `revalidate = 60` on per-sport Odds API fetches — keep these aligned when adding new match endpoints so the live clock stays close to real time.
-- Money in GHS (Ghana cedis). Paystack returns pesewas (×100); convert at the boundary.
+- Money in GHS (Ghana cedis). Moolre's hosted checkout accepts the major-unit amount directly — no pesewa conversion needed.

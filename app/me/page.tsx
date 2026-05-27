@@ -1,9 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import Script from 'next/script'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ChevronRight,
   Ticket,
@@ -37,7 +36,6 @@ import {
   getUserId,
   getUserName,
 } from '@/lib/user-session'
-import { PAYSTACK_SDK_SRC, ghsToPesewas } from '@/lib/paystack-client'
 import { formatMoney } from '@/lib/format-money'
 import { SUPPORT_TELEGRAM_URL } from '@/lib/support'
 
@@ -84,6 +82,7 @@ const MENU_ITEMS = [
 
 export default function MePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [balanceHidden, setBalanceHidden] = useState(false)
@@ -96,11 +95,9 @@ export default function MePage() {
   const [withdrawLoading, setWithdrawLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [selections, setSelections] = useState<BetSelection[]>([])
-  const [sdkReady, setSdkReady] = useState(false)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [verifyError, setVerifyError] = useState<string | null>(null)
-  // Dedup: never credit the same Paystack reference twice within a session.
-  const submittedRefs = useRef<Set<string>>(new Set())
+  const [depositToast, setDepositToast] = useState<{ kind: 'success' | 'failed'; text: string } | null>(null)
 
   const loadProfile = useCallback(async () => {
     const userId = getUserId()
@@ -137,6 +134,26 @@ export default function MePage() {
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [loadProfile])
+
+  // Handle the redirect back from Moolre. On success we re-fetch the
+  // profile so the new balance / verification step are reflected; on
+  // failure we surface the reason as a dismissible toast. Strip the query
+  // params after handling so a refresh doesn't replay them.
+  useEffect(() => {
+    const status = searchParams.get('moolre')
+    if (!status) return
+    if (status === 'success') {
+      setDepositToast({ kind: 'success', text: 'Deposit credited. Welcome back!' })
+      void loadProfile()
+    } else {
+      const reason = searchParams.get('reason')
+      setDepositToast({
+        kind: 'failed',
+        text: reason ? `Deposit failed: ${reason}` : 'Deposit failed. Try again.',
+      })
+    }
+    router.replace('/me')
+  }, [searchParams, loadProfile, router])
 
   const balance = profile?.balance ?? 0
   const hasDeposited = !!profile?.firstDepositAt
@@ -248,65 +265,30 @@ export default function MePage() {
     }
   }
 
-  const startVerificationDeposit = () => {
+  const startVerificationDeposit = async () => {
     if (!profile) return
     setVerifyError(null)
-    const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? ''
-    if (!publicKey) {
-      setVerifyError('Payment not configured (missing Paystack public key).')
-      return
-    }
-    if (!window.PaystackPop) {
-      setVerifyError('Payment library still loading — try again in a second.')
-      return
-    }
     setVerifyLoading(true)
-    const reference = `PB-VRF-${profile.id.slice(0, 8)}-${Date.now()}`
-    const handler = window.PaystackPop.setup({
-      key: publicKey,
-      email: profile.email || `${profile.id}@primebet.local`,
-      amount: ghsToPesewas(VERIFICATION_AMOUNT),
-      currency: 'GHS',
-      ref: reference,
-      metadata: {
-        userId: profile.id,
-        name: profile.name || 'Player',
-        purpose: 'verification',
-      },
-      callback: (response) => {
-        const ref = response.reference || reference
-        if (submittedRefs.current.has(ref)) {
-          // Callback fired twice for the same payment — ignore.
-          return
-        }
-        submittedRefs.current.add(ref)
-        void (async () => {
-          try {
-            const res = await fetch('/api/users/deposit', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                userId: profile.id,
-                amount: VERIFICATION_AMOUNT,
-                reference: ref,
-              }),
-            })
-            const json = await res.json().catch(() => ({}))
-            if (!res.ok) {
-              submittedRefs.current.delete(ref)
-              throw new Error(json.error ?? `HTTP ${res.status}`)
-            }
-            await loadProfile()
-          } catch (err) {
-            setVerifyError(err instanceof Error ? err.message : String(err))
-          } finally {
-            setVerifyLoading(false)
-          }
-        })()
-      },
-      onClose: () => setVerifyLoading(false),
-    })
-    handler.openIframe()
+    try {
+      const res = await fetch('/api/payments/moolre/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          amount: VERIFICATION_AMOUNT,
+          purpose: 'verification',
+          returnPath: '/me',
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) {
+        throw new Error(data.error ?? `HTTP ${res.status}`)
+      }
+      window.location.href = data.url as string
+    } catch (err) {
+      setVerifyError(err instanceof Error ? err.message : String(err))
+      setVerifyLoading(false)
+    }
   }
 
   const copyUserId = async () => {
@@ -439,6 +421,25 @@ export default function MePage() {
               <span className="truncate">Withdraw</span>
             </button>
           </div>
+          {depositToast && (
+            <div
+              className={`mt-3 p-2.5 rounded-lg text-xs flex items-start justify-between gap-2 border ${
+                depositToast.kind === 'success'
+                  ? 'bg-success/10 border-success/30 text-foreground'
+                  : 'bg-destructive/10 border-destructive/30 text-destructive'
+              }`}
+            >
+              <span>{depositToast.text}</span>
+              <button
+                type="button"
+                onClick={() => setDepositToast(null)}
+                aria-label="Dismiss"
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           {noFundsBanner && (
             <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground flex items-start justify-between gap-2">
               <span>{noFundsBanner}</span>
@@ -558,12 +559,6 @@ export default function MePage() {
         activeTab="me"
       />
 
-      <Script
-        src={PAYSTACK_SDK_SRC}
-        strategy="afterInteractive"
-        onLoad={() => setSdkReady(true)}
-      />
-
       {/* Withdraw sheet — always rendered, visibility toggled via style so the
           click handler can never get caught by a conditional-render race. */}
       <div
@@ -638,36 +633,30 @@ export default function MePage() {
                     {verifyError}
                   </p>
                 )}
-                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-foreground flex items-start gap-2">
-                  <Info className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <div className="p-2.5 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                   <span>
-                    <strong>Telecel users:</strong> the OTP only arrives if WhatsApp is open on
-                    that SIM. Pay with <strong>MTN</strong> if you don&apos;t use WhatsApp on this
-                    number.
+                    You&apos;ll be redirected to Moolre to complete payment
+                    (MTN, Telecel or AT Money).
                   </span>
                 </div>
                 <Button
                   type="button"
-                  onClick={startVerificationDeposit}
-                  disabled={verifyLoading || !sdkReady}
+                  onClick={() => void startVerificationDeposit()}
+                  disabled={verifyLoading}
                   className="w-full h-11 bg-primary text-primary-foreground hover:bg-primary/90 font-bold"
                 >
                   {verifyLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing…
-                    </>
-                  ) : !sdkReady ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Loading payment…
+                      Redirecting…
                     </>
                   ) : (
                     `Pay GHS ${VERIFICATION_AMOUNT} to verify`
                   )}
                 </Button>
                 <p className="text-[11px] text-center text-muted-foreground">
-                  Secured by Paystack. Funds are credited to your wallet balance.
+                  Secured by Moolre. Funds are credited to your wallet balance.
                 </p>
               </div>
             ) : (

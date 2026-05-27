@@ -172,7 +172,7 @@ export default function AdminPlayersPage() {
         <h1 className="text-2xl font-bold">Players</h1>
         <p className="text-sm text-muted-foreground">
           Every registered user. Use <strong>Credit</strong> to top up a
-          balance manually (e.g. when Paystack failed but the user paid).
+          balance manually (e.g. when Moolre failed but the user paid).
           Withdrawal approval requires verification (both 200 GHS deposits)
           and a manual <strong>Approve</strong>.
         </p>

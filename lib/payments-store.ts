@@ -74,7 +74,7 @@ export async function recordPayment(input: RecordPaymentInput): Promise<PaymentR
     reference: input.reference,
     amount: input.amount,
     currency: input.currency ?? 'GHS',
-    provider: input.provider ?? 'paystack',
+    provider: input.provider ?? 'moolre',
     status: input.status ?? 'success',
     metadata,
     verified_at: input.verifiedAt ?? new Date().toISOString(),
@@ -137,6 +137,48 @@ export async function findPaymentById(id: string): Promise<PaymentRecord | null>
     .eq('id', id)
     .maybeSingle()
   if (error) throw new Error(`payments.findById: ${error.message}`)
+  return data ? rowToRecord(data as PaymentRow) : null
+}
+
+export async function findPaymentByReference(
+  reference: string,
+): Promise<PaymentRecord | null> {
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .select('*')
+    .eq('reference', reference)
+    .maybeSingle()
+  if (error) throw new Error(`payments.findByReference: ${error.message}`)
+  return data ? rowToRecord(data as PaymentRow) : null
+}
+
+/**
+ * Compare-and-set the status of a pending payment. Returns the updated row
+ * only when the row was actually pending — if it was already success/failed
+ * (e.g. a concurrent webhook beat us), returns null. This is the lock that
+ * protects against double-crediting when Moolre fires both the browser
+ * redirect and the server webhook for the same payment.
+ */
+export async function claimPendingPayment(
+  reference: string,
+  nextStatus: PaymentStatus,
+  metaPatch?: Record<string, unknown>,
+): Promise<PaymentRecord | null> {
+  const existing = await findPaymentByReference(reference)
+  if (!existing || existing.status !== 'pending') return null
+  const mergedMeta = { ...existing.metadata, ...(metaPatch ?? {}) }
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .update({
+      status: nextStatus,
+      verified_at: new Date().toISOString(),
+      metadata: mergedMeta,
+    })
+    .eq('reference', reference)
+    .eq('status', 'pending')
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`payments.claimPending: ${error.message}`)
   return data ? rowToRecord(data as PaymentRow) : null
 }
 

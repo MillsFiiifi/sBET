@@ -118,7 +118,7 @@ export default function AdminDepositsPage() {
   const resolvePayment = async (paymentId: string, userName: string, amount: number) => {
     if (
       !confirm(
-        `Credit ${userName} GHS ${formatMoney(amount)} and mark this Paystack attempt as resolved?\n\nMake sure the user actually paid — this cannot be undone here.`,
+        `Credit ${userName} GHS ${formatMoney(amount)} and mark this Moolre attempt as resolved?\n\nMake sure the user actually paid — this cannot be undone here.`,
       )
     ) {
       return
@@ -159,7 +159,7 @@ export default function AdminDepositsPage() {
         <div>
           <h1 className="text-2xl font-bold">Deposits</h1>
           <p className="text-sm text-muted-foreground">
-            All player deposits — Paystack top-ups and admin credits. Newest
+            All player deposits — Moolre top-ups and admin credits. Newest
             first.
           </p>
         </div>
@@ -371,7 +371,7 @@ export default function AdminDepositsPage() {
                           }
                           disabled={resolvingId === d.id}
                           className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                          title="Credit user this amount and mark this Paystack attempt as resolved"
+                          title="Credit user this amount and mark this Moolre attempt as resolved"
                         >
                           {resolvingId === d.id ? (
                             <Loader2 className="w-3 h-3 animate-spin" />

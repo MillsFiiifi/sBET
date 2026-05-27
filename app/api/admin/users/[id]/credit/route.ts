@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: Params) {
 
   // Log to the payments ledger so it appears in the user's transactions feed
   // (and on the admin deposits page). Tag with source='admin_credit' so it's
-  // distinguishable from Paystack deposits — these do NOT advance the
+  // distinguishable from Moolre deposits — these do NOT advance the
   // verification gate or fire sub-admin commission.
   try {
     await recordPayment({

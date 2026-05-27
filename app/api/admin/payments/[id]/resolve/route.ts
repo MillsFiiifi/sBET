@@ -16,7 +16,7 @@ async function isAdminAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Admin "Credit & resolve" — for a failed/pending Paystack row, credit the
+ * Admin "Credit & resolve" — for a failed/pending Moolre row, credit the
  * user the recorded amount and flip the payment row to success so it can't
  * be credited twice.
  */
