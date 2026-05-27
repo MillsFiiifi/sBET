@@ -101,6 +101,8 @@ export interface AppUser {
   email: string
   passwordHash: string
   phone?: string
+  /** Ghana Card number in canonical form: GHA-XXXXXXXXX-X. */
+  ghanaCard?: string
   referredByCode?: string
   referredBySubAdminId?: string
   firstDepositAmount: number

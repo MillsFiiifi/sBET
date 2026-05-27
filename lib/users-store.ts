@@ -8,6 +8,7 @@ interface UserRow {
   email: string
   password_hash: string
   phone: string | null
+  ghana_card: string | null
   referred_by_code: string | null
   referred_by_sub_admin_id: string | null
   first_deposit_amount: number
@@ -39,6 +40,7 @@ function rowToUser(row: UserRow): AppUser {
     email: row.email,
     passwordHash: row.password_hash,
     phone: row.phone ?? undefined,
+    ghanaCard: row.ghana_card ?? undefined,
     referredByCode: row.referred_by_code ?? undefined,
     referredBySubAdminId: row.referred_by_sub_admin_id ?? undefined,
     firstDepositAmount: Number(row.first_deposit_amount),
@@ -104,6 +106,7 @@ export async function addUser(
     email: input.email.trim().toLowerCase(),
     password_hash: input.passwordHash,
     phone: input.phone?.trim() || null,
+    ghana_card: input.ghanaCard?.trim() || null,
     referred_by_code: input.referredByCode ?? null,
     referred_by_sub_admin_id: input.referredBySubAdminId ?? null,
   }

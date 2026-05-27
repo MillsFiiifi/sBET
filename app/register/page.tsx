@@ -16,6 +16,7 @@ function RegisterForm() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [ghanaCard, setGhanaCard] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   // Lazy-init from ?ref= so the real referral code is on the field at first
@@ -56,6 +57,7 @@ function RegisterForm() {
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim(),
+          ghanaCard: ghanaCard.trim(),
           password,
           referralCode: referralCode.trim(),
         }),
@@ -177,6 +179,26 @@ function RegisterForm() {
                 />
                 <p className="text-[11px] text-muted-foreground">
                   We use this when paying out withdrawals.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="ghanaCard" className="text-sm font-medium text-foreground">
+                  Ghana Card number
+                </label>
+                <Input
+                  id="ghanaCard"
+                  type="text"
+                  inputMode="text"
+                  placeholder="GHA-XXXXXXXXX-X"
+                  value={ghanaCard}
+                  onChange={(e) => setGhanaCard(e.target.value.toUpperCase())}
+                  className="h-11 bg-secondary border-border tracking-wider font-mono"
+                  maxLength={15}
+                  required
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Required for account verification.
                 </p>
               </div>
 

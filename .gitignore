@@ -20,3 +20,5 @@ dev.log
 
 # Local Claude Code state
 .claude/
+
+.vercel

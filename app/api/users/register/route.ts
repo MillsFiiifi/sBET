@@ -5,12 +5,21 @@ import { hashPassword } from '@/lib/password'
 
 export const dynamic = 'force-dynamic'
 
+// Canonical Ghana Card format: GHA-XXXXXXXXX-X (3 letters + 9 digits + 1 check digit).
+// Accept input with or without hyphens, in any case, then normalize.
+function normalizeGhanaCard(raw: string): string | null {
+  const stripped = raw.toUpperCase().replace(/[\s-]/g, '')
+  if (!/^GHA\d{10}$/.test(stripped)) return null
+  return `${stripped.slice(0, 3)}-${stripped.slice(3, 12)}-${stripped.slice(12)}`
+}
+
 export async function POST(request: Request) {
   let body: {
     name?: string
     email?: string
     password?: string
     phone?: string
+    ghanaCard?: string
     referralCode?: string
   }
   try {
@@ -23,7 +32,7 @@ export async function POST(request: Request) {
   const email = (body.email ?? '').trim().toLowerCase()
   const password = body.password ?? ''
   const referralCode = (body.referralCode ?? '').trim().toUpperCase()
-  // Normalise phone to 10-digit local format. Optional at signup.
+  // Normalise phone to 10-digit local format. Required at signup.
   let phone = (body.phone ?? '').replace(/\s|-/g, '')
   if (phone.startsWith('+233')) phone = '0' + phone.slice(4)
   else if (phone.startsWith('233')) phone = '0' + phone.slice(3)
@@ -34,9 +43,17 @@ export async function POST(request: Request) {
     )
   }
 
+  const ghanaCard = normalizeGhanaCard(body.ghanaCard ?? '')
+  if (!ghanaCard) {
+    return NextResponse.json(
+      { error: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)' },
+      { status: 400 },
+    )
+  }
+
   if (!name || !email || !password || !phone) {
     return NextResponse.json(
-      { error: 'name, email, phone, and password are required' },
+      { error: 'name, email, phone, Ghana Card, and password are required' },
       { status: 400 },
     )
   }
@@ -79,6 +96,7 @@ export async function POST(request: Request) {
     email,
     passwordHash: hashPassword(password),
     phone: phone || undefined,
+    ghanaCard,
     referredByCode: validatedReferralCode,
     referredBySubAdminId,
   })
