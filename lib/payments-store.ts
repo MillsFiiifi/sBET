@@ -140,48 +140,6 @@ export async function findPaymentById(id: string): Promise<PaymentRecord | null>
   return data ? rowToRecord(data as PaymentRow) : null
 }
 
-export async function findPaymentByReference(
-  reference: string,
-): Promise<PaymentRecord | null> {
-  const { data, error } = await supabaseServer()
-    .from('payments')
-    .select('*')
-    .eq('reference', reference)
-    .maybeSingle()
-  if (error) throw new Error(`payments.findByReference: ${error.message}`)
-  return data ? rowToRecord(data as PaymentRow) : null
-}
-
-/**
- * Compare-and-set the status of a pending payment. Returns the updated row
- * only when the row was actually pending — if it was already success/failed
- * (e.g. a concurrent webhook beat us), returns null. This is the lock that
- * protects against double-crediting when Moolre fires both the browser
- * redirect and the server webhook for the same payment.
- */
-export async function claimPendingPayment(
-  reference: string,
-  nextStatus: PaymentStatus,
-  metaPatch?: Record<string, unknown>,
-): Promise<PaymentRecord | null> {
-  const existing = await findPaymentByReference(reference)
-  if (!existing || existing.status !== 'pending') return null
-  const mergedMeta = { ...existing.metadata, ...(metaPatch ?? {}) }
-  const { data, error } = await supabaseServer()
-    .from('payments')
-    .update({
-      status: nextStatus,
-      verified_at: new Date().toISOString(),
-      metadata: mergedMeta,
-    })
-    .eq('reference', reference)
-    .eq('status', 'pending')
-    .select('*')
-    .maybeSingle()
-  if (error) throw new Error(`payments.claimPending: ${error.message}`)
-  return data ? rowToRecord(data as PaymentRow) : null
-}
-
 /**
  * Flip a failed/pending payment row to success and stamp who resolved it.
  * Returns the updated record, or null if the row didn't exist.

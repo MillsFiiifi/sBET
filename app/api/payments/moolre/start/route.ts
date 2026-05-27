@@ -1,22 +1,20 @@
 import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
-import { getMinFirstDeposit, startMoolrePayment } from '@/lib/moolre'
+import { getMinFirstDeposit, getMoolrePosUrl } from '@/lib/moolre'
 
 export const dynamic = 'force-dynamic'
 
 interface StartBody {
   userId?: string
   amount?: number
-  /** Where to send the user after callback completes. Server appends ?moolre=... */
+  /** Where to send the user after the (manual) reconciliation. */
   returnPath?: string
   /** Tag for traceability — 'deposit' (default) or 'verification'. */
   purpose?: 'deposit' | 'verification'
 }
 
 function sanitizeReturnPath(raw: string | undefined): string {
-  // Only allow same-origin paths so callback redirect can't be hijacked into
-  // an open redirect. Drop anything not starting with '/'.
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/me'
   return raw
 }
@@ -47,33 +45,23 @@ export async function POST(request: Request) {
     )
   }
 
+  const posUrl = getMoolrePosUrl()
+  if (!posUrl) {
+    return NextResponse.json(
+      { error: 'MOOLRE_POS_URL not configured' },
+      { status: 502 },
+    )
+  }
+
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
 
   const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
   const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
 
-  // Build absolute callback URL from the incoming request. Works in dev,
-  // preview, and prod without needing a separate env var.
-  const origin = new URL(request.url).origin
-  const callbackUrl = `${origin}/api/payments/moolre/callback`
-
-  const moolre = await startMoolrePayment({
-    reference,
-    email: user.email,
-    amount,
-    callbackUrl,
-  })
-  if (!moolre.ok || !moolre.url) {
-    return NextResponse.json(
-      { error: moolre.error ?? 'failed to start payment' },
-      { status: 502 },
-    )
-  }
-
-  // Best-effort pending row so we can show abandoned attempts on the admin
-  // page and so the callback has somewhere to claim. Failure here is not
-  // fatal — the callback can still verify against Moolre and credit.
+  // Pending row so the admin can see the intent on /admin/deposits and
+  // credit it once they confirm the payment on the Moolre dashboard. The
+  // unique constraint on `reference` makes this idempotent.
   try {
     await recordPayment({
       userId,
@@ -82,11 +70,17 @@ export async function POST(request: Request) {
       type: 'deposit',
       status: 'pending',
       provider: 'moolre',
-      metadata: { purpose, returnPath },
+      metadata: {
+        purpose,
+        returnPath,
+        userName: user.name,
+        userPhone: user.phone ?? null,
+        flow: 'pos-link',
+      },
     })
   } catch (e) {
     console.error('[moolre/start] pending ledger write failed:', e)
   }
 
-  return NextResponse.json({ url: moolre.url, reference }, { status: 201 })
+  return NextResponse.json({ url: posUrl, reference }, { status: 201 })
 }

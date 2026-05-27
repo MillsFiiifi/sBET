@@ -646,8 +646,8 @@ function MePageInner() {
                 <div className="p-2.5 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
                   <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                   <span>
-                    You&apos;ll be redirected to Moolre to complete payment
-                    (MTN, Telecel or AT Money).
+                    You&apos;ll be redirected to Moolre to pay. Your balance
+                    is credited within a few minutes of payment.
                   </span>
                 </div>
                 <Button

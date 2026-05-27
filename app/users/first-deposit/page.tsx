@@ -221,7 +221,7 @@ function DepositForm() {
                   </div>
                   <h1 className="text-2xl font-bold text-foreground">{headingTitle}</h1>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pay securely with Moolre (MTN, Telecel or AT Money).
+                    Pay with MTN, Telecel or AT Money on Moolre.
                     Minimum deposit: GHS {MIN_FIRST_DEPOSIT}.
                   </p>
                 </div>
@@ -270,8 +270,9 @@ function DepositForm() {
                   <div className="p-3 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
                     <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                     <span>
-                      You&apos;ll be redirected to Moolre to complete payment.
-                      Once paid, you&apos;ll come straight back here.
+                      You&apos;ll be redirected to Moolre to pay. Your balance
+                      is credited within a few minutes of payment — check{' '}
+                      <strong>My Account</strong> after.
                     </span>
                   </div>
 
