@@ -27,5 +27,6 @@ export async function GET(
     withdrawalApproved: user.withdrawalApproved ?? false,
     phone: user.phone ?? null,
     firstDepositAt: user.firstDepositAt ?? null,
+    referredByCode: user.referredByCode ?? null,
   })
 }

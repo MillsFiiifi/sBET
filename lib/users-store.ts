@@ -221,6 +221,24 @@ export async function advanceVerificationStep(userId: string): Promise<AppUser |
 }
 
 /**
+ * Update the user's password hash. Used by /api/users/change-password
+ * after the caller has verified the current password.
+ */
+export async function setUserPassword(
+  userId: string,
+  passwordHash: string,
+): Promise<AppUser | null> {
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .update({ password_hash: passwordHash })
+    .eq('id', userId)
+    .select('*')
+    .maybeSingle()
+  if (error) throw new Error(`users.setPassword: ${error.message}`)
+  return data ? rowToUser(data) : null
+}
+
+/**
  * Save / update the user's mobile-money phone number so it can be
  * pre-filled on subsequent withdrawals.
  */

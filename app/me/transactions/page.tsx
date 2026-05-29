@@ -1,9 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import {
-  ArrowLeft,
   ArrowDownLeft,
   ArrowUpRight,
   Receipt,
@@ -11,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
+import { MeSubpageHeader } from '@/components/me-subpage-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getUserId } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
@@ -86,18 +85,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col pb-20 xl:pb-0 max-w-lg mx-auto w-full">
-      <header className="bg-card border-b border-border sticky top-0 z-10">
-        <div className="px-3 sm:px-4 h-14 flex items-center gap-3">
-          <Link
-            href="/me"
-            aria-label="Back"
-            className="p-2 -ml-2 rounded-md hover:bg-secondary transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <h1 className="font-bold text-lg flex-1 truncate">Transaction History</h1>
-        </div>
-      </header>
+      <MeSubpageHeader title="Transaction History" />
 
       {loading ? (
         <div className="px-3 sm:px-4 pt-4 space-y-3">

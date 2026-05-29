@@ -75,17 +75,17 @@ const NETWORK_STYLE: Record<string, string> = {
 }
 
 const QUICK_LINKS = [
-  { label: 'Bet History', icon: Ticket, href: '#' },
+  { label: 'Bet History', icon: Ticket, href: '/me/bets' },
   { label: 'Transactions', icon: History, href: '/me/transactions' },
-  { label: 'Gifts', icon: Gift, href: '#', badge: '0' },
+  { label: 'Gifts', icon: Gift, href: '/me/gifts', badge: '0' },
 ] as const
 
 const MENU_ITEMS = [
-  { label: 'My SportySocial', icon: Users, href: '#' },
-  { label: 'Daily Streak', icon: Flame, href: '#', badge: '2' },
+  { label: 'My Referrals', icon: Users, href: '/me/social' },
+  { label: 'Daily Streak', icon: Flame, href: '/me/streak', badge: '2' },
   { label: 'Customer Service', icon: MessageCircle, href: SUPPORT_TELEGRAM_URL, external: true },
-  { label: 'How to Play', icon: HelpCircle, href: '#' },
-  { label: 'Settings', icon: Settings, href: '#' },
+  { label: 'How to Play', icon: HelpCircle, href: '/me/how-to-play' },
+  { label: 'Settings', icon: Settings, href: '/me/settings' },
 ] as const
 
 export default function MePage() {
