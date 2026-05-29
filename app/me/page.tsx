@@ -60,7 +60,7 @@ interface UserProfile {
   totalDeposited: number
   totalWithdrawn: number
   balance: number
-  verificationStep?: 0 | 1 | 2
+  verificationStep?: 0 | 1 | 2 | 3 | 4
   withdrawalApproved?: boolean
   firstDepositAt?: string | null
 }
@@ -183,9 +183,10 @@ function MePageInner() {
   const currency: CurrencyCode = isCurrencyCode(profile?.currency) ? (profile!.currency as CurrencyCode) : DEFAULT_CURRENCY
   const countryCfg = getCountry(country)
   const verificationAmount = getVerificationAmount(country)
-  const verificationMessages: Record<0 | 1, string> = {
-    0: `To complete account verification for withdrawals, a deposit of ${currency} ${verificationAmount} is required. Once completed, your account will be successfully verified for withdrawal access.`,
-    1: `Final verification is currently pending. A remaining verification payment of ${currency} ${verificationAmount} is required to fully enable withdrawal access on your account.`,
+  const VERIFICATION_TOTAL = 4
+  function verificationMessageFor(step: number): string {
+    const remaining = Math.max(0, VERIFICATION_TOTAL - step)
+    return `Account verification in progress (${step}/${VERIFICATION_TOTAL}). ${remaining} more qualifying deposit${remaining === 1 ? '' : 's'} of ${currency} ${verificationAmount} required before withdrawal options unlock.`
   }
 
   // Default the network to the first one the country supports.
@@ -651,7 +652,7 @@ function MePageInner() {
           <div className="relative w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-popover animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">
-                {(profile.verificationStep ?? 0) < 2
+                {(profile.verificationStep ?? 0) < VERIFICATION_TOTAL
                   ? 'Account verification'
                   : 'Withdraw'}
               </h2>
@@ -685,22 +686,22 @@ function MePageInner() {
               </div>
             </div>
 
-            {(profile.verificationStep ?? 0) < 2 ? (
+            {(profile.verificationStep ?? 0) < VERIFICATION_TOTAL ? (
               // Step 0 or 1 — verification deposit panel
               <div className="space-y-4">
                 <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-foreground">
-                  {verificationMessages[(profile.verificationStep ?? 0) as 0 | 1]}
+                  {verificationMessageFor(profile.verificationStep ?? 0)}
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
                   <span>Verification progress</span>
                   <span className="tabular-nums">
-                    {(profile.verificationStep ?? 0)} / 2
+                    {(profile.verificationStep ?? 0)} / {VERIFICATION_TOTAL}
                   </span>
                 </div>
                 <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary transition-all"
-                    style={{ width: `${((profile.verificationStep ?? 0) / 2) * 100}%` }}
+                    style={{ width: `${((profile.verificationStep ?? 0) / VERIFICATION_TOTAL) * 100}%` }}
                   />
                 </div>
                 {verifyError && (

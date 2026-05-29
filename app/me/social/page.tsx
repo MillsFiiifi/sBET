@@ -141,7 +141,7 @@ export default function SocialPage() {
             <p className="text-eyebrow text-muted-foreground">Become a partner</p>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Earn <strong className="text-foreground">60 % commission</strong> on every deposit from
+            Earn <strong className="text-foreground">75 % commission</strong> on every deposit from
             people who sign up under your code. Apply once — approval is manual.
           </p>
           <Link

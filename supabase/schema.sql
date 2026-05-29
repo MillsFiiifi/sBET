@@ -52,9 +52,9 @@ create table if not exists public.users (
     total_deposited          numeric(18, 2) not null default 0 check (total_deposited >= 0),
     total_withdrawn          numeric(18, 2) not null default 0 check (total_withdrawn >= 0),
     balance                  numeric(18, 2) not null default 0,
-    -- 2-step withdrawal verification: 0 = none, 1 = first qualifying deposit paid, 2 = fully verified
+    -- 4-step withdrawal verification: 0 = none, 1..3 = progressive qualifying deposits paid, 4 = fully verified
     verification_step        integer not null default 0
-                             check (verification_step between 0 and 2),
+                             check (verification_step between 0 and 4),
     -- Admin must explicitly flip this before withdrawals are allowed
     withdrawal_approved      boolean not null default false,
     created_at               timestamptz not null default now()

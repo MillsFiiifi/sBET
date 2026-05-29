@@ -46,7 +46,7 @@ interface CommissionRow {
 
 function rowToUser(row: UserRow): AppUser {
   const step = Number(row.verification_step ?? 0)
-  const clamped = (step < 0 ? 0 : step > 2 ? 2 : step) as 0 | 1 | 2
+  const clamped = (step < 0 ? 0 : step > 4 ? 4 : step) as 0 | 1 | 2 | 3 | 4
   const country: CountryCode = isCountryCode(row.country) ? row.country : DEFAULT_COUNTRY
   const currency: CurrencyCode = isCurrencyCode(row.currency) ? row.currency : currencyFromCountry(country)
   return {
@@ -202,13 +202,14 @@ export async function recordWithdrawal(
 }
 
 /**
- * Bump the user's withdrawal-verification step by 1 (capped at 2).
- * Called after each verification-tier Moolre deposit clears.
+ * Bump the user's withdrawal-verification step by 1 (capped at 4).
+ * Called after each qualifying deposit clears (manual admin credit or
+ * Paystack auto-credit). Withdrawals unlock at step 4.
  */
 export async function advanceVerificationStep(userId: string): Promise<AppUser | null> {
   const current = await findUserById(userId)
   if (!current) return null
-  const next = Math.min(2, (current.verificationStep ?? 0) + 1)
+  const next = Math.min(4, (current.verificationStep ?? 0) + 1)
   if (next === current.verificationStep) return current
   const { data, error } = await supabaseServer()
     .from('users')

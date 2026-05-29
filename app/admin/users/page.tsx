@@ -23,7 +23,7 @@ interface AdminUserRow {
   phone: string | null
   country?: string
   currency?: string
-  verificationStep: 0 | 1 | 2
+  verificationStep: 0 | 1 | 2 | 3 | 4
   withdrawalApproved: boolean
   balance: number
   totalDeposited: number
@@ -70,11 +70,11 @@ export default function AdminPlayersPage() {
       if (filter === 'depositors') {
         if (!u.firstDepositAt) return false
       } else if (filter === 'awaiting') {
-        if (!(u.verificationStep === 2 && !u.withdrawalApproved)) return false
+        if (!(u.verificationStep === 4 && !u.withdrawalApproved)) return false
       } else if (filter === 'approved') {
         if (!u.withdrawalApproved) return false
       } else if (filter === 'unverified') {
-        if (u.verificationStep === 2) return false
+        if (u.verificationStep === 4) return false
       }
       if (q) {
         if (
@@ -94,10 +94,10 @@ export default function AdminPlayersPage() {
       all: users.length,
       depositors: users.filter((u) => !!u.firstDepositAt).length,
       awaiting: users.filter(
-        (u) => u.verificationStep === 2 && !u.withdrawalApproved,
+        (u) => u.verificationStep === 4 && !u.withdrawalApproved,
       ).length,
       approved: users.filter((u) => u.withdrawalApproved).length,
-      unverified: users.filter((u) => u.verificationStep < 2).length,
+      unverified: users.filter((u) => u.verificationStep < 4).length,
     }),
     [users],
   )
@@ -176,7 +176,7 @@ export default function AdminPlayersPage() {
         <p className="text-sm text-muted-foreground">
           Every registered user. Use <strong>Credit</strong> to top up a
           balance manually (e.g. when Moolre failed but the user paid).
-          Withdrawal approval requires verification (both qualifying deposits)
+          Withdrawal approval requires verification (4 qualifying deposits)
           and a manual <strong>Approve</strong>.
         </p>
       </div>
@@ -293,10 +293,10 @@ export default function AdminPlayersPage() {
                       <Wallet className="w-3 h-3 mr-1" />
                       Credit
                     </Button>
-                    {u.verificationStep < 2 ? (
+                    {u.verificationStep < 4 ? (
                       <span
                         className="text-[11px] text-muted-foreground"
-                        title="Player hasn't completed both qualifying verification deposits yet."
+                        title="Player hasn't completed all 4 qualifying verification deposits yet."
                       >
                         Awaiting verification
                       </span>
@@ -450,12 +450,12 @@ function formatJoined(iso: string): string {
   }
 }
 
-function StepBadge({ step }: { step: 0 | 1 | 2 }) {
-  const label = step === 0 ? '0/2' : step === 1 ? '1/2' : '2/2'
+function StepBadge({ step }: { step: 0 | 1 | 2 | 3 | 4 }) {
+  const label = `${step}/4`
   const cls =
-    step === 2
+    step === 4
       ? 'border-success/30 text-success bg-success/10'
-      : step === 1
+      : step >= 1
         ? 'border-amber-500/40 text-amber-500 bg-amber-500/10'
         : 'border-border text-muted-foreground'
   return (

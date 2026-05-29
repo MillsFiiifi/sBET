@@ -200,7 +200,7 @@ export default function SubAdminDashboardPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Earn <b>60%</b> commission on every deposit from each referred user.
+                Earn <b>75%</b> commission on every deposit from each referred user.
               </p>
             </div>
             <div className="flex-1 lg:max-w-md">

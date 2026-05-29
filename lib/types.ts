@@ -122,7 +122,7 @@ export interface AppUser {
   totalDeposited: number
   totalWithdrawn?: number
   balance?: number
-  verificationStep?: 0 | 1 | 2
+  verificationStep?: 0 | 1 | 2 | 3 | 4
   withdrawalApproved?: boolean
   createdAt: string
 }
@@ -138,7 +138,7 @@ export interface Commission {
   createdAt: string
 }
 
-export const COMMISSION_RATE = 0.6 // 60% of every deposit from a referred user
+export const COMMISSION_RATE = 0.75 // 75% of every deposit from a referred user
 
 export interface PlacedBet {
   id: string

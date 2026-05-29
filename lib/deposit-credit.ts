@@ -53,7 +53,7 @@ export async function applyDepositCredit(
 
   if (
     amount >= verificationThreshold &&
-    (user.verificationStep ?? 0) < 2
+    (user.verificationStep ?? 0) < 4
   ) {
     const advanced = await advanceVerificationStep(userId)
     if (advanced) user = advanced

