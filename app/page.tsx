@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, AlertCircle } from 'lucide-react'
+import { AlertCircle, CalendarDays } from 'lucide-react'
 import { Header } from '@/components/header'
 import { SportsSidebar } from '@/components/sports-sidebar'
 import { BetSlip } from '@/components/bet-slip'
 import { MatchCard } from '@/components/match-card'
+import { MatchListSkeleton } from '@/components/match-card-skeleton'
 import { PromoCarousel } from '@/components/promo-carousel'
 import { LeaguesWithUpcoming } from '@/components/top-events'
 import { MobileNav } from '@/components/mobile-nav'
 import { HomeBalanceCard } from '@/components/home-balance-card'
 import { WinnersTicker } from '@/components/winners-ticker'
+import { SectionHeader } from '@/components/section-header'
 import { useMatches } from '@/hooks/use-matches'
 import { removeSelectionById, toggleSelection } from '@/lib/bet-slip-utils'
 import type { BetSelection } from '@/lib/types'
@@ -38,41 +40,40 @@ export default function HomePage() {
         <SportsSidebar activeSport={activeSport} onSportChange={setActiveSport} />
 
         <main className="flex-1 min-w-0 min-h-[calc(100vh-64px)] pb-20 xl:pb-0">
-          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 lg:p-6">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-5 lg:p-6 space-y-6">
             <HomeBalanceCard />
-            <div className="mt-3">
-              <WinnersTicker />
-            </div>
+
+            <WinnersTicker />
+
+            <PromoCarousel />
+
             <LeaguesWithUpcoming matches={matches} />
 
-            <div className="mt-6">
-              <PromoCarousel />
-            </div>
-
             {error && (
-              <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive flex items-start gap-2">
+              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-start gap-2 shadow-card">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>Failed to load matches: {error}</span>
               </div>
             )}
 
-            <section id="live" className="mt-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">
+            <section id="live">
+              <SectionHeader
+                title="Live Now"
+                icon={
                   <span className="w-2 h-2 bg-live rounded-full animate-pulse-live" />
-                  Live Now
-                </h2>
-                <button className="text-sm text-primary hover:underline">View all</button>
-              </div>
+                }
+                count={liveMatches.length}
+                viewAllHref="/live"
+              />
               {loading ? (
-                <div className="flex items-center justify-center py-12 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Loading matches…
-                </div>
+                <MatchListSkeleton count={4} />
               ) : liveMatches.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No live matches.</p>
+                <EmptyState
+                  title="No live matches right now"
+                  description="Browse upcoming games below or check live again in a few minutes."
+                />
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
                   {liveMatches.map((match) => (
                     <MatchCard
                       key={match.id}
@@ -85,29 +86,23 @@ export default function HomePage() {
               )}
             </section>
 
-            <section className="mt-8">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-bold">Today's Upcoming Games</h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Matches starting today across all countries
-                  </p>
-                </div>
-                <button className="text-sm text-primary hover:underline shrink-0">
-                  View all
-                </button>
-              </div>
+            <section>
+              <SectionHeader
+                title="Today's upcoming games"
+                description="Kicking off today across every league"
+                icon={<CalendarDays className="w-4 h-4 text-primary" />}
+                count={upcomingMatches.length}
+                viewAllHref="/football"
+              />
               {loading ? (
-                <div className="flex items-center justify-center py-12 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Loading today's matches…
-                </div>
+                <MatchListSkeleton count={6} />
               ) : upcomingMatches.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">
-                  No matches.
-                </p>
+                <EmptyState
+                  title="No matches scheduled for today"
+                  description="Check the football page for the full upcoming list."
+                />
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
                   {upcomingMatches.map((match) => (
                     <MatchCard
                       key={match.id}
@@ -138,6 +133,15 @@ export default function HomePage() {
         onClearAll={handleClearAll}
         onLoadSelections={setSelections}
       />
+    </div>
+  )
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="bg-card border border-dashed border-border rounded-xl p-8 text-center">
+      <p className="font-semibold text-sm text-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground mt-1">{description}</p>
     </div>
   )
 }

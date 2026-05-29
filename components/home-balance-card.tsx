@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { Eye, EyeOff, Wallet, Banknote, ArrowRight } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowRight, Banknote, Eye, EyeOff, Wallet } from 'lucide-react'
 import { getUserId, getUserName } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
 
@@ -19,6 +19,9 @@ export function HomeBalanceCard() {
   const [userId, setUserId] = useState<string | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [hidden, setHidden] = useState(false)
+  // Flash the balance when it changes so deposits/wins feel acknowledged.
+  const [flashKey, setFlashKey] = useState(0)
+  const prevBalance = useRef<number | null>(null)
 
   useEffect(() => {
     setUserId(getUserId())
@@ -60,28 +63,45 @@ export function HomeBalanceCard() {
     }
   }, [userId])
 
+  // Trigger the value-flash class whenever the balance increases.
+  useEffect(() => {
+    if (!profile) return
+    if (prevBalance.current !== null && profile.balance > prevBalance.current) {
+      setFlashKey((k) => k + 1)
+    }
+    prevBalance.current = profile.balance
+  }, [profile])
+
   if (!userId) {
     return (
-      <section className="mb-4 rounded-2xl bg-card border border-border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 shadow-sm">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs sm:text-sm text-muted-foreground">Welcome to Prime Bet</p>
-          <p className="text-base sm:text-lg font-bold text-foreground mt-0.5">
-            Sign in to see your balance and place bets.
-          </p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <Link
-            href="/login"
-            className="flex-1 sm:flex-none text-center px-4 py-2 rounded-lg border-2 border-primary text-primary text-sm font-bold hover:bg-primary/10 transition-colors"
-          >
-            Login
-          </Link>
-          <Link
-            href="/register"
-            className="flex-1 sm:flex-none text-center px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors"
-          >
-            Register
-          </Link>
+      <section className="mb-4 rounded-2xl bg-card border border-border p-5 sm:p-6 shadow-card lift-on-hover">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+              <Wallet className="w-5 h-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-eyebrow text-muted-foreground">Welcome to Prime Bet</p>
+              <p className="text-base sm:text-lg font-bold mt-0.5">
+                Sign in to start winning
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Link
+              href="/login"
+              className="flex-1 sm:flex-none text-center px-4 h-10 inline-flex items-center justify-center rounded-lg border-2 border-primary text-primary text-sm font-bold hover:bg-primary/10 transition-colors"
+            >
+              Login
+            </Link>
+            <Link
+              href="/register"
+              className="flex-1 sm:flex-none text-center px-4 h-10 inline-flex items-center justify-center gap-1 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors shadow-card"
+            >
+              Register
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       </section>
     )
@@ -92,53 +112,63 @@ export function HomeBalanceCard() {
   const depositHref = `/users/first-deposit?userId=${userId}`
 
   return (
-    <section className="mb-4 rounded-2xl bg-card border border-border shadow-sm">
-      <div className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3 sm:gap-4 mb-4 min-w-0">
+    <section className="relative mb-4 rounded-2xl bg-gradient-to-br from-card via-card to-secondary/30 border border-border shadow-card overflow-hidden">
+      {/* Decorative brand glow — sits behind content, subtle */}
+      <div
+        aria-hidden
+        className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-primary/10 blur-3xl"
+      />
+      <div className="relative p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4 mb-5">
           <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Total Balance
-            </p>
-            <div className="flex items-center gap-2 mt-1 min-w-0">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums truncate">
-                {hidden ? '••••••' : `${currency} ${formatMoney(balance, currency)}`}
-              </p>
+            <div className="flex items-center gap-2 mb-1.5">
+              <p className="text-eyebrow text-muted-foreground">Total Balance</p>
               <button
                 type="button"
                 onClick={() => setHidden((v) => !v)}
-                className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 aria-label={hidden ? 'Show balance' : 'Hide balance'}
               >
-                {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {hidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1 truncate">
-              Hi,{' '}
-              <span className="text-foreground font-medium">{profile?.name ?? 'Player'}</span>
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="text-sm font-bold text-muted-foreground tabular-nums">
+                {currency}
+              </span>
+              <span
+                key={flashKey}
+                className="text-display font-black tabular-nums truncate rounded-md px-1 -mx-1 animate-value-flash"
+              >
+                {hidden ? '••••••' : formatMoney(balance, currency)}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5 truncate">
+              Hi, <span className="text-foreground font-semibold">{profile?.name ?? 'Player'}</span>
             </p>
           </div>
           <Link
             href="/me"
-            className="hidden sm:flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+            className="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 shrink-0"
           >
             Account <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
 
-        <div className="flex gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
           <Link
             href={depositHref}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm transition-colors min-w-0"
+            className="group/btn relative inline-flex items-center justify-center gap-2 h-12 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
           >
-            <Wallet className="w-4 h-4 shrink-0" />
-            <span className="truncate">Deposit</span>
+            <Wallet className="w-4 h-4 transition-transform group-hover/btn:scale-110" />
+            Deposit
           </Link>
           <Link
             href="/me?withdraw=1"
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-primary bg-transparent text-primary hover:bg-primary/10 font-bold text-sm transition-colors min-w-0"
+            className="inline-flex items-center justify-center gap-2 h-12 rounded-xl border-2 border-primary text-primary font-bold text-sm hover:bg-primary/10 transition-colors"
           >
-            <Banknote className="w-4 h-4 shrink-0" />
-            <span className="truncate">Withdraw</span>
+            <Banknote className="w-4 h-4" />
+            Withdraw
           </Link>
         </div>
       </div>

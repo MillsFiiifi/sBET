@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronUp, ExternalLink, Lock } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Lock, Radio } from 'lucide-react'
 import type { Match, BetSelection } from '@/lib/types'
 import { getBettingState } from '@/lib/match-betting'
 import {
@@ -35,24 +35,25 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
             : null
 
   const hasMarkets = !!match.markets
+  const isHalftime = match.isLive && match.minute === 'HT'
 
   return (
     <div
-      className={`bg-card border rounded-xl overflow-hidden transition-colors ${
+      className={`group bg-card border rounded-xl overflow-hidden lift-on-hover ${
         betting.closed
-          ? 'border-border opacity-90'
-          : 'border-border hover:border-primary/50'
+          ? 'border-border/70 opacity-95'
+          : 'border-border hover:border-primary/40'
       }`}
     >
-      {/* League header */}
-      <div className="px-3 sm:px-4 py-2 bg-secondary/50 flex items-center justify-between gap-2">
-        <span className="text-[11px] sm:text-xs text-muted-foreground uppercase tracking-wide truncate min-w-0 flex items-center gap-1.5">
-          <span aria-hidden className="text-sm shrink-0">
+      {/* League header strip */}
+      <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-secondary/70 to-secondary/30 border-b border-border/60 flex items-center justify-between gap-2">
+        <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate min-w-0 flex items-center gap-1.5">
+          <span aria-hidden className="text-base shrink-0 leading-none">
             {getCountryFlag(match.country)}
           </span>
           <span className="truncate">
             {match.league}
-            {match.country ? ` — ${match.country}` : ''}
+            {match.country ? <span className="opacity-60"> · {match.country}</span> : null}
           </span>
         </span>
         <span className="shrink-0 flex items-center gap-2 text-[11px] sm:text-xs">
@@ -63,51 +64,38 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
             </span>
           )}
           {match.isLive ? (
-            match.minute === 'HT' ? (
-              <span className="font-bold uppercase tracking-wide text-amber-500">
+            isHalftime ? (
+              <span className="font-bold uppercase tracking-wide text-amber-500 text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10">
                 HALFTIME
               </span>
             ) : (
-              <span className="flex items-center gap-1.5 font-semibold text-live">
-                <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse-live" />
+              <span className="inline-flex items-center gap-1.5 font-bold text-live text-[10px] px-1.5 py-0.5 rounded-full border border-live/30 bg-live/10 animate-live-glow">
+                <Radio className="w-2.5 h-2.5" />
                 LIVE {match.minute}
               </span>
             )
           ) : (
-            <span className="text-muted-foreground font-medium">{match.startTime}</span>
+            <span className="text-muted-foreground font-medium tabular-nums">{match.startTime}</span>
           )}
         </span>
       </div>
 
-      <div className="p-3 sm:p-4 space-y-3">
-        {/* Teams */}
+      <div className="p-3 sm:p-4 space-y-3.5">
+        {/* Teams + live scoreline */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <TeamCrest name={match.homeTeam} url={match.homeFlagUrl} size={32} />
-              <span className="font-medium text-sm truncate">{match.homeTeam}</span>
-            </div>
-            {match.isLive && (
-              <span className="text-base font-bold shrink-0 tabular-nums">
-                {match.homeScore ?? '-'}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <TeamCrest name={match.awayTeam} url={match.awayFlagUrl} size={32} />
-              <span className="font-medium text-sm truncate">{match.awayTeam}</span>
-            </div>
-            {match.isLive && (
-              <span className="text-base font-bold shrink-0 tabular-nums">
-                {match.awayScore ?? '-'}
-              </span>
-            )}
-          </div>
+          <TeamRow
+            name={match.homeTeam}
+            url={match.homeFlagUrl}
+            score={match.isLive ? match.homeScore : undefined}
+          />
+          <TeamRow
+            name={match.awayTeam}
+            url={match.awayFlagUrl}
+            score={match.isLive ? match.awayScore : undefined}
+          />
         </div>
 
-        {/* Odds */}
+        {/* Odds row */}
         <div className="grid grid-cols-3 gap-2">
           <OddsButton
             label="1"
@@ -148,14 +136,14 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              className="flex items-center gap-1 text-[11px] sm:text-xs text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-primary hover:text-primary/80 transition-colors"
             >
-              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               {expanded ? 'Hide markets' : 'More markets'}
             </button>
             <Link
               href={`/football/match/${match.id}`}
-              className="flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground hover:text-primary"
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground hover:text-primary transition-colors"
             >
               All markets
               <ExternalLink className="w-3 h-3" />
@@ -164,7 +152,7 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
         )}
 
         {expanded && hasMarkets && (
-          <div className="pt-1">
+          <div className="pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
             <MarketsPanel
               match={match}
               selections={selections}
@@ -175,6 +163,31 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function TeamRow({
+  name,
+  url,
+  score,
+}: {
+  name: string
+  url?: string
+  score?: number
+}) {
+  const showScore = typeof score === 'number'
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <TeamCrest name={name} url={url} size={32} />
+        <span className="font-semibold text-sm truncate">{name}</span>
+      </div>
+      {showScore && (
+        <span className="text-lg font-extrabold shrink-0 tabular-nums px-2 min-w-[2ch] text-center text-foreground">
+          {score}
+        </span>
+      )}
     </div>
   )
 }
@@ -196,16 +209,21 @@ function OddsButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col items-center py-2.5 rounded-lg transition-all ${
+      aria-pressed={selected}
+      className={`relative flex flex-col items-center justify-center py-2.5 sm:py-3 rounded-lg font-semibold transition-all duration-150 ${
         disabled
           ? 'bg-secondary/40 text-muted-foreground cursor-not-allowed opacity-60'
           : selected
-            ? 'bg-primary text-primary-foreground active:scale-95'
-            : 'bg-secondary hover:bg-secondary/80 active:scale-95'
+            ? 'bg-primary text-primary-foreground shadow-card-pressed scale-[0.98]'
+            : 'bg-secondary text-foreground hover:bg-secondary/70 hover:-translate-y-0.5 hover:shadow-card active:scale-95'
       }`}
     >
-      <span className="text-[10px] text-muted-foreground mb-0.5">{label}</span>
-      <span className="font-bold text-base tabular-nums">{value.toFixed(2)}</span>
+      <span className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${selected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+        {label}
+      </span>
+      <span className="text-base sm:text-lg font-extrabold tabular-nums leading-none">
+        {value.toFixed(2)}
+      </span>
     </button>
   )
 }
