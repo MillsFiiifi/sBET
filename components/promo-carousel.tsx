@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, ChevronLeft, ChevronRight, Gift, Sparkles, Trophy } from 'lucide-react'
 import { getUserId } from '@/lib/user-session'
@@ -119,7 +119,6 @@ export function PromoCarousel() {
   const [index, setIndex] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY)
-  const [isPaused, setIsPaused] = useState(false)
 
   // Resolve the signed-in user's currency on mount so amounts render in their
   // wallet currency. Logged-out users keep the GHS default.
@@ -140,38 +139,32 @@ export function PromoCarousel() {
     }
   }, [])
 
-  // Autoplay every 6s; pauses while hovered/touched so users can read.
+  // Autoplay every 5s, no pause logic — keeps the slideshow visibly alive on
+  // both mobile and desktop. Manual taps on a dot/arrow just reset to a new
+  // index; the interval keeps marching on its own from there.
   useEffect(() => {
-    if (isPaused) return
-    const t = setInterval(() => setIndex((i) => (i + 1) % PROMOS.length), 6000)
+    const t = setInterval(() => setIndex((i) => (i + 1) % PROMOS.length), 5000)
     return () => clearInterval(t)
-  }, [isPaused])
+  }, [])
 
-  const current = PROMOS[index]
-  const Icon = current.Icon
-  const ctaHref = current.href(userId)
-  const headline = useMemo(() => headlineFor(current, currency), [current, currency])
+  const ctaHref = PROMOS[index].href(userId)
 
   return (
-    <div
-      className="relative rounded-2xl overflow-hidden"
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
-      onTouchStart={() => setIsPaused(true)}
-      onTouchEnd={() => setIsPaused(false)}
-    >
-      <div className="relative h-[210px] sm:h-[230px]">
+    <div className="relative rounded-2xl overflow-hidden">
+      {/* Sliding track: full-width strip of slides translated by index ×100%. */}
+      <div
+        className="relative flex h-[210px] sm:h-[230px] transition-transform duration-700 ease-out"
+        style={{ transform: `translateX(-${index * 100}%)` }}
+      >
         {PROMOS.map((promo, i) => {
-          const active = i === index
           const Glyph = promo.Icon
           const slideHeadline = headlineFor(promo, currency)
+          const active = i === index
           return (
             <div
               key={promo.id}
               aria-hidden={!active}
-              className={`absolute inset-0 transition-all duration-500 ease-out ${
-                active ? 'opacity-100 translate-x-0' : i < index ? 'opacity-0 -translate-x-4' : 'opacity-0 translate-x-4'
-              }`}
+              className="relative flex-shrink-0 w-full"
             >
               <div className={`relative h-full bg-gradient-to-br ${promo.gradient} text-white overflow-hidden`}>
                 {/* Subtle radial-dot pattern overlay so the gradient doesn't read flat */}
