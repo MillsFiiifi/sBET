@@ -111,6 +111,27 @@ interface OddsRow {
   bookmakers: OddsBookmaker[]
 }
 
+/**
+ * /odds/live has a different shape from /odds: no bookmaker wrapper, and
+ * bet types live under `odds` (not `bookmakers[].bets`). We normalize live
+ * rows into the OddsRow shape so averageOdds can consume both.
+ */
+interface LiveOddsValue {
+  value: string
+  odd: string
+  suspended?: boolean
+}
+interface LiveOddsBet {
+  id: number
+  name: string
+  values: LiveOddsValue[]
+}
+interface LiveOddsRow {
+  fixture: { id: number }
+  league: { id: number; season: number }
+  odds: LiveOddsBet[]
+}
+
 // Status codes that mean "ball is in play" — see
 // https://www.api-football.com/documentation-v3#section/Introduction/Status
 const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'])
@@ -190,8 +211,27 @@ async function fetchLiveOddsForLeague(
   leagueId: number,
   apiKey: string,
 ): Promise<OddsRow[]> {
-  const json = await apiFetch<OddsRow[]>(`/odds/live?league=${leagueId}`, apiKey, 30)
-  return json?.response ?? []
+  const json = await apiFetch<LiveOddsRow[]>(
+    `/odds/live?league=${leagueId}`,
+    apiKey,
+    30,
+  )
+  const rows = json?.response ?? []
+  return rows.map((r) => ({
+    fixture: r.fixture,
+    league: r.league,
+    bookmakers: [
+      {
+        id: 0,
+        name: 'live',
+        bets: (r.odds ?? []).map((b) => ({
+          id: b.id,
+          name: b.name,
+          values: (b.values ?? []).filter((v) => !v.suspended),
+        })),
+      },
+    ],
+  }))
 }
 
 interface AveragedOdds {
@@ -224,8 +264,11 @@ function averageOdds(rows: OddsRow[]): AveragedOdds {
   >()
 
   for (const row of rows) {
+    if (!row || !Array.isArray(row.bookmakers)) continue
     for (const bm of row.bookmakers) {
+      if (!bm || !Array.isArray(bm.bets)) continue
       for (const bet of bm.bets) {
+        if (!bet || !Array.isArray(bet.values)) continue
         if (bet.id === 1) {
           for (const v of bet.values) {
             const odd = parseFloat(v.odd)
