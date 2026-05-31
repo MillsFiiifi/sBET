@@ -207,15 +207,11 @@ async function fetchOddsForLeague(
   return all
 }
 
-async function fetchLiveOddsForLeague(
-  leagueId: number,
-  apiKey: string,
-): Promise<OddsRow[]> {
-  const json = await apiFetch<LiveOddsRow[]>(
-    `/odds/live?league=${leagueId}`,
-    apiKey,
-    30,
-  )
+async function fetchLiveOdds(apiKey: string): Promise<OddsRow[]> {
+  // /odds/live with no params returns every currently in-play game globally
+  // in a single call — much cheaper than per-league when we want to include
+  // any live football match, not just whitelisted leagues.
+  const json = await apiFetch<LiveOddsRow[]>(`/odds/live`, apiKey, 30)
   const rows = json?.response ?? []
   return rows.map((r) => ({
     fixture: r.fixture,
@@ -438,32 +434,38 @@ export async function getMatchesForSport(sport: string): Promise<Match[]> {
   // Live fixtures take precedence — they carry the fresher elapsed minute.
   for (const f of fixturesLive) byId.set(f.fixture.id, f)
 
-  const fixtures = [...byId.values()].filter((f) =>
-    WHITELISTED_LEAGUE_IDS.has(f.league.id),
+  // Whitelist applies to pre-match only. For live we surface every football
+  // match that's in-play upstream — by late season most top European leagues
+  // are off, and bettors expect to see whatever's currently happening on
+  // other platforms (lower divisions, friendlies, Americas/Asia leagues).
+  const liveFixtureIds = new Set(
+    fixturesLive.map((f) => f.fixture.id),
+  )
+  const fixtures = [...byId.values()].filter(
+    (f) =>
+      liveFixtureIds.has(f.fixture.id) || WHITELISTED_LEAGUE_IDS.has(f.league.id),
   )
   if (fixtures.length === 0) return []
 
-  // Unique league+season pairs to fetch pre-match odds for; live leagues
-  // to also hit /odds/live so the prices on in-play games are fresh.
+  // Pre-match odds still fetched per league+season — keeps the upstream call
+  // count bounded by the whitelist size. Live odds fetched globally in one
+  // call so we don't have to walk every live league individually.
   const preMatchKeys = new Map<string, { leagueId: number; season: number }>()
-  const liveLeagueIds = new Set<number>()
   for (const f of fixtures) {
+    if (!WHITELISTED_LEAGUE_IDS.has(f.league.id)) continue
     preMatchKeys.set(`${f.league.id}:${f.league.season}`, {
       leagueId: f.league.id,
       season: f.league.season,
     })
-    if (LIVE_STATUSES.has(f.fixture.status.short)) liveLeagueIds.add(f.league.id)
   }
 
-  const [preMatchResults, liveResults] = await Promise.all([
+  const [preMatchResults, liveOdds] = await Promise.all([
     Promise.allSettled(
       [...preMatchKeys.values()].map((k) =>
         fetchOddsForLeague(k.leagueId, k.season, today, apiKey),
       ),
     ),
-    Promise.allSettled(
-      [...liveLeagueIds].map((id) => fetchLiveOddsForLeague(id, apiKey)),
-    ),
+    fetchLiveOdds(apiKey).catch(() => [] as OddsRow[]),
   ])
 
   const oddsMap = new Map<number, OddsRow[]>()
@@ -477,10 +479,7 @@ export async function getMatchesForSport(sport: string): Promise<Match[]> {
   }
   // Live odds replace pre-match: once a game kicks off the pre-match book
   // disappears upstream anyway, and live prices are fresher.
-  for (const r of liveResults) {
-    if (r.status !== 'fulfilled') continue
-    for (const row of r.value) oddsMap.set(row.fixture.id, [row])
-  }
+  for (const row of liveOdds) oddsMap.set(row.fixture.id, [row])
 
   return fixtures
     .map((f) => toMatch(f, oddsMap.get(f.fixture.id) ?? []))
