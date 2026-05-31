@@ -128,6 +128,25 @@ export async function GET() {
   )
   const overlap = [...liveFixtureIds].filter((id) => liveOddsIds.has(id)).length
 
+  // Distribution of bet ids across ALL live odds rows so we can see which
+  // markets are widely offered live (and confirm whether Match Winner /
+  // Fulltime Result is present anywhere).
+  const betIdHistogram: Record<number, { name: string; count: number }> = {}
+  const liveRows = Array.isArray(live_odds.response) ? live_odds.response : []
+  let liveRowsWithMatchWinner = 0
+  for (const r of liveRows) {
+    const odds = ((r as Record<string, unknown>).odds as Array<Record<string, unknown>>) ?? []
+    let hasMW = false
+    for (const b of odds) {
+      const id = b.id as number
+      const name = b.name as string
+      if (!betIdHistogram[id]) betIdHistogram[id] = { name, count: 0 }
+      betIdHistogram[id].count++
+      if (id === 1 || id === 59) hasMW = true
+    }
+    if (hasMW) liveRowsWithMatchWinner++
+  }
+
   return NextResponse.json({
     today,
     upstream: {
@@ -162,6 +181,11 @@ export async function GET() {
       liveFixtureIds: liveFixtureIds.size,
       liveOddsIds: liveOddsIds.size,
       idsInBoth: overlap,
+    },
+    liveBetDistribution: {
+      rowsWithMatchWinner: liveRowsWithMatchWinner,
+      totalRows: liveRows.length,
+      byBetId: betIdHistogram,
     },
   })
 }
