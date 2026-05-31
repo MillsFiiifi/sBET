@@ -20,6 +20,7 @@ interface StatusResponse {
     remaining: number | null
     used: number | null
     status: number
+    plan?: string
     message?: string
   }
 }
@@ -104,9 +105,9 @@ export default function AdminSettingsPage() {
             </header>
             <ul className="divide-y divide-border">
               <EnvRow
-                label="ODDS_API_KEY"
+                label="API_FOOTBALL_KEY"
                 ok={status.env.odds_api_key}
-                helpText="Used by /api/matches to fetch real odds from the-odds-api.com"
+                helpText="Used by /api/matches to fetch fixtures and odds from api-football.com"
               />
               <EnvRow
                 label="ADMIN_PASSWORD"
@@ -116,23 +117,30 @@ export default function AdminSettingsPage() {
             </ul>
           </section>
 
-          {/* The Odds API */}
+          {/* API-Football */}
           <section className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
             <header className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
-              <h2 className="font-semibold text-title">The Odds API</h2>
+              <h2 className="font-semibold text-title">
+                API-Football
+                {status.oddsApi.plan && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {status.oddsApi.plan}
+                  </span>
+                )}
+              </h2>
               <a
-                href="https://the-odds-api.com/account/"
+                href="https://dashboard.api-football.com/profile"
                 target="_blank"
                 rel="noreferrer"
                 className="text-xs text-primary hover:underline flex items-center gap-1"
               >
-                Account <ExternalLink className="w-3 h-3" />
+                Dashboard <ExternalLink className="w-3 h-3" />
               </a>
             </header>
             <div className="p-4 space-y-3">
               {!status.env.odds_api_key ? (
                 <p className="text-sm text-muted-foreground">
-                  No ODDS_API_KEY set. The app falls back to mock data.
+                  No API_FOOTBALL_KEY set. /api/matches will only return admin-created custom matches.
                 </p>
               ) : status.oddsApi.ok ? (
                 <>
@@ -143,11 +151,11 @@ export default function AdminSettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Stat
-                      label="Requests used"
+                      label="Requests today"
                       value={status.oddsApi.used?.toString() ?? '—'}
                     />
                     <Stat
-                      label="Requests remaining"
+                      label="Remaining today"
                       value={status.oddsApi.remaining?.toString() ?? '—'}
                       tone={
                         status.oddsApi.remaining != null && status.oddsApi.remaining < 50

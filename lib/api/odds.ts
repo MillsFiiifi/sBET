@@ -1,464 +1,444 @@
 import type { Match, MarketBook, OverUnderLine } from '@/lib/types'
 import { deriveMarketBook, mergeMarketBook } from '@/lib/markets'
 
-const ODDS_API_BASE = 'https://api.the-odds-api.com/v4'
+/**
+ * Upstream: API-Football v3 (https://www.api-football.com).
+ * Only the football host is wired up — basketball/tennis/etc require separate
+ * API-Sports subscriptions (different hosts) and currently return [].
+ *
+ * IMPORTANT: API-Football enforces an optional IP allowlist per account.
+ * If you see `{ errors: { Ip: "This IP is not allowed..." } }` go to the
+ * dashboard → "My Access" and clear the IP restriction — Vercel Functions
+ * use dynamic IPs that cannot be reliably whitelisted.
+ */
+const API_BASE = 'https://v3.football.api-sports.io'
 
-const SPORT_KEYS: Record<string, string[]> = {
-  football: [
-    // Top 5 European leagues
-    'soccer_epl',
-    'soccer_spain_la_liga',
-    'soccer_italy_serie_a',
-    'soccer_germany_bundesliga',
-    'soccer_france_ligue_one',
-    // Other Europe
-    'soccer_netherlands_eredivisie',
-    'soccer_portugal_primeira_liga',
-    'soccer_belgium_first_div',
-    'soccer_turkey_super_league',
-    'soccer_greece_super_league',
-    'soccer_switzerland_superleague',
-    'soccer_austria_bundesliga',
-    'soccer_denmark_superliga',
-    'soccer_norway_eliteserien',
-    'soccer_sweden_allsvenskan',
-    'soccer_poland_ekstraklasa',
-    'soccer_efl_champ',
-    'soccer_spl',
-    // UEFA / international
-    'soccer_uefa_champs_league',
-    'soccer_uefa_europa_league',
-    'soccer_uefa_europa_conference_league',
-    'soccer_uefa_nations_league',
-    'soccer_fifa_world_cup',
-    // Americas
-    'soccer_usa_mls',
-    'soccer_mexico_ligamx',
-    'soccer_brazil_campeonato',
-    'soccer_argentina_primera_division',
-    'soccer_chile_campeonato',
-    'soccer_conmebol_copa_libertadores',
-    'soccer_conmebol_copa_america',
-    // Asia & Oceania
-    'soccer_japan_j_league',
-    'soccer_korea_kleague1',
-    'soccer_china_superleague',
-    'soccer_australia_aleague',
-  ],
-  basketball: ['basketball_nba', 'basketball_euroleague'],
-  tennis: ['tennis_atp_aus_open_singles', 'tennis_wta_aus_open_singles'],
-  baseball: ['baseball_mlb'],
-  hockey: ['icehockey_nhl'],
-  volleyball: [],
+/**
+ * Whitelisted competition IDs — mirrors the leagues The Odds API was
+ * configured to fetch. Look these up at https://www.api-football.com/leagues.
+ */
+const WHITELISTED_LEAGUE_IDS = new Set<number>([
+  39, // Premier League
+  40, // EFL Championship
+  179, // Scottish Premiership
+  140, // La Liga
+  135, // Serie A
+  78, // Bundesliga
+  61, // Ligue 1
+  88, // Eredivisie
+  94, // Primeira Liga
+  144, // Belgium Pro League
+  203, // Süper Lig (Turkey)
+  197, // Super League 1 (Greece)
+  207, // Swiss Super League
+  218, // Austrian Bundesliga
+  119, // Danish Superliga
+  103, // Eliteserien (Norway)
+  113, // Allsvenskan (Sweden)
+  106, // Ekstraklasa (Poland)
+  // UEFA / international
+  2, // Champions League
+  3, // Europa League
+  848, // Europa Conference League
+  5, // Nations League
+  1, // World Cup
+  4, // Euro Championship
+  // Americas
+  253, // MLS
+  262, // Liga MX
+  71, // Brazil Serie A
+  128, // Liga Profesional (Argentina)
+  265, // Primera División (Chile)
+  13, // Copa Libertadores
+  9, // Copa America
+  // Asia / Oceania
+  98, // J1 League
+  292, // K League 1
+  169, // Chinese Super League
+  188, // A-League
+])
+
+interface ApiResponse<T> {
+  errors: unknown
+  results: number
+  paging: { current: number; total: number }
+  response: T
 }
 
-const SPORT_TITLE_TO_COUNTRY: Record<string, string> = {
-  EPL: 'England',
-  'EFL Championship': 'England',
-  'Scottish Premiership': 'Scotland',
-  'La Liga - Spain': 'Spain',
-  'Serie A - Italy': 'Italy',
-  'Bundesliga - Germany': 'Germany',
-  'Ligue 1 - France': 'France',
-  'Eredivisie - Netherlands': 'Netherlands',
-  'Primeira Liga - Portugal': 'Portugal',
-  'Belgium First Division A': 'Belgium',
-  'Super Lig - Turkey': 'Turkey',
-  'Super League - Greece': 'Greece',
-  'Super League - Switzerland': 'Switzerland',
-  'Bundesliga - Austria': 'Austria',
-  'Superliga - Denmark': 'Denmark',
-  'Eliteserien - Norway': 'Norway',
-  'Allsvenskan - Sweden': 'Sweden',
-  'Ekstraklasa - Poland': 'Poland',
-  'UEFA Champions League': 'Europe',
-  'UEFA Europa League': 'Europe',
-  'UEFA Europa Conference League': 'Europe',
-  'UEFA Nations League': 'Europe',
-  'FIFA World Cup': 'International',
-  'MLS - USA': 'USA',
-  'Liga MX - Mexico': 'Mexico',
-  'Brazil Série A': 'Brazil',
-  'Primera División - Argentina': 'Argentina',
-  'Primera División - Chile': 'Chile',
-  'Copa Libertadores': 'South America',
-  'Copa America': 'South America',
-  'J League - Japan': 'Japan',
-  'K League 1 - South Korea': 'South Korea',
-  'Super League - China': 'China',
-  'A-League - Australia': 'Australia',
-  NBA: 'USA',
-  EuroLeague: 'Europe',
-  MLB: 'USA',
-  NHL: 'USA',
+interface FixtureStatus {
+  long: string
+  short: string
+  elapsed: number | null
 }
 
-interface OddsApiOutcome {
+interface Fixture {
+  fixture: {
+    id: number
+    date: string
+    timestamp: number
+    status: FixtureStatus
+  }
+  league: {
+    id: number
+    name: string
+    country: string
+    season: number
+  }
+  teams: {
+    home: { id: number; name: string; logo: string }
+    away: { id: number; name: string; logo: string }
+  }
+  goals: { home: number | null; away: number | null }
+}
+
+interface OddsValue {
+  value: string
+  odd: string
+}
+interface OddsBet {
+  id: number
   name: string
-  price: number
-  point?: number
+  values: OddsValue[]
 }
-interface OddsApiMarket {
-  key: string
-  outcomes: OddsApiOutcome[]
+interface OddsBookmaker {
+  id: number
+  name: string
+  bets: OddsBet[]
 }
-interface OddsApiBookmaker {
-  key: string
-  title: string
-  markets: OddsApiMarket[]
-}
-interface OddsApiEvent {
-  id: string
-  sport_key: string
-  sport_title: string
-  commence_time: string
-  home_team: string
-  away_team: string
-  bookmakers: OddsApiBookmaker[]
+interface OddsRow {
+  fixture: { id: number }
+  league: { id: number; season: number }
+  bookmakers: OddsBookmaker[]
 }
 
-function averageH2H(event: OddsApiEvent): { home: number; draw: number; away: number } {
-  let homeSum = 0
-  let drawSum = 0
-  let awaySum = 0
-  let homeN = 0
-  let drawN = 0
-  let awayN = 0
+// Status codes that mean "ball is in play" — see
+// https://www.api-football.com/documentation-v3#section/Introduction/Status
+const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'])
+const FINISHED_STATUSES = new Set([
+  'FT',
+  'AET',
+  'PEN',
+  'PST',
+  'CANC',
+  'ABD',
+  'AWD',
+  'WO',
+])
 
-  for (const bm of event.bookmakers) {
-    const market = bm.markets.find((m) => m.key === 'h2h')
-    if (!market) continue
-    for (const o of market.outcomes) {
-      if (o.name === event.home_team) {
-        homeSum += o.price
-        homeN++
-      } else if (o.name === event.away_team) {
-        awaySum += o.price
-        awayN++
-      } else if (o.name.toLowerCase() === 'draw') {
-        drawSum += o.price
-        drawN++
-      }
+async function apiFetch<T>(
+  path: string,
+  apiKey: string,
+  revalidateSeconds: number,
+): Promise<ApiResponse<T> | null> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'x-apisports-key': apiKey },
+    next: { revalidate: revalidateSeconds },
+  })
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `API-Football auth failed (${res.status}) — check API_FOOTBALL_KEY`,
+      )
     }
+    if (res.status === 429) throw new Error('API-Football quota exceeded (429)')
+    return null
   }
-
-  return {
-    home: homeN ? +(homeSum / homeN).toFixed(2) : 0,
-    draw: drawN ? +(drawSum / drawN).toFixed(2) : 0,
-    away: awayN ? +(awaySum / awayN).toFixed(2) : 0,
+  const json = (await res.json()) as ApiResponse<T>
+  // API-Football returns 200 even for IP-block / quota errors; the failure
+  // shows up inside `errors`. Surface IP errors loudly since they're the
+  // single most common gotcha on a fresh account.
+  if (json.errors && typeof json.errors === 'object' && !Array.isArray(json.errors)) {
+    const errs = json.errors as Record<string, string>
+    const ipMsg = errs.Ip ?? errs.ip
+    if (ipMsg) throw new Error(`API-Football: ${ipMsg}`)
   }
+  return json
 }
 
-function averageTotals(event: OddsApiEvent): OverUnderLine[] {
-  const byLine = new Map<
+async function fetchFixturesByDate(date: string, apiKey: string): Promise<Fixture[]> {
+  const json = await apiFetch<Fixture[]>(`/fixtures?date=${date}`, apiKey, 60)
+  return json?.response ?? []
+}
+
+async function fetchLiveFixtures(apiKey: string): Promise<Fixture[]> {
+  const json = await apiFetch<Fixture[]>(`/fixtures?live=all`, apiKey, 30)
+  return json?.response ?? []
+}
+
+async function fetchOddsForLeague(
+  leagueId: number,
+  season: number,
+  date: string,
+  apiKey: string,
+): Promise<OddsRow[]> {
+  const all: OddsRow[] = []
+  const MAX_PAGES = 5
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const json = await apiFetch<OddsRow[]>(
+      `/odds?league=${leagueId}&season=${season}&date=${date}&page=${page}`,
+      apiKey,
+      300,
+    )
+    if (!json) break
+    all.push(...json.response)
+    if (json.paging.current >= json.paging.total) break
+  }
+  return all
+}
+
+async function fetchLiveOddsForLeague(
+  leagueId: number,
+  apiKey: string,
+): Promise<OddsRow[]> {
+  const json = await apiFetch<OddsRow[]>(`/odds/live?league=${leagueId}`, apiKey, 30)
+  return json?.response ?? []
+}
+
+interface AveragedOdds {
+  matchWinner: { home: number; draw: number; away: number }
+  overUnder: OverUnderLine[]
+  btts: { yes: number; no: number } | null
+  doubleChance: { homeOrDraw: number; homeOrAway: number; drawOrAway: number } | null
+}
+
+function averageOdds(rows: OddsRow[]): AveragedOdds {
+  let homeS = 0,
+    homeN = 0,
+    drawS = 0,
+    drawN = 0,
+    awayS = 0,
+    awayN = 0
+  let yesS = 0,
+    yesN = 0,
+    noS = 0,
+    noN = 0
+  let hdS = 0,
+    hdN = 0,
+    haS = 0,
+    haN = 0,
+    daS = 0,
+    daN = 0
+  const totals = new Map<
     number,
-    { overSum: number; overN: number; underSum: number; underN: number }
+    { overS: number; overN: number; underS: number; underN: number }
   >()
 
-  for (const bm of event.bookmakers) {
-    const market = bm.markets.find((m) => m.key === 'totals')
-    if (!market) continue
-    for (const o of market.outcomes) {
-      if (o.point === undefined) continue
-      const line = o.point
-      const entry =
-        byLine.get(line) ?? { overSum: 0, overN: 0, underSum: 0, underN: 0 }
-      const dir = o.name.toLowerCase()
-      if (dir === 'over') {
-        entry.overSum += o.price
-        entry.overN++
-      } else if (dir === 'under') {
-        entry.underSum += o.price
-        entry.underN++
+  for (const row of rows) {
+    for (const bm of row.bookmakers) {
+      for (const bet of bm.bets) {
+        if (bet.id === 1) {
+          for (const v of bet.values) {
+            const odd = parseFloat(v.odd)
+            if (!Number.isFinite(odd)) continue
+            const label = v.value.toLowerCase().trim()
+            if (label === 'home') {
+              homeS += odd
+              homeN++
+            } else if (label === 'draw') {
+              drawS += odd
+              drawN++
+            } else if (label === 'away') {
+              awayS += odd
+              awayN++
+            }
+          }
+        } else if (bet.id === 5) {
+          for (const v of bet.values) {
+            const odd = parseFloat(v.odd)
+            if (!Number.isFinite(odd)) continue
+            const m = v.value.match(/(over|under)\s+(-?\d+(?:\.\d+)?)/i)
+            if (!m) continue
+            const dir = m[1].toLowerCase()
+            const line = parseFloat(m[2])
+            const entry =
+              totals.get(line) ?? { overS: 0, overN: 0, underS: 0, underN: 0 }
+            if (dir === 'over') {
+              entry.overS += odd
+              entry.overN++
+            } else {
+              entry.underS += odd
+              entry.underN++
+            }
+            totals.set(line, entry)
+          }
+        } else if (bet.id === 8) {
+          for (const v of bet.values) {
+            const odd = parseFloat(v.odd)
+            if (!Number.isFinite(odd)) continue
+            const label = v.value.toLowerCase().trim()
+            if (label === 'yes') {
+              yesS += odd
+              yesN++
+            } else if (label === 'no') {
+              noS += odd
+              noN++
+            }
+          }
+        } else if (bet.id === 12) {
+          for (const v of bet.values) {
+            const odd = parseFloat(v.odd)
+            if (!Number.isFinite(odd)) continue
+            const label = v.value.toLowerCase().replace(/\s+/g, '').trim()
+            if (label === 'home/draw' || label === '1x') {
+              hdS += odd
+              hdN++
+            } else if (label === 'home/away' || label === '12') {
+              haS += odd
+              haN++
+            } else if (label === 'draw/away' || label === 'x2') {
+              daS += odd
+              daN++
+            }
+          }
+        }
       }
-      byLine.set(line, entry)
     }
   }
 
-  return [...byLine.entries()]
+  const overUnder: OverUnderLine[] = [...totals.entries()]
     .filter(([, v]) => v.overN > 0 && v.underN > 0)
     .map(([line, v]) => ({
       line,
-      over: +(v.overSum / v.overN).toFixed(2),
-      under: +(v.underSum / v.underN).toFixed(2),
+      over: +(v.overS / v.overN).toFixed(2),
+      under: +(v.underS / v.underN).toFixed(2),
     }))
     .sort((a, b) => a.line - b.line)
-}
 
-function averageBtts(event: OddsApiEvent): { yes: number; no: number } | null {
-  let yesSum = 0
-  let yesN = 0
-  let noSum = 0
-  let noN = 0
-  for (const bm of event.bookmakers) {
-    const market = bm.markets.find((m) => m.key === 'btts')
-    if (!market) continue
-    for (const o of market.outcomes) {
-      const v = o.name.toLowerCase()
-      if (v === 'yes') {
-        yesSum += o.price
-        yesN++
-      } else if (v === 'no') {
-        noSum += o.price
-        noN++
-      }
-    }
-  }
-  if (yesN === 0 || noN === 0) return null
-  return { yes: +(yesSum / yesN).toFixed(2), no: +(noSum / noN).toFixed(2) }
-}
-
-function averageDoubleChance(
-  event: OddsApiEvent,
-): { homeOrDraw: number; homeOrAway: number; drawOrAway: number } | null {
-  let hd = 0
-  let hdN = 0
-  let ha = 0
-  let haN = 0
-  let da = 0
-  let daN = 0
-  for (const bm of event.bookmakers) {
-    const market = bm.markets.find((m) => m.key === 'double_chance')
-    if (!market) continue
-    for (const o of market.outcomes) {
-      // odds-api labels double_chance outcomes as e.g. "Home/Draw" or team names
-      const name = o.name.toLowerCase()
-      if (name.includes('draw') && name.includes(event.home_team.toLowerCase())) {
-        hd += o.price
-        hdN++
-      } else if (
-        name.includes(event.home_team.toLowerCase()) &&
-        name.includes(event.away_team.toLowerCase())
-      ) {
-        ha += o.price
-        haN++
-      } else if (name.includes('draw') && name.includes(event.away_team.toLowerCase())) {
-        da += o.price
-        daN++
-      }
-    }
-  }
-  if (hdN === 0 && haN === 0 && daN === 0) return null
   return {
-    homeOrDraw: hdN ? +(hd / hdN).toFixed(2) : 0,
-    homeOrAway: haN ? +(ha / haN).toFixed(2) : 0,
-    drawOrAway: daN ? +(da / daN).toFixed(2) : 0,
+    matchWinner: {
+      home: homeN ? +(homeS / homeN).toFixed(2) : 0,
+      draw: drawN ? +(drawS / drawN).toFixed(2) : 0,
+      away: awayN ? +(awayS / awayN).toFixed(2) : 0,
+    },
+    overUnder,
+    btts:
+      yesN > 0 && noN > 0
+        ? { yes: +(yesS / yesN).toFixed(2), no: +(noS / noN).toFixed(2) }
+        : null,
+    doubleChance:
+      hdN > 0 || haN > 0 || daN > 0
+        ? {
+            homeOrDraw: hdN ? +(hdS / hdN).toFixed(2) : 0,
+            homeOrAway: haN ? +(haS / haN).toFixed(2) : 0,
+            drawOrAway: daN ? +(daS / daN).toFixed(2) : 0,
+          }
+        : null,
   }
 }
 
-function apiPartialMarkets(event: OddsApiEvent): Partial<MarketBook> {
-  const partial: Partial<MarketBook> = {}
-  const totals = averageTotals(event)
-  if (totals.length > 0) partial.overUnder = totals
-  const btts = averageBtts(event)
-  if (btts) partial.btts = btts
-  const dc = averageDoubleChance(event)
-  if (dc && (dc.homeOrDraw > 0 || dc.homeOrAway > 0 || dc.drawOrAway > 0)) {
-    partial.doubleChance = dc
+function statusToClock(status: FixtureStatus): {
+  minute: string | undefined
+  isLive: boolean
+} {
+  const short = status.short
+  if (FINISHED_STATUSES.has(short)) return { minute: 'FT', isLive: false }
+  if (short === 'HT') return { minute: 'HT', isLive: true }
+  if (LIVE_STATUSES.has(short)) {
+    const elapsed = status.elapsed ?? 0
+    return { minute: `${elapsed}'`, isLive: true }
   }
-  return partial
+  return { minute: undefined, isLive: false }
 }
 
-/**
- * Deterministic 1–4 minute stoppage derived from the event id and half index,
- * mirroring stoppageFor() in lib/custom-matches-store.ts so API and custom
- * matches use the same convention.
- */
-function stoppageFor(eventId: string, half: 1 | 2): number {
-  let h = 0
-  for (let i = 0; i < eventId.length; i++) {
-    h = (h * 31 + eventId.charCodeAt(i) + half) | 0
-  }
-  return (Math.abs(h) % 4) + 1 // 1..4
-}
-
-const HT_BREAK_MINUTES = 15
-
-/**
- * Map real wall-clock elapsed minutes since kick-off to a football match clock,
- * with proper stoppage time and halftime pause so the displayed minute tracks a
- * real broadcast (and Sportybet) instead of running ~3–5 min ahead.
- *
- *   real 0..44                          → "1'"…"44'"
- *   real 45..44+stoppage1               → "45+1'"…"45+N'" (1st half stoppage)
- *   real (44+stoppage1)..(+15)          → "HT"            (15-min break)
- *   real (then)..(+45)                  → "46'"…"90'"     (2nd half)
- *   real (then)..(+stoppage2)           → "90+1'"…"90+M'" (2nd half stoppage)
- *   real beyond                         → "FT"
- */
-function footballMatchClock(
-  eventId: string,
-  elapsedMin: number,
-): { minute: string; finished: boolean } {
-  const stoppage1 = stoppageFor(eventId, 1)
-  const stoppage2 = stoppageFor(eventId, 2)
-
-  if (elapsedMin < 45) return { minute: `${elapsedMin}'`, finished: false }
-  if (elapsedMin < 45 + stoppage1) {
-    return { minute: `45+${elapsedMin - 45 + 1}'`, finished: false }
-  }
-  if (elapsedMin < 45 + stoppage1 + HT_BREAK_MINUTES) {
-    return { minute: 'HT', finished: false }
-  }
-  const secondHalf = 46 + (elapsedMin - 45 - stoppage1 - HT_BREAK_MINUTES)
-  if (secondHalf <= 90) return { minute: `${secondHalf}'`, finished: false }
-  if (secondHalf < 90 + stoppage2) {
-    return { minute: `90+${secondHalf - 90 + 1}'`, finished: false }
-  }
-  return { minute: 'FT', finished: true }
-}
-
-function toMatch(event: OddsApiEvent, sport: string): Match {
-  const odds = averageH2H(event)
-  const start = new Date(event.commence_time)
-  const now = new Date()
-  const elapsedMin = Math.floor((now.getTime() - start.getTime()) / 60000)
-  const started = elapsedMin >= 0
-
-  let minute: string | undefined
-  let isLive = started
-  if (started) {
-    if (sport === 'football') {
-      const clock = footballMatchClock(event.id, elapsedMin)
-      minute = clock.minute
-      if (clock.finished) isLive = false
-    } else {
-      minute = `${elapsedMin}'`
-    }
-  }
+function toMatch(fixture: Fixture, oddsRows: OddsRow[]): Match {
+  const odds = averageOdds(oddsRows)
+  const { minute, isLive } = statusToClock(fixture.fixture.status)
+  const start = new Date(fixture.fixture.date)
 
   const base: Match = {
-    id: event.id,
-    league: event.sport_title,
-    country: SPORT_TITLE_TO_COUNTRY[event.sport_title] ?? 'International',
-    homeTeam: event.home_team,
-    awayTeam: event.away_team,
+    id: String(fixture.fixture.id),
+    league: fixture.league.name,
+    country: fixture.league.country ?? 'International',
+    homeTeam: fixture.teams.home.name,
+    awayTeam: fixture.teams.away.name,
     isLive,
     startTime: isLive
       ? undefined
       : start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-    startTimeISO: event.commence_time,
+    startTimeISO: fixture.fixture.date,
     minute,
-    odds,
-    sport,
+    odds: odds.matchWinner,
+    sport: 'football',
   }
+  if (typeof fixture.goals.home === 'number') base.homeScore = fixture.goals.home
+  if (typeof fixture.goals.away === 'number') base.awayScore = fixture.goals.away
 
   const derived = deriveMarketBook(base)
   if (derived) {
-    base.markets = mergeMarketBook(derived, apiPartialMarkets(event))
+    const partial: Partial<MarketBook> = {}
+    if (odds.overUnder.length > 0) partial.overUnder = odds.overUnder
+    if (odds.btts) partial.btts = odds.btts
+    if (odds.doubleChance) partial.doubleChance = odds.doubleChance
+    base.markets = mergeMarketBook(derived, partial)
   }
+
   return base
 }
 
-/**
- * Comma-separated list of markets to request. Free plans only get h2h+totals;
- * higher tiers expose btts / double_chance. We ask for all of them — if the
- * tier doesn't support a market the API simply omits it from the response.
- */
-const SOCCER_MARKETS = 'h2h,totals,btts,double_chance'
-const DEFAULT_MARKETS = 'h2h,totals'
-
-interface OddsApiScoreEntry {
-  name: string
-  score: string
-}
-interface OddsApiScore {
-  id: string
-  sport_key: string
-  completed: boolean
-  scores: OddsApiScoreEntry[] | null
-}
-
-/** Map of event-id → { home, away } parsed scores. */
-type ScoreMap = Map<string, { home: number; away: number }>
-
-async function fetchScoresForSport(
-  sportKey: string,
-  apiKey: string,
-): Promise<ScoreMap> {
-  const map: ScoreMap = new Map()
-  try {
-    // daysFrom=1 returns live + recently completed events in the last 24h.
-    const url = `${ODDS_API_BASE}/sports/${sportKey}/scores/?apiKey=${apiKey}&daysFrom=1`
-    const res = await fetch(url, { next: { revalidate: 30 } })
-    if (!res.ok) return map
-    const items = (await res.json()) as OddsApiScore[]
-    for (const item of items) {
-      if (!item.scores || item.scores.length < 2) continue
-      // Match scores to home/away by the team name attached to each entry.
-      // We don't know which entry is home up front, so we keep both.
-      let home: number | null = null
-      let away: number | null = null
-      // The /scores endpoint doesn't directly tag home vs away, but the order
-      // matches the upstream event order (home first, away second).
-      const first = Number(item.scores[0]?.score)
-      const second = Number(item.scores[1]?.score)
-      if (Number.isFinite(first)) home = first
-      if (Number.isFinite(second)) away = second
-      if (home !== null && away !== null) map.set(item.id, { home, away })
-    }
-  } catch {
-    // ignore — scores are best-effort, the odds list still renders
-  }
-  return map
-}
-
-async function fetchSport(sportKey: string, apiKey: string): Promise<OddsApiEvent[]> {
-  const markets = sportKey.startsWith('soccer_') ? SOCCER_MARKETS : DEFAULT_MARKETS
-  const url = `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${apiKey}&regions=eu&markets=${markets}&oddsFormat=decimal`
-  const res = await fetch(url, { next: { revalidate: 60 } })
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      throw new Error(`Odds API auth failed (${res.status}) — check ODDS_API_KEY`)
-    }
-    if (res.status === 429) {
-      throw new Error('Odds API quota exceeded (429)')
-    }
-    // 422 commonly indicates an unsupported market on this plan — retry with h2h only
-    if (res.status === 422) {
-      const fallbackUrl = `${ODDS_API_BASE}/sports/${sportKey}/odds/?apiKey=${apiKey}&regions=eu&markets=h2h&oddsFormat=decimal`
-      const r2 = await fetch(fallbackUrl, { next: { revalidate: 60 } })
-      if (!r2.ok) return []
-      return (await r2.json()) as OddsApiEvent[]
-    }
-    return []
-  }
-  return (await res.json()) as OddsApiEvent[]
-}
-
 export async function getMatchesForSport(sport: string): Promise<Match[]> {
-  const apiKey = process.env.ODDS_API_KEY
-  if (!apiKey) {
-    throw new Error('ODDS_API_KEY missing')
-  }
-  const keys = SPORT_KEYS[sport] ?? []
-  if (keys.length === 0) return []
+  if (sport !== 'football') return []
 
-  // Fetch odds and live scores for every sport key in parallel. Scores are
-  // best-effort: if the /scores endpoint fails we just don't attach them.
-  const [oddsResults, scoreResults] = await Promise.all([
-    Promise.allSettled(keys.map((k) => fetchSport(k, apiKey))),
-    Promise.allSettled(keys.map((k) => fetchScoresForSport(k, apiKey))),
+  const apiKey = process.env.API_FOOTBALL_KEY
+  if (!apiKey) throw new Error('API_FOOTBALL_KEY missing')
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  const [fixturesToday, fixturesLive] = await Promise.all([
+    fetchFixturesByDate(today, apiKey),
+    fetchLiveFixtures(apiKey),
   ])
 
-  // Merge all per-sport-key score maps into one big eventId → score lookup.
-  const allScores: ScoreMap = new Map()
-  for (const r of scoreResults) {
-    if (r.status !== 'fulfilled') continue
-    for (const [id, sc] of r.value) allScores.set(id, sc)
+  const byId = new Map<number, Fixture>()
+  for (const f of fixturesToday) byId.set(f.fixture.id, f)
+  // Live fixtures take precedence — they carry the fresher elapsed minute.
+  for (const f of fixturesLive) byId.set(f.fixture.id, f)
+
+  const fixtures = [...byId.values()].filter((f) =>
+    WHITELISTED_LEAGUE_IDS.has(f.league.id),
+  )
+  if (fixtures.length === 0) return []
+
+  // Unique league+season pairs to fetch pre-match odds for; live leagues
+  // to also hit /odds/live so the prices on in-play games are fresh.
+  const preMatchKeys = new Map<string, { leagueId: number; season: number }>()
+  const liveLeagueIds = new Set<number>()
+  for (const f of fixtures) {
+    preMatchKeys.set(`${f.league.id}:${f.league.season}`, {
+      leagueId: f.league.id,
+      season: f.league.season,
+    })
+    if (LIVE_STATUSES.has(f.fixture.status.short)) liveLeagueIds.add(f.league.id)
   }
 
-  const events = oddsResults.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
-  return events
-    .map((e) => {
-      const m = toMatch(e, sport)
-      const score = allScores.get(e.id)
-      if (score) {
-        m.homeScore = score.home
-        m.awayScore = score.away
-      }
-      return m
-    })
+  const [preMatchResults, liveResults] = await Promise.all([
+    Promise.allSettled(
+      [...preMatchKeys.values()].map((k) =>
+        fetchOddsForLeague(k.leagueId, k.season, today, apiKey),
+      ),
+    ),
+    Promise.allSettled(
+      [...liveLeagueIds].map((id) => fetchLiveOddsForLeague(id, apiKey)),
+    ),
+  ])
+
+  const oddsMap = new Map<number, OddsRow[]>()
+  for (const r of preMatchResults) {
+    if (r.status !== 'fulfilled') continue
+    for (const row of r.value) {
+      const list = oddsMap.get(row.fixture.id) ?? []
+      list.push(row)
+      oddsMap.set(row.fixture.id, list)
+    }
+  }
+  // Live odds replace pre-match: once a game kicks off the pre-match book
+  // disappears upstream anyway, and live prices are fresher.
+  for (const r of liveResults) {
+    if (r.status !== 'fulfilled') continue
+    for (const row of r.value) oddsMap.set(row.fixture.id, [row])
+  }
+
+  return fixtures
+    .map((f) => toMatch(f, oddsMap.get(f.fixture.id) ?? []))
     .filter((m) => m.odds.home > 0 && m.odds.away > 0)
     .sort((a, b) => {
       if (a.isLive !== b.isLive) return a.isLive ? -1 : 1
@@ -467,5 +447,5 @@ export async function getMatchesForSport(sport: string): Promise<Match[]> {
 }
 
 export function supportedSports(): string[] {
-  return Object.keys(SPORT_KEYS)
+  return ['football']
 }

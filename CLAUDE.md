@@ -18,7 +18,7 @@ Use PowerShell on Windows. No test framework is configured.
 
 `.env.local.example` is the source of truth for required vars. Notable ones:
 
-- `ODDS_API_KEY` — without it, `/api/matches` returns `customMatches` only with `reason: "ODDS_API_KEY missing"`
+- `API_FOOTBALL_KEY` — API-Football (v3.football.api-sports.io) key. Without it, `/api/matches` returns `customMatches` only with `reason: "API_FOOTBALL_KEY missing"`. The API enforces an optional IP allow-list per account; on Vercel you must leave it disabled because Functions run on dynamic IPs. Only the football host is wired up — basketball/tennis/baseball/hockey/volleyball return `[]` from `getMatchesForSport()`
 - `ADMIN_PASSWORD` — **unset disables the entire admin section** (proxy returns 503 / redirects to `/admin/login?disabled=1`)
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — all server-side stores throw if the URL or service-role key is missing
 - `MOOLRE_PUBLIC_KEY`, `MOOLRE_ACCOUNT_NUMBER`, `MOOLRE_SECRET_KEY`, `MIN_FIRST_DEPOSIT` — Moolre API integration, **Ghana wallets only**. `POST /api/payments/moolre/start` calls Moolre's `embed/src/start` endpoint with `X-Api-Pubkey` + body `{ state: 'starter', accountnumber, reference, email, amount, currency, callback, nonce_value, tx_source }` and returns `data.authorization_url` for the redirect. After payment, Moolre POSTs the result to `/api/payments/moolre/callback`; the webhook receiver verifies HMAC-SHA256(body, `MOOLRE_SECRET_KEY`), looks up the pending payment by reference, and fires the same `applyDepositCredit` pipeline Paystack uses — so the verification step and sub-admin commission both land automatically. `MOOLRE_PRIVATE_KEY` is reserved for the payouts API and isn't read by either route.
@@ -46,21 +46,25 @@ Edge runtime — it can only import from `lib/admin-auth.ts` and `lib/sub-admin-
 2. **Sub-admin**: per-record. Cookie is `"<subAdminId>:<sig>"` where sig is `sha256("primebet:sub-admin:" + id + ":" + passwordHash)`. The proxy only parses the cookie shape; full validation requires loading the record inside the route handler (`assertSubAdmin`). Changing a sub-admin's password invalidates their sessions. (`lib/sub-admin-auth.ts`)
 3. **Player**: bcrypt-hashed password on the `users` table, custom cookie-based session via `lib/user-session.ts`.
 
-### Match feed: Odds API + custom matches + admin overrides
+### Match feed: API-Football + custom matches + admin overrides
 
 `GET /api/matches` (in `app/api/matches/route.ts`) merges three sources and is the canonical pipeline — replicate this order if you build another match endpoint:
 
 1. Pull admin overrides (`match_overrides` table) into a `matchId → override` map. Missing table is non-fatal — empty map.
 2. Load admin-created `custom_matches` for the sport, drop any with `minute === 'FT'`.
-3. Fetch Odds API events (`lib/api/odds.ts`), drop any with `minute === 'FT'`.
+3. Fetch API-Football fixtures+odds via `lib/api/odds.ts` (football only — other sports return `[]`), drop any with `minute === 'FT'`.
 4. For each match, apply the override (only fields the admin set), then hydrate `markets` via `deriveMarketBook` if absent.
 5. Optionally filter to "today only" using a tz offset the client passes via `?tzOffset=<minutes>`.
 
 A `locked` override on either source freezes betting regardless of `isLive`/`startTime` — match-betting checks honor it.
 
-### Football clock is intentionally fake-but-consistent
+Upstream call shape: per refresh, `lib/api/odds.ts` hits `/fixtures?date=today`, `/fixtures?live=all`, then `/odds?league&season&date` for each unique league with fixtures today, plus `/odds/live?league` for live leagues. Pre-match odds cache for 300s, live for 30s — change those revalidate values together if you tune cadence.
 
-Real-time elapsed minutes are mapped through a regime that adds deterministic 1–4 min stoppage at the end of each half, pauses 15 min at HT, and ends at FT. The displayed minute tracks 1:1 with real time so the clock matches a real broadcast (and Sportybet) rather than drifting ahead.
+### Football clock: real for upstream, synthetic for custom matches
+
+Upstream matches now take their minute straight from API-Football's `fixture.status.elapsed` + `status.short` (`1H` / `HT` / `2H` / `ET` / `FT` / etc.), so we display whatever the league feed reports. No synthetic clock for those.
+
+Admin-created custom matches still need a synthetic clock — they don't have an upstream feed driving them. `tickingMinute()` in `lib/custom-matches-store.ts` maps real elapsed minutes since kick-off into a broadcast-style clock:
 
 - `0..44` real min → `"0'"…"44'"` (1st half)
 - next 1–4 min → `"45+1'"…"45+N'"` (1st half stoppage)
@@ -69,7 +73,7 @@ Real-time elapsed minutes are mapped through a regime that adds deterministic 1�
 - next 1–4 min → `"90+1'"…"90+M'"` (2nd half stoppage)
 - beyond → `"FT"` (match hidden from feed)
 
-Stoppage length is derived per-match from a hash of the event/match id (1–4 min), so the same match always shows the same stoppage. Two implementations must stay in sync — `footballMatchClock(eventId, elapsedMin)` in `lib/api/odds.ts` for upstream events and `tickingMinute()` in `lib/custom-matches-store.ts` for admin-added matches. Don't change one without the other; same `stoppageFor()` hash recipe in both.
+Stoppage length is derived per-match from a hash of the match id (1–4 min), so the same match always shows the same stoppage.
 
 ### Derived markets
 
