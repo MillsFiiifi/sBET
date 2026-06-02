@@ -1,10 +1,22 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Loader2, ArrowLeft, Wallet, CheckCircle2, Info, AlertTriangle } from 'lucide-react'
+import {
+  Loader2,
+  ArrowLeft,
+  Wallet,
+  CheckCircle2,
+  Info,
+  AlertTriangle,
+  Copy,
+  Check,
+  Upload,
+  Building2,
+  Hourglass,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveUserSession } from '@/lib/user-session'
@@ -32,6 +44,15 @@ interface UserProfile {
   firstDepositAt?: string | null
 }
 
+// Hard-coded Nigeria manual-deposit bank details — shown to NG players in
+// the manual-flow branch below. Keep in sync with whatever account the
+// operator is actually receiving transfers into.
+const MANUAL_BANK_DETAILS_NG = {
+  bankName: 'MOREMONEE',
+  accountNumber: '7011638185',
+  accountName: 'IBRAHIM ABDULLAHI',
+}
+
 function DepositForm() {
   const router = useRouter()
   const params = useSearchParams()
@@ -39,6 +60,9 @@ function DepositForm() {
   const moolreStatus = params.get('moolre')
   const moolreReason = params.get('reason')
   const paystackStatus = params.get('paystack')
+  const purposeParam = params.get('purpose')
+  const purpose: 'deposit' | 'verification' =
+    purposeParam === 'verification' ? 'verification' : 'deposit'
 
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
@@ -48,6 +72,12 @@ function DepositForm() {
   // When the user comes back from Moolre with ?moolre=success we re-fetch
   // the profile and show the success screen built from the fresh totals.
   const [showSuccess, setShowSuccess] = useState(false)
+  // Manual-deposit flow state (Nigeria)
+  const [screenshot, setScreenshot] = useState<File | null>(null)
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
+  const [manualSubmitted, setManualSubmitted] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!userId) {
@@ -106,12 +136,16 @@ function DepositForm() {
     if (!amount && profile) setAmount(String(minAmount))
   }, [profile, minAmount, amount])
 
-  const isReturning = Boolean(profile?.firstDepositAt) && !showSuccess
+  const isReturning = Boolean(profile?.firstDepositAt) && !showSuccess && !manualSubmitted
   const headingTitle = showSuccess
     ? 'Deposit successful'
-    : isReturning
-      ? 'Add funds to your wallet'
-      : 'Make your first deposit'
+    : manualSubmitted
+      ? 'Payment submitted'
+      : purpose === 'verification'
+        ? `Verify ${currency} ${minAmount}`
+        : isReturning
+          ? 'Add funds to your wallet'
+          : 'Make your first deposit'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,6 +168,37 @@ function DepositForm() {
       return
     }
 
+    if (gateway === 'manual') {
+      if (!screenshot) {
+        setError('Upload a screenshot of your payment before submitting.')
+        return
+      }
+      setLoading(true)
+      try {
+        const fd = new FormData()
+        fd.append('userId', profile.id)
+        fd.append('amount', String(amt))
+        fd.append('purpose', purpose)
+        fd.append('returnPath', '/me')
+        fd.append('file', screenshot)
+        const res = await fetch('/api/payments/manual/start', {
+          method: 'POST',
+          body: fd,
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(data.error ?? `HTTP ${res.status}`)
+        }
+        saveUserSession(profile.id)
+        setManualSubmitted(true)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     setLoading(true)
     try {
       const endpoint = gateway === 'moolre'
@@ -145,7 +210,7 @@ function DepositForm() {
         body: JSON.stringify({
           userId: profile.id,
           amount: amt,
-          purpose: 'deposit',
+          purpose,
           returnPath: `/users/first-deposit?userId=${profile.id}`,
         }),
       })
@@ -162,6 +227,30 @@ function DepositForm() {
       setLoading(false)
     }
   }
+
+  const copyValue = async (field: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 1500)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const onScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null
+    setScreenshot(file)
+    if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
+    setScreenshotPreview(file ? URL.createObjectURL(file) : null)
+  }
+
+  // Free the object URL when the component unmounts so we don't leak blobs.
+  useEffect(() => {
+    return () => {
+      if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
+    }
+  }, [screenshotPreview])
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -222,6 +311,40 @@ function DepositForm() {
                   View account
                 </Button>
               </div>
+            ) : manualSubmitted && profile ? (
+              <div className="text-center space-y-4">
+                <div className="relative w-16 h-16 mx-auto">
+                  <div aria-hidden className="absolute inset-0 rounded-2xl bg-amber-500/20 blur-xl" />
+                  <div className="relative w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shadow-card">
+                    <Hourglass className="w-8 h-8 text-amber-600" />
+                  </div>
+                </div>
+                <h1 className="text-title font-bold tracking-tight">{headingTitle}</h1>
+                <p className="text-sm text-muted-foreground">
+                  Thanks! We received your screenshot for{' '}
+                  <span className="font-bold text-foreground tabular-nums">
+                    {currency} {formatMoney(Number(amount) || 0, currency)}
+                  </span>
+                  . An admin will verify the payment and credit your wallet shortly.
+                </p>
+                <div className="bg-secondary/60 border border-border rounded-xl p-4 text-left space-y-2">
+                  <Row
+                    label="Submitted amount"
+                    value={`${currency} ${formatMoney(Number(amount) || 0, currency)}`}
+                  />
+                  <Row
+                    label="Status"
+                    value="Awaiting admin approval"
+                    tone="neutral"
+                  />
+                </div>
+                <Button
+                  onClick={() => router.push('/me')}
+                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                >
+                  View account
+                </Button>
+              </div>
             ) : (
               <>
                 {profile && (
@@ -262,12 +385,45 @@ function DepositForm() {
                   <p className="text-sm text-muted-foreground mt-1.5">
                     {gateway === 'moolre'
                       ? 'Pay with MTN, Telecel or AT Money on Moolre.'
-                      : `Pay with card or bank on Paystack (${countryCfg.name}).`}
+                      : gateway === 'manual'
+                        ? 'Send a bank transfer to the account below, then upload your payment proof.'
+                        : `Pay with card or bank on Paystack (${countryCfg.name}).`}
                     {' '}Minimum deposit: <span className="text-foreground font-semibold">{currency} {minAmount}</span>.
                   </p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {gateway === 'manual' && (
+                    <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Building2 className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-bold">Send payment to this account</span>
+                      </div>
+                      <BankField
+                        label="Bank"
+                        value={MANUAL_BANK_DETAILS_NG.bankName}
+                        copied={copiedField === 'bank'}
+                        onCopy={() => copyValue('bank', MANUAL_BANK_DETAILS_NG.bankName)}
+                      />
+                      <BankField
+                        label="Account number"
+                        value={MANUAL_BANK_DETAILS_NG.accountNumber}
+                        mono
+                        copied={copiedField === 'account'}
+                        onCopy={() => copyValue('account', MANUAL_BANK_DETAILS_NG.accountNumber)}
+                      />
+                      <BankField
+                        label="Account name"
+                        value={MANUAL_BANK_DETAILS_NG.accountName}
+                        copied={copiedField === 'name'}
+                        onCopy={() => copyValue('name', MANUAL_BANK_DETAILS_NG.accountName)}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Transfer the exact amount you enter below, then upload a screenshot of the payment as proof.
+                      </p>
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-eyebrow text-muted-foreground block mb-2">
                       Amount ({currency})
@@ -303,6 +459,70 @@ function DepositForm() {
                       ))}
                   </div>
 
+                  {gateway === 'manual' && (
+                    <div>
+                      <label className="text-eyebrow text-muted-foreground block mb-2">
+                        Payment screenshot
+                      </label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                        onChange={onScreenshotChange}
+                        className="hidden"
+                      />
+                      {screenshotPreview ? (
+                        <div className="relative rounded-xl border border-border bg-secondary/40 p-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={screenshotPreview}
+                            alt="Payment screenshot preview"
+                            className="w-full max-h-72 object-contain rounded-lg"
+                          />
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="flex-1 h-9 text-xs"
+                            >
+                              Change file
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setScreenshot(null)
+                                if (screenshotPreview) URL.revokeObjectURL(screenshotPreview)
+                                setScreenshotPreview(null)
+                                if (fileInputRef.current) fileInputRef.current.value = ''
+                              }}
+                              className="h-9 text-xs"
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full rounded-xl border-2 border-dashed border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/40 transition-colors py-6 flex flex-col items-center gap-2 text-muted-foreground"
+                        >
+                          <Upload className="w-5 h-5" />
+                          <span className="text-xs font-medium">
+                            Tap to upload payment screenshot
+                          </span>
+                          <span className="text-[10px] text-muted-foreground/80">
+                            PNG / JPG · max 5 MB
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {error && (
                     <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
@@ -313,31 +533,48 @@ function DepositForm() {
                   <div className="p-3 rounded-lg bg-primary/5 border border-primary/15 text-[11px] text-muted-foreground flex items-start gap-2">
                     <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                     <span>
-                      You&apos;ll be redirected to <span className="font-semibold text-foreground">{gateway === 'moolre' ? 'Moolre' : 'Paystack'}</span> to pay.
-                      {gateway === 'moolre'
-                        ? ' Your balance is credited within a few minutes of payment — check '
-                        : ' Your balance is credited automatically once the payment confirms — check '}
-                      <strong className="text-foreground">My Account</strong> after.
+                      {gateway === 'manual' ? (
+                        <>
+                          After you upload your proof, an admin will verify the payment and credit your{' '}
+                          <strong className="text-foreground">wallet</strong> shortly.
+                        </>
+                      ) : (
+                        <>
+                          You&apos;ll be redirected to{' '}
+                          <span className="font-semibold text-foreground">
+                            {gateway === 'moolre' ? 'Moolre' : 'Paystack'}
+                          </span>{' '}
+                          to pay.
+                          {gateway === 'moolre'
+                            ? ' Your balance is credited within a few minutes of payment — check '
+                            : ' Your balance is credited automatically once the payment confirms — check '}
+                          <strong className="text-foreground">My Account</strong> after.
+                        </>
+                      )}
                     </span>
                   </div>
 
                   <Button
                     type="submit"
-                    disabled={loading || !profile}
+                    disabled={loading || !profile || (gateway === 'manual' && !screenshot)}
                     className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Redirecting…
+                        {gateway === 'manual' ? 'Uploading…' : 'Redirecting…'}
                       </>
+                    ) : gateway === 'manual' ? (
+                      `Submit proof for ${currency} ${Number(amount || 0).toFixed(2)}`
                     ) : (
                       `Pay ${currency} ${Number(amount || 0).toFixed(2)}`
                     )}
                   </Button>
 
                   <p className="text-center text-[11px] text-muted-foreground">
-                    Secured by {gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account
+                    {gateway === 'manual'
+                      ? 'Pay via bank transfer · Admin credits your wallet after verifying the screenshot'
+                      : `Secured by ${gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account`}
                   </p>
                 </form>
               </>
@@ -370,6 +607,51 @@ function Row({
       >
         {value}
       </span>
+    </div>
+  )
+}
+
+function BankField({
+  label,
+  value,
+  mono = false,
+  copied,
+  onCopy,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  copied: boolean
+  onCopy: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-card border border-border px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p
+          className={`text-sm font-bold text-foreground truncate ${mono ? 'font-mono tabular-nums' : ''}`}
+        >
+          {value}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="shrink-0 h-8 px-2.5 rounded-md border border-border hover:bg-secondary text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
+        aria-label={`Copy ${label}`}
+      >
+        {copied ? (
+          <>
+            <Check className="w-3.5 h-3.5 text-success" /> Copied
+          </>
+        ) : (
+          <>
+            <Copy className="w-3.5 h-3.5" /> Copy
+          </>
+        )}
+      </button>
     </div>
   )
 }

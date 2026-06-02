@@ -37,6 +37,8 @@ export async function GET() {
         ? (p.metadata.paidAmount as number)
         : null
     const adminResolved = p.metadata?.adminResolved === true
+    const screenshotUrl =
+      (typeof p.metadata?.screenshotUrl === 'string' && p.metadata.screenshotUrl) || null
     return {
       id: p.id,
       reference: p.reference,
@@ -44,11 +46,12 @@ export async function GET() {
       currency: p.currency,
       provider: p.provider,
       status: p.status,
-      source, // 'admin_credit' | null
+      source, // 'admin_credit' | 'manual_upload' | null
       note,
       failureReason,
       paidAmount,
       adminResolved,
+      screenshotUrl,
       createdAt: p.createdAt,
       user: u
         ? {

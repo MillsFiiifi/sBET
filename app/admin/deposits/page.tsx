@@ -29,6 +29,7 @@ interface DepositRow {
   failureReason: string | null
   paidAmount: number | null
   adminResolved: boolean
+  screenshotUrl: string | null
   createdAt: string
   user: {
     id: string
@@ -366,6 +367,22 @@ export default function AdminDepositsPage() {
                         {d.note ? ` · ${d.note}` : ''}
                       </p>
                       <FailureReason metadata={d} />
+                      {d.screenshotUrl && (
+                        <a
+                          href={d.screenshotUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-block rounded-lg border border-border overflow-hidden hover:border-primary transition-colors"
+                          title="Open full screenshot"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={d.screenshotUrl}
+                            alt="Payment proof"
+                            className="max-h-32 max-w-[180px] object-contain bg-secondary/40"
+                          />
+                        </a>
+                      )}
                     </div>
                     <div className="text-right shrink-0 flex flex-col items-end gap-2">
                       <div>
@@ -537,6 +554,13 @@ function SourceBadge({
     return (
       <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase border-primary/30 text-primary bg-primary/10">
         Admin credit
+      </span>
+    )
+  }
+  if (source === 'manual_upload' || provider === 'manual') {
+    return (
+      <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase border-amber-500/40 text-amber-700 bg-amber-500/10">
+        Manual upload
       </span>
     )
   }

@@ -328,6 +328,14 @@ function MePageInner() {
   const startVerificationDeposit = async () => {
     if (!profile) return
     setVerifyError(null)
+    // Manual gateway has no hosted checkout — send the user to the deposit
+    // page with purpose=verification and let them upload a screenshot there.
+    if (countryCfg.gateway === 'manual') {
+      router.push(
+        `/users/first-deposit?userId=${profile.id}&purpose=verification`,
+      )
+      return
+    }
     setVerifyLoading(true)
     try {
       const endpoint = countryCfg.gateway === 'moolre'
@@ -710,9 +718,11 @@ function MePageInner() {
                 <div className="p-2.5 rounded-lg bg-secondary/60 border border-border text-[11px] text-muted-foreground flex items-start gap-2">
                   <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
                   <span>
-                    You&apos;ll be redirected to {countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'} to pay. Your balance
-                    is credited
-                    {countryCfg.gateway === 'moolre' ? ' within a few minutes of payment.' : ' automatically once the payment confirms.'}
+                    {countryCfg.gateway === 'manual'
+                      ? 'You\'ll see our bank details and upload your payment proof on the next page. Admin credits your wallet once verified.'
+                      : countryCfg.gateway === 'moolre'
+                        ? 'You\'ll be redirected to Moolre to pay. Your balance is credited within a few minutes of payment.'
+                        : 'You\'ll be redirected to Paystack to pay. Your balance is credited automatically once the payment confirms.'}
                   </span>
                 </div>
                 <Button
@@ -724,14 +734,18 @@ function MePageInner() {
                   {verifyLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Redirecting…
+                      {countryCfg.gateway === 'manual' ? 'Opening…' : 'Redirecting…'}
                     </>
+                  ) : countryCfg.gateway === 'manual' ? (
+                    `Pay ${currency} ${verificationAmount} via bank transfer`
                   ) : (
                     `Pay ${currency} ${verificationAmount} to verify`
                   )}
                 </Button>
                 <p className="text-[11px] text-center text-muted-foreground">
-                  Secured by {countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'}. Funds are credited to your wallet balance.
+                  {countryCfg.gateway === 'manual'
+                    ? 'Bank transfer · Admin credits your wallet after verifying the screenshot.'
+                    : `Secured by ${countryCfg.gateway === 'moolre' ? 'Moolre' : 'Paystack'}. Funds are credited to your wallet balance.`}
                 </p>
               </div>
             ) : (

@@ -6,7 +6,7 @@
 
 export type CountryCode = 'GH' | 'NG' | 'KE' | 'ZA'
 export type CurrencyCode = 'GHS' | 'NGN' | 'KES' | 'ZAR'
-export type Gateway = 'moolre' | 'paystack'
+export type Gateway = 'moolre' | 'paystack' | 'manual'
 
 export interface PayoutNetwork {
   key: string
@@ -81,7 +81,7 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycError: 'BVN or NIN must be exactly 11 digits',
     minFirstDeposit: 30000,
     verificationAmount: 30000,
-    gateway: 'paystack',
+    gateway: 'manual',
     payoutTarget: 'bank',
     payoutNetworks: [
       { key: 'bank', label: 'Bank account' },
