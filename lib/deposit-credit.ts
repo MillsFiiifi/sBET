@@ -59,10 +59,33 @@ export async function applyDepositCredit(
     if (advanced) user = advanced
   }
 
+  // Commission fires on EVERY confirmed deposit (not just the first) as long
+  // as the user was referred by an approved sub-admin. Skip reasons are
+  // logged so it's easy to diagnose "I deposited but my referrer didn't get
+  // paid" reports from production Vercel logs.
   let commission: ApplyDepositResult['commission'] = null
-  if (user.referredBySubAdminId) {
+  if (!user.referredBySubAdminId) {
+    console.log('[deposit-credit] commission skipped: user not referred', {
+      userId: user.id,
+      amount,
+      depositNumber: result.isFirst ? 1 : '2+',
+    })
+  } else {
     const sa = await findSubAdminById(user.referredBySubAdminId)
-    if (sa && sa.approved) {
+    if (!sa) {
+      console.warn('[deposit-credit] commission skipped: referring sub-admin not found', {
+        userId: user.id,
+        subAdminId: user.referredBySubAdminId,
+        amount,
+      })
+    } else if (!sa.approved) {
+      console.warn('[deposit-credit] commission skipped: referring sub-admin not approved', {
+        userId: user.id,
+        subAdminId: sa.id,
+        subAdminName: sa.name,
+        amount,
+      })
+    } else {
       const amt = +(amount * COMMISSION_RATE).toFixed(2)
       await creditCommission(sa.id, amt, user.currency)
       await addCommission({
@@ -72,6 +95,14 @@ export async function applyDepositCredit(
         commission: amt,
         rate: COMMISSION_RATE,
         currency: user.currency,
+      })
+      console.log('[deposit-credit] commission credited', {
+        userId: user.id,
+        subAdminId: sa.id,
+        depositAmount: amount,
+        commissionAmount: amt,
+        currency: user.currency,
+        depositNumber: result.isFirst ? 1 : '2+',
       })
       commission = {
         amount: amt,
