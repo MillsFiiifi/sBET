@@ -188,6 +188,11 @@ function DepositForm() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      // The route returns 201 ok=true even when the Telegram send fails so
+      // the pending row is preserved for manual recovery. Surface the
+      // warning as a hard error here so the player doesn't think an
+      // operator was actually notified.
+      if (typeof data.warning === 'string') throw new Error(data.warning)
       if (userId) saveUserSession(userId)
       setTelegramSubmitted(true)
     } catch (e) {
