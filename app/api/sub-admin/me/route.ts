@@ -42,6 +42,6 @@ export async function GET() {
       firstDepositAt: u.firstDepositAt,
       totalDeposited: u.totalDeposited,
     })),
-    commissions: commissions.slice(0, 50),
+    commissions,
   })
 }

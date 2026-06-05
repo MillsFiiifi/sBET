@@ -299,7 +299,9 @@ export default function SubAdminDashboardPage() {
               </div>
               <ul className="divide-y divide-border">
                 {data.referredUsers.map((u) => {
-                  const cm = data.commissions.find((c) => c.userId === u.id)
+                  const userCommissions = data.commissions.filter((c) => c.userId === u.id)
+                  const totalCommission = userCommissions.reduce((sum, c) => sum + c.commission, 0)
+                  const commissionCurrency = userCommissions[0]?.currency ?? u.currency
                   return (
                     <li key={u.id} className="px-4 py-3">
                       <div className="md:grid md:grid-cols-[1fr_180px_120px_120px_120px] md:gap-3 md:items-center flex flex-col gap-1">
@@ -329,10 +331,12 @@ export default function SubAdminDashboardPage() {
                         </p>
                         <p
                           className={`md:text-right text-sm font-bold tabular-nums ${
-                            cm ? 'text-success' : 'text-muted-foreground'
+                            userCommissions.length > 0 ? 'text-success' : 'text-muted-foreground'
                           }`}
                         >
-                          {cm ? `+${cm.currency} ${formatMoney(cm.commission, cm.currency)}` : '—'}
+                          {userCommissions.length > 0
+                            ? `+${commissionCurrency} ${formatMoney(totalCommission, commissionCurrency)}`
+                            : '—'}
                         </p>
                       </div>
                     </li>
