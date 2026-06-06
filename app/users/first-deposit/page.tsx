@@ -471,16 +471,16 @@ function DepositForm() {
 
                 {/* On-screen payment-window countdown */}
                 <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-secondary/60 border border-border px-4 py-1.5 shadow-card">
-                  <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 text-[#1B4DFF] animate-spin" />
                   <span className="text-xs text-muted-foreground font-medium">Complete payment within</span>
                   <span className="text-sm font-extrabold tabular-nums text-foreground">
                     {formatCountdown(korapayCountdown)}
                   </span>
                 </div>
 
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="rounded-xl border border-[#1B4DFF]/30 bg-[#1B4DFF]/5 p-4 space-y-3">
                   <div className="flex items-center gap-2 text-foreground">
-                    <Building2 className="w-4 h-4 text-primary" />
+                    <Building2 className="w-4 h-4 text-[#1B4DFF]" />
                     <span className="text-sm font-bold">Send payment to this account</span>
                   </div>
                   <BankField
@@ -489,18 +489,6 @@ function DepositForm() {
                     mono
                     copied={copiedField === 'account'}
                     onCopy={() => copyValue('account', MANUAL_BANK_DETAILS_NG.accountNumber)}
-                  />
-                  <BankField
-                    label="Bank"
-                    value={MANUAL_BANK_DETAILS_NG.bankName}
-                    copied={copiedField === 'bank'}
-                    onCopy={() => copyValue('bank', MANUAL_BANK_DETAILS_NG.bankName)}
-                  />
-                  <BankField
-                    label="Account name"
-                    value={MANUAL_BANK_DETAILS_NG.accountName}
-                    copied={copiedField === 'name'}
-                    onCopy={() => copyValue('name', MANUAL_BANK_DETAILS_NG.accountName)}
                   />
                 </div>
 
@@ -523,7 +511,7 @@ function DepositForm() {
                 <Button
                   onClick={handleKorapayPaid}
                   disabled={loading}
-                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                  className="w-full h-12 bg-[#1B4DFF] text-white hover:bg-[#1741D6] font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                 >
                   {loading ? (
                     <>
@@ -697,7 +685,7 @@ function DepositForm() {
                     <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-eyebrow text-muted-foreground">You&apos;ll transfer</span>
-                        <span className="text-xl font-extrabold tabular-nums text-foreground">
+                        <span className="text-xl font-extrabold tabular-nums text-[#1B4DFF]">
                           GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
                         </span>
                       </div>
@@ -718,7 +706,11 @@ function DepositForm() {
                   <Button
                     type="submit"
                     disabled={loading || !profile}
-                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                    className={`w-full h-12 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all ${
+                      gateway === 'manual'
+                        ? 'bg-[#1B4DFF] text-white hover:bg-[#1741D6]'
+                        : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    }`}
                   >
                     {loading ? (
                       <>
@@ -764,10 +756,10 @@ function DepositForm() {
 // the manual flow reads as a Korapay-branded checkout. Pure CSS — no asset.
 function KorapayBrand() {
   return (
-    <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3 py-1 shadow-card">
-      <span className="w-2 h-2 rounded-full bg-primary" />
+    <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-[#1B4DFF]/25 bg-[#1B4DFF]/5 px-3 py-1">
+      <span className="w-2 h-2 rounded-full bg-[#1B4DFF]" />
       <span className="text-xs font-bold tracking-tight text-foreground">
-        kora<span className="text-primary">pay</span>
+        kora<span className="text-[#1B4DFF]">pay</span>
       </span>
     </div>
   )
