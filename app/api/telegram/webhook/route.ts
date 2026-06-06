@@ -35,26 +35,43 @@ export async function POST(request: Request) {
   let update: TelegramUpdate
   try {
     update = (await request.json()) as TelegramUpdate
-  } catch {
+  } catch (e) {
+    console.warn('[telegram/webhook] invalid json body', e)
     return NextResponse.json({ ok: true })
   }
 
+  console.log('[telegram/webhook] received update', JSON.stringify(update).slice(0, 500))
+
   const cb = update.callback_query
   if (!cb || !cb.data || !cb.message) {
+    console.warn('[telegram/webhook] no callback_query.data/message on update', {
+      hasCb: Boolean(cb),
+      hasData: Boolean(cb?.data),
+      hasMessage: Boolean(cb?.message),
+    })
     return NextResponse.json({ ok: true })
   }
 
   const [action, paymentId] = cb.data.split(':')
+  console.log('[telegram/webhook] action', { action, paymentId, callbackQueryId: cb.id })
+
   if (!paymentId || (action !== 'approve' && action !== 'reject')) {
+    console.warn('[telegram/webhook] unknown action', { cbData: cb.data })
     await answerCallbackQuery({ callbackQueryId: cb.id, text: 'Unknown action' })
     return NextResponse.json({ ok: true })
   }
 
   const payment = await findPaymentById(paymentId)
   if (!payment) {
+    console.warn('[telegram/webhook] payment row not found', { paymentId })
     await answerCallbackQuery({ callbackQueryId: cb.id, text: 'Payment not found' })
     return NextResponse.json({ ok: true })
   }
+  console.log('[telegram/webhook] payment row loaded', {
+    paymentId: payment.id,
+    status: payment.status,
+    amount: payment.amount,
+  })
 
   // Already resolved (operator double-clicked, or a different path credited
   // it). Just clean up the message and ack.
