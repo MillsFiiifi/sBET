@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     )
   }
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+  const setRes = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -76,22 +76,34 @@ export async function GET(request: Request) {
       allowed_updates: ['callback_query'],
     }),
   })
-  const data = (await res.json().catch(() => ({}))) as {
+  const setData = (await setRes.json().catch(() => ({}))) as {
     ok?: boolean
     description?: string
   }
 
-  if (!res.ok || !data.ok) {
+  // Always read back getWebhookInfo so the operator can see the current
+  // hook URL, any delivery errors, and any queued updates in one call.
+  const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)
+  const infoData = await infoRes.json().catch(() => ({}))
+
+  if (!setRes.ok || !setData.ok) {
     return NextResponse.json(
       {
         ok: false,
         webhookUrl,
-        telegramStatus: res.status,
-        telegramDescription: data.description ?? 'unknown error',
+        secretLength: secret.length,
+        setWebhook: { status: setRes.status, description: setData.description ?? 'unknown error' },
+        webhookInfo: infoData,
       },
       { status: 502 },
     )
   }
 
-  return NextResponse.json({ ok: true, webhookUrl, telegram: data })
+  return NextResponse.json({
+    ok: true,
+    webhookUrl,
+    secretLength: secret.length,
+    setWebhook: setData,
+    webhookInfo: infoData,
+  })
 }
