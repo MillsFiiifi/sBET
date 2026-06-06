@@ -540,8 +540,6 @@ function DepositForm() {
                 >
                   ← Start over
                 </button>
-
-                <SecuredByKora />
               </div>
             ) : (
               <>
