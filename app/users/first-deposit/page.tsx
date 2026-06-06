@@ -517,9 +517,6 @@ function DepositForm() {
                         copied={copiedField === 'account'}
                         onCopy={() => copyValue('account', MANUAL_BANK_DETAILS_NG.accountNumber)}
                       />
-                      <p className="text-[11px] text-muted-foreground">
-                        Transfer the exact amount you enter below, then tap Pay so an operator can confirm and credit your wallet.
-                      </p>
                     </div>
                   )}
 
@@ -584,11 +581,11 @@ function DepositForm() {
                     )}
                   </Button>
 
-                  <p className="text-center text-[11px] text-muted-foreground">
-                    {gateway === 'manual'
-                      ? 'Operator approves your payment from a Telegram chat — wallet credited once they confirm'
-                      : `Secured by ${gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account`}
-                  </p>
+                  {gateway !== 'manual' && (
+                    <p className="text-center text-[11px] text-muted-foreground">
+                      Secured by {gateway === 'moolre' ? 'Moolre' : 'Paystack'} · You can deposit later from your account
+                    </p>
+                  )}
 
                   {momoAvailable && payMode === 'card' && (
                     <button
