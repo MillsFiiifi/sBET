@@ -246,7 +246,7 @@ export default function TowerRushPage() {
         @keyframes tr-sway { 0%,100% { transform: rotate(-3deg) } 50% { transform: rotate(3deg) } }
         @keyframes tr-fall { to { transform: translateY(420px) rotate(80deg); opacity: 0 } }
         .tr-block-in { animation: tr-drop .28s ease-out }
-        .tr-sway { animation: tr-sway 2.4s ease-in-out infinite; transform-origin: top center }
+        .tr-sway { animation: tr-sway 1.4s ease-in-out infinite; transform-origin: top center }
         .tr-fall { animation: tr-fall .9s ease-in forwards }
       `}</style>
 
@@ -279,7 +279,7 @@ export default function TowerRushPage() {
             {!crashed && (
               <div className="tr-sway flex flex-col items-center">
                 <div className="w-0.5 h-8 bg-[#1f2a3d]" />
-                <BrickBlock />
+                <BrickBlock index={floor} />
               </div>
             )}
           </div>
@@ -305,9 +305,15 @@ export default function TowerRushPage() {
               <div
                 key={i}
                 className={`tr-block-in ${crashed ? 'tr-fall' : ''}`}
-                style={{ marginTop: i === 0 ? 0 : 2, animationDelay: crashed ? `${i * 40}ms` : undefined }}
+                style={{
+                  marginTop: i === 0 ? 0 : 2,
+                  // First floor drops at normal speed; every floor after snaps
+                  // in fast.
+                  animationDuration: crashed ? undefined : i === 0 ? '0.28s' : '0.12s',
+                  animationDelay: crashed ? `${i * 40}ms` : undefined,
+                }}
               >
-                <BrickBlock />
+                <BrickBlock index={i} />
               </div>
             ))}
           </div>
@@ -435,7 +441,19 @@ export default function TowerRushPage() {
 
 // ---- Presentational bits --------------------------------------------------
 
-function BrickBlock() {
+// Each floor uses a different building material so the tower looks varied as
+// it climbs (cycled by floor index).
+const TOWER_MATERIALS = [
+  { body: 'repeating-linear-gradient(0deg,#b0432e 0 12px,#9c3a27 12px 13px), #a83f2b', ring: '#7d2e1e', glass: '#f3ead3', frame: '#cdbf9e' }, // red brick
+  { body: 'repeating-linear-gradient(0deg,#cda35c 0 12px,#bb9149 12px 13px), #c59b51', ring: '#8a6a2f', glass: '#fff6df', frame: '#9c8048' }, // sandstone
+  { body: 'repeating-linear-gradient(0deg,#8a93a6 0 12px,#767f91 12px 13px), #828b9e', ring: '#5b6373', glass: '#eef2f8', frame: '#aab3c2' }, // grey stone
+  { body: 'repeating-linear-gradient(0deg,#4f7bd6 0 12px,#3f6ac4 12px 13px), #4a73cf', ring: '#2f4f9c', glass: '#eaf1ff', frame: '#b9c9ef' }, // steel blue
+  { body: 'repeating-linear-gradient(0deg,#2f9e6b 0 12px,#268a5c 12px 13px), #2c945f', ring: '#1f6f49', glass: '#e7fff2', frame: '#9fd9bd' }, // emerald
+  { body: 'repeating-linear-gradient(0deg,#c77b3a 0 12px,#b56c30 12px 13px), #be7335', ring: '#8a5020', glass: '#fff0db', frame: '#d8ab74' }, // amber wood
+]
+
+function BrickBlock({ index = 0 }: { index?: number }) {
+  const m = TOWER_MATERIALS[((index % TOWER_MATERIALS.length) + TOWER_MATERIALS.length) % TOWER_MATERIALS.length]
   return (
     <div
       className="relative flex items-center justify-center"
@@ -443,13 +461,16 @@ function BrickBlock() {
         width: TOWER_BLOCK_W,
         height: TOWER_BLOCK_H,
         borderRadius: 6,
-        background: 'repeating-linear-gradient(0deg,#b0432e 0 12px,#9c3a27 12px 13px), #a83f2b',
-        boxShadow: 'inset 0 0 0 3px #7d2e1e, 0 3px 4px rgba(0,0,0,0.35)',
+        background: m.body,
+        boxShadow: `inset 0 0 0 3px ${m.ring}, 0 3px 4px rgba(0,0,0,0.35)`,
       }}
     >
-      <div className="w-7 h-7 rounded-full bg-[#f3ead3] border-[3px] border-[#cdbf9e] flex items-center justify-center">
-        <div className="w-full h-[3px] bg-[#cdbf9e]" />
-        <div className="absolute w-[3px] h-7 bg-[#cdbf9e]" />
+      <div
+        className="w-7 h-7 rounded-full flex items-center justify-center"
+        style={{ background: m.glass, border: `3px solid ${m.frame}` }}
+      >
+        <div className="w-full h-[3px]" style={{ background: m.frame }} />
+        <div className="absolute w-[3px] h-7" style={{ background: m.frame }} />
       </div>
     </div>
   )
