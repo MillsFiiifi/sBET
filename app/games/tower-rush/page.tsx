@@ -315,6 +315,11 @@ export default function TowerRushPage() {
         {/* ===================== GAME STAGE ===================== */}
         <section className="relative flex-1 rounded-2xl overflow-hidden border border-black/30 shadow-2xl min-h-[460px]">
           <div className="absolute inset-0 bg-gradient-to-b from-[#7ec8f0] via-[#a9dcf5] to-[#e9d9b8]" />
+          {/* The higher the tower climbs, the deeper the sky turns. */}
+          <div
+            className="absolute inset-0 bg-gradient-to-b from-[#06204a] to-[#0a3a6e] pointer-events-none"
+            style={{ opacity: Math.min(floor / 16, 1) * 0.7, transition: 'opacity .4s ease-out' }}
+          />
           <div className="absolute left-1/2 -translate-x-1/2 bottom-24 w-40 h-40 rounded-full bg-yellow-200/70 blur-2xl" />
           <Skyline />
 
@@ -437,8 +442,9 @@ export default function TowerRushPage() {
                   {busy && !building ? 'BUILDING…' : building ? 'BUILD +1' : 'BUILD'}
                 </button>
                 {building && (
-                  <button onClick={cashOut} disabled={busy} className="h-12 rounded-xl bg-[#22c55e] hover:bg-[#1eae53] disabled:opacity-60 font-black text-base shadow-lg active:translate-y-0.5 transition-transform">
-                    CASH OUT x{coeffStr(coeff)}
+                  <button onClick={cashOut} disabled={busy} className="h-12 rounded-xl bg-[#22c55e] hover:bg-[#1eae53] disabled:opacity-60 shadow-lg active:translate-y-0.5 transition-transform flex flex-col items-center justify-center leading-none">
+                    <span className="font-black text-sm">CASH OUT {formatMoney(+(bet * coeff).toFixed(2), currency)} {currency}</span>
+                    <span className="text-[10px] font-bold text-white/80 mt-0.5">x{coeffStr(coeff)}</span>
                   </button>
                 )}
               </div>
@@ -508,23 +514,32 @@ const TOWER_MATERIALS = [
 function BrickBlock({ index = 0 }: { index?: number }) {
   const m = TOWER_MATERIALS[((index % TOWER_MATERIALS.length) + TOWER_MATERIALS.length) % TOWER_MATERIALS.length]
   return (
-    <div
-      className="relative flex items-center justify-center"
-      style={{
-        width: TOWER_BLOCK_W,
-        height: TOWER_BLOCK_H,
-        borderRadius: 6,
-        background: m.body,
-        boxShadow: `inset 0 0 0 3px ${m.ring}, 0 3px 4px rgba(0,0,0,0.35)`,
-      }}
-    >
+    <div className="relative" style={{ width: TOWER_BLOCK_W, height: TOWER_BLOCK_H }}>
+      {/* Facade */}
       <div
-        className="w-7 h-7 rounded-full flex items-center justify-center"
-        style={{ background: m.glass, border: `3px solid ${m.frame}` }}
+        className="absolute inset-0 flex items-center justify-center overflow-hidden"
+        style={{
+          borderRadius: 5,
+          background: m.body,
+          boxShadow: `inset 0 0 0 3px ${m.ring}, 0 3px 4px rgba(0,0,0,0.35)`,
+        }}
       >
-        <div className="w-full h-[3px]" style={{ background: m.frame }} />
-        <div className="absolute w-[3px] h-7" style={{ background: m.frame }} />
+        {/* Depth shading: lit on the left, shadowed on the right */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg,rgba(255,255,255,0.14),transparent 40%,rgba(0,0,0,0.22))' }} />
+        {/* Round window */}
+        <div
+          className="relative w-7 h-7 rounded-full flex items-center justify-center"
+          style={{ background: m.glass, border: `3px solid ${m.frame}`, boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.25)' }}
+        >
+          <div className="w-full h-[3px]" style={{ background: m.frame }} />
+          <div className="absolute w-[3px] h-7" style={{ background: m.frame }} />
+        </div>
       </div>
+      {/* Cornice / ledge — slightly wider, sits on top of the storey */}
+      <div
+        className="absolute -top-1 left-1/2 -translate-x-1/2 rounded-sm"
+        style={{ width: TOWER_BLOCK_W + 8, height: 6, background: m.frame, boxShadow: '0 1px 2px rgba(0,0,0,0.35)' }}
+      />
     </div>
   )
 }
