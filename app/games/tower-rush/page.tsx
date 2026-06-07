@@ -500,8 +500,8 @@ export default function TowerRushPage() {
 
 // ---- Presentational bits --------------------------------------------------
 
-// Real game block art. Add more files here and they'll be cycled per floor.
-const TOWER_BLOCK_IMAGES = ['/build-tool-one.png']
+// Block art — Kenney "Retro Fantasy" kit (CC0). Cycled per floor for variety.
+const TOWER_BLOCK_IMAGES = ['/tower-block-1.png', '/tower-block-2.png', '/tower-block-3.png']
 
 // Until we have multiple block sprites, vary the single sprite per floor with
 // subtle, natural tints so the tower doesn't read as the same house repeated.
@@ -525,7 +525,8 @@ function BrickBlock({ index = 0 }: { index?: number }) {
         alt=""
         fill
         sizes="96px"
-        className="object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.35)]"
+        unoptimized
+        className="object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.35)] [image-rendering:pixelated]"
         style={{ filter: tint === 'none' ? undefined : tint }}
       />
     </div>
