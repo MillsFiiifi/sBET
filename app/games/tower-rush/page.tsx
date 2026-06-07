@@ -25,6 +25,11 @@ import {
 const VISIBLE_FLOORS = 5
 const RESET_MS = 1500
 
+// Optional full-stage background illustration. Drop an image in /public and set
+// this to its path (e.g. '/tower-bg.png') to replace the CSS scene with real
+// art instantly. Leave null to use the built-in CSS street scene.
+const TOWER_BG_IMAGE: string | null = null
+
 type Phase = 'idle' | 'building' | 'crashed' | 'cashed'
 type Tab = 'players' | 'history' | 'top'
 
@@ -323,12 +328,17 @@ export default function TowerRushPage() {
           />
           <div className="absolute left-1/2 -translate-x-1/2 bottom-24 w-40 h-40 rounded-full bg-yellow-200/70 blur-2xl" />
 
-          {/* Soft clouds */}
-          <Cloud className="top-10 left-[12%] w-24 h-8" />
-          <Cloud className="top-24 left-[60%] w-32 h-10" />
-          <Cloud className="top-40 left-[28%] w-20 h-7 opacity-80" />
-
-          <Skyline />
+          {TOWER_BG_IMAGE ? (
+            <Image src={TOWER_BG_IMAGE} alt="" fill priority className="object-cover object-bottom z-0" />
+          ) : (
+            <>
+              {/* Soft clouds */}
+              <Cloud className="top-10 left-[12%] w-24 h-8" />
+              <Cloud className="top-24 left-[60%] w-32 h-10" />
+              <Cloud className="top-40 left-[28%] w-20 h-7 opacity-80" />
+              <Skyline />
+            </>
+          )}
 
           <div className="absolute top-3 left-3 z-20 select-none">
             <Image src="/tower-logo.png" alt="Tower Rush" width={120} height={120} priority className="w-20 sm:w-24 h-auto drop-shadow-lg" />
