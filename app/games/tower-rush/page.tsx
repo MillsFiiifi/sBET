@@ -329,7 +329,7 @@ export default function TowerRushPage() {
           </div>
 
           {/* Crane + hanging next block (over the right-side column) */}
-          <div className="absolute top-0 left-[70%] -translate-x-1/2 z-20 flex flex-col items-center">
+          <div className="absolute top-0 left-[63%] -translate-x-1/2 z-20 flex flex-col items-center">
             <div className="w-40 h-1.5 bg-[#3a4a63] rounded-b" />
             <div className="w-1 h-6 bg-[#2b3850]" />
             {!crashed && (
@@ -350,11 +350,11 @@ export default function TowerRushPage() {
             </div>
           )}
 
-          <div className="absolute left-[70%] -translate-x-1/2 bottom-6 z-10"><Shop /></div>
+          <div className="absolute left-[63%] -translate-x-1/2 bottom-6 z-10"><Shop /></div>
 
           {/* Stacked tower (right-side column) */}
           <div
-            className="absolute left-[70%] z-10"
+            className="absolute left-[63%] z-10"
             style={{ bottom: 86, transform: `translate(-50%, ${scrollOffset}px)`, transition: 'transform .3s ease-out' }}
           >
             {Array.from({ length: floor }).map((_, i) => (
@@ -500,8 +500,8 @@ export default function TowerRushPage() {
 
 // ---- Presentational bits --------------------------------------------------
 
-// Block art — Kenney "Retro Fantasy" kit (CC0). Cycled per floor for variety.
-const TOWER_BLOCK_IMAGES = ['/tower-block-1.png', '/tower-block-2.png', '/tower-block-3.png']
+// Block art. Add more files here and they'll be cycled per floor.
+const TOWER_BLOCK_IMAGES = ['/build-tool-one.png']
 
 // Until we have multiple block sprites, vary the single sprite per floor with
 // subtle, natural tints so the tower doesn't read as the same house repeated.
@@ -524,9 +524,8 @@ function BrickBlock({ index = 0 }: { index?: number }) {
         src={src}
         alt=""
         fill
-        sizes="96px"
-        unoptimized
-        className="object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.35)] [image-rendering:pixelated]"
+        sizes="120px"
+        className="object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.35)]"
         style={{ filter: tint === 'none' ? undefined : tint }}
       />
     </div>
