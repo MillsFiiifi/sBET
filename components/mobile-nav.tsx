@@ -52,6 +52,13 @@ export function MobileNav({
             <span className="text-[11px] font-medium">Live</span>
           </Link>
           <Link
+            href="/games/tower-rush"
+            className="flex flex-col items-center gap-1 px-3 py-2 text-muted-foreground hover:text-primary transition-colors"
+          >
+            <span className="text-lg">🏗️</span>
+            <span className="text-[11px] font-medium">Tower</span>
+          </Link>
+          <Link
             href="/me"
             className={`flex flex-col items-center gap-1 px-3 py-2 transition-colors relative ${
               activeTab === 'me'
