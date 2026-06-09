@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { sendApprovalRequest } from '@/lib/telegram'
-import { getMinFirstDeposit } from '@/lib/countries'
+import { getCountry, getMinFirstDeposit } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,11 +37,12 @@ export async function POST(request: Request) {
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
 
-  // Telegram pay flow is Nigeria-only for now. Other countries already
-  // have automated gateways and don't need the manual operator path.
-  if (user.country !== 'NG') {
+  // The Telegram operator-approval path is for countries configured with the
+  // manual gateway (currently Nigeria and Ghana). Countries with an automated
+  // gateway don't use it.
+  if (getCountry(user.country).gateway !== 'manual') {
     return NextResponse.json(
-      { error: 'Telegram pay is available for Nigeria wallets only.' },
+      { error: 'Manual operator pay is not available for this wallet.' },
       { status: 400 },
     )
   }

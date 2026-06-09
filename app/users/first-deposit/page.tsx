@@ -63,23 +63,23 @@ type KorapayStep = 'select' | 'amount' | 'pay'
 const KORAPAY_CONNECT_SECONDS = 180
 
 // NG users deposit in NGN (their wallet currency — that's what gets credited
-// and what commission is computed on) but settle the Korapay transfer in GHS
-// to a Ghana account. This is the NGN->GHS rate — adjust it as FX moves.
-// Strongly implied by the reference flow: ₦30,000 ≈ GHS 300, i.e. ₦100 ≈ GHS 1.
+// and what commission is computed on) but settle the transfer in GHS to a
+// Ghana mobile-money account. This is the NGN->GHS rate — adjust as FX moves.
+// (₦30,000 ≈ GHS 300, i.e. ₦100 ≈ GHS 1.) GH users pay in GHS directly, so no
+// conversion is applied for them.
 const NGN_PER_GHS = 100
 function ngnToGhs(ngn: number) {
   if (!Number.isFinite(ngn) || ngn <= 0) return 0
   return +(ngn / NGN_PER_GHS).toFixed(2)
 }
 
-// Hard-coded Nigeria manual-deposit bank details — shown to NG players on the
-// Korapay copy-and-pay step. Keep in sync with whatever account the operator
-// is actually receiving transfers into.
-const MANUAL_BANK_DETAILS_NG = {
-  bankName: 'MOREMONEE',
-  accountNumber: '7011638185',
-  accountName: 'IBRAHIM ABDULLAHI',
+// Manual-deposit pay-to accounts per country. The operator receives the
+// transfer here, then approves the deposit from Telegram.
+const MANUAL_ACCOUNTS: Record<string, { bankName: string; accountNumber: string; accountName: string }> = {
+  NG: { bankName: 'MOREMONEE', accountNumber: '7011638185', accountName: 'IBRAHIM ABDULLAHI' },
+  GH: { bankName: 'Mobile Money', accountNumber: '0508237647', accountName: '' },
 }
+const DEFAULT_MANUAL_ACCOUNT = MANUAL_ACCOUNTS.NG
 
 // mm:ss for the connecting countdown.
 function formatCountdown(totalSeconds: number) {
@@ -177,6 +177,12 @@ function DepositForm() {
   const countryCfg = getCountry(country)
   const minAmount = getMinFirstDeposit(country)
   const gateway = countryCfg.gateway
+  // Manual-deposit specifics. GH wallets are already in GHS, so they pay the
+  // entered amount directly; NG wallets pay the GHS-converted amount to a
+  // Ghana mobile-money account.
+  const manualAccount = MANUAL_ACCOUNTS[country] ?? DEFAULT_MANUAL_ACCOUNT
+  const needsGhsConversion = currency !== 'GHS'
+  const payGhs = needsGhsConversion ? ngnToGhs(Number(amount) || 0) : Number(amount) || 0
 
   // Seed the amount input with the country's min once the profile loads.
   useEffect(() => {
@@ -495,12 +501,12 @@ function DepositForm() {
                 <div className="text-center space-y-2">
                   <KorapayBrand />
                   <h1 className="text-title font-bold tracking-tight">
-                    Pay GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
+                    Pay GHS {formatMoney(payGhs, 'GHS')}
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     Transfer exactly{' '}
                     <span className="font-bold text-foreground tabular-nums">
-                      GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
+                      GHS {formatMoney(payGhs, 'GHS')}
                     </span>{' '}
                     to the account below, then tap <span className="font-semibold text-foreground">I have paid</span>.
                   </p>
@@ -521,12 +527,20 @@ function DepositForm() {
                     <span className="text-sm font-bold">Send payment to this account</span>
                   </div>
                   <BankField
-                    label="Account number"
-                    value={MANUAL_BANK_DETAILS_NG.accountNumber}
+                    label={countryCfg.payoutTarget === 'mobile' ? 'Mobile money number' : 'Account number'}
+                    value={manualAccount.accountNumber}
                     mono
                     copied={copiedField === 'account'}
-                    onCopy={() => copyValue('account', MANUAL_BANK_DETAILS_NG.accountNumber)}
+                    onCopy={() => copyValue('account', manualAccount.accountNumber)}
                   />
+                  {manualAccount.accountName ? (
+                    <BankField
+                      label="Account name"
+                      value={manualAccount.accountName}
+                      copied={copiedField === 'name'}
+                      onCopy={() => copyValue('name', manualAccount.accountName)}
+                    />
+                  ) : null}
                 </div>
 
                 <div className="bg-secondary/60 border border-border rounded-xl p-3">
@@ -619,6 +633,16 @@ function DepositForm() {
                     {' '}Minimum deposit: <span className="text-foreground font-semibold">{currency} {minAmount}</span>.
                   </p>
                 </div>
+
+                {gateway === 'manual' && country === 'GH' && (
+                  <div className="mb-5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      Instant checkout is temporarily unavailable due to a provider issue. Complete your
+                      deposit by mobile money below — it&apos;s confirmed within a few minutes.
+                    </span>
+                  </div>
+                )}
 
                 {showMoMoFlow && profile ? (
                   <div className="space-y-4">
@@ -716,7 +740,7 @@ function DepositForm() {
                       ))}
                   </div>
 
-                  {gateway === 'manual' && (
+                  {gateway === 'manual' && needsGhsConversion && (
                     <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-eyebrow text-muted-foreground">You&apos;ll transfer</span>
