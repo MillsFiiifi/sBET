@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   X,
   Trash2,
@@ -9,6 +10,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Copy,
   Check,
   Lock,
@@ -17,6 +19,7 @@ import type { BetSelection, PlacedBet } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useBets } from '@/hooks/use-bets'
+import { getUserId } from '@/lib/user-session'
 import { getBettingState } from '@/lib/match-betting'
 import { hydrateLegacySelection } from '@/lib/bet-slip-utils'
 import { getCountryFlag } from '@/lib/country-flags'
@@ -44,6 +47,27 @@ export function BetSlipPanel({
   const [tab, setTab] = useState<Tab>('slip')
   const [stake, setStake] = useState('')
   const [betType, setBetType] = useState<'single' | 'multiple' | 'system'>('multiple')
+  const [userId, setUserId] = useState<string | null>(null)
+  const [balance, setBalance] = useState<number | null>(null)
+  const [currency, setCurrency] = useState('GHS')
+
+  // Wallet balance/currency so the slip can show the balance and a deposit
+  // shortfall prompt (mirrors the header's lookup).
+  useEffect(() => {
+    const id = getUserId()
+    setUserId(id)
+    if (!id) return
+    let cancelled = false
+    void fetch(`/api/users/${id}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (cancelled || !u) return
+        if (typeof u.balance === 'number') setBalance(u.balance)
+        if (typeof u.currency === 'string') setCurrency(u.currency)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const [bookingCode, setBookingCode] = useState('')
   const [loadingCode, setLoadingCode] = useState(false)
   const [statusMsg, setStatusMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
@@ -83,6 +107,8 @@ export function BetSlipPanel({
       ? selections.reduce((sum, sel) => sum + stakeNum * sel.odds, 0)
       : stakeNum * totalOdds
   const potentialWin = potentialWinNum.toFixed(2)
+  const insufficient = validStake && balance !== null && totalStakeAmount > balance
+  const shortfall = insufficient ? totalStakeAmount - (balance ?? 0) : 0
 
   const closedSelections = selections.filter((s) => getBettingState(s.match).closed)
   const hasClosed = closedSelections.length > 0
@@ -234,18 +260,23 @@ export function BetSlipPanel({
             </div>
           ) : (
             <>
-              {/* Header: count + remove all */}
+              {/* Header: count badge + remove all + balance */}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold">
-                  {selections.length} selection{selections.length > 1 ? 's' : ''}
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-full bg-success text-white text-xs font-extrabold flex items-center justify-center tabular-nums">
+                    {selections.length}
+                  </span>
+                  <button
+                    onClick={onClearAll}
+                    className="text-xs text-destructive hover:text-destructive/80 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Remove All
+                  </button>
+                </div>
+                <span className="text-sm font-extrabold text-amber-400 tabular-nums">
+                  {currency} {balance !== null ? balance.toFixed(2) : '—'}
                 </span>
-                <button
-                  onClick={onClearAll}
-                  className="text-xs text-destructive hover:text-destructive/80 flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Remove All
-                </button>
               </div>
 
               {/* Bet-type segmented control */}
@@ -311,15 +342,35 @@ export function BetSlipPanel({
               {/* Total stake */}
               <div className="mt-4 flex items-center justify-between gap-3">
                 <span className="text-sm font-bold">Total Stake</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={stake}
-                  onChange={(e) => setStake(e.target.value)}
-                  className="w-32 text-right bg-secondary border-border font-bold tabular-nums"
-                />
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-muted-foreground">{currency}</span>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={stake}
+                    onChange={(e) => setStake(e.target.value)}
+                    className={`w-28 text-right bg-secondary font-bold tabular-nums ${
+                      insufficient ? 'border-destructive ring-1 ring-destructive/60' : 'border-border'
+                    }`}
+                  />
+                </div>
               </div>
+
+              {insufficient && (
+                <div className="mt-1.5 text-right">
+                  <p className="text-xs text-destructive">
+                    You need a balance of {currency} {totalStakeAmount.toFixed(2)} to place this bet. Please
+                    deposit an additional {currency} {shortfall.toFixed(2)}.
+                  </p>
+                  <Link
+                    href={userId ? `/users/first-deposit?userId=${userId}` : '/register'}
+                    className="mt-1 inline-flex items-center gap-0.5 text-xs font-bold text-success hover:underline"
+                  >
+                    Go to Deposit <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              )}
 
               {/* Totals */}
               <div className="mt-3 rounded-xl bg-secondary p-3 space-y-1.5">
@@ -368,8 +419,8 @@ export function BetSlipPanel({
                 </Button>
                 <Button
                   onClick={handlePlaceBet}
-                  disabled={loading || hasClosed}
-                  className="h-12 bg-success text-white hover:bg-success/90 font-bold shadow-lg shadow-success/20"
+                  disabled={loading || hasClosed || insufficient}
+                  className="h-12 bg-success text-white hover:bg-success/90 font-bold shadow-lg shadow-success/20 disabled:opacity-60"
                 >
                   {loading ? (
                     <>
