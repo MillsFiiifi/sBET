@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { getUserId } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
+import { spinxpressHref } from '@/lib/spinxpress'
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -100,7 +101,7 @@ export function Header() {
               Leagues
             </Link>
             <a
-              href="https://spinxpress.casino"
+              href={spinxpressHref(userId)}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors font-medium flex items-center gap-1.5"
@@ -206,7 +207,7 @@ export function Header() {
                 Leagues
               </Link>
               <a
-                href="https://spinxpress.casino"
+                href={spinxpressHref(userId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 rounded-lg hover:bg-secondary transition-colors flex items-center gap-2"

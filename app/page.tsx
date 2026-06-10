@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertCircle, CalendarDays, ChevronRight, Gamepad2 } from 'lucide-react'
 import { Header } from '@/components/header'
@@ -17,10 +17,14 @@ import { SectionHeader } from '@/components/section-header'
 import { useMatches } from '@/hooks/use-matches'
 import { removeSelectionById, toggleSelection } from '@/lib/bet-slip-utils'
 import { towerCoeffAt } from '@/lib/tower-rush'
+import { spinxpressHref } from '@/lib/spinxpress'
+import { getUserId } from '@/lib/user-session'
 import type { BetSelection } from '@/lib/types'
 
 export default function HomePage() {
   const [activeSport, setActiveSport] = useState('football')
+  const [userId, setUserId] = useState<string | null>(null)
+  useEffect(() => setUserId(getUserId()), [])
   const [selections, setSelections] = useState<BetSelection[]>([])
 
   const { matches, liveMatches, upcomingMatches, loading, error } =
@@ -51,7 +55,7 @@ export default function HomePage() {
 
             {/* Casino games entry */}
             <Link
-              href="https://spinxpress.casino"
+              href={spinxpressHref(userId)}
               target="_blank"
               rel="noopener noreferrer"
               className="group relative block overflow-hidden rounded-xl border border-border bg-gradient-to-r from-[#1f3a93] to-[#2563eb] p-4 shadow-card hover:shadow-card-hover transition-shadow"

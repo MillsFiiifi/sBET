@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Blocks, Goal, Radio, Receipt, Trophy, User, X } from 'lucide-react'
 import type { BetSelection } from '@/lib/types'
 import { BetSlipPanel } from '@/components/bet-slip-panel'
+import { getUserId } from '@/lib/user-session'
+import { spinxpressHref } from '@/lib/spinxpress'
 
 interface MobileNavProps {
   selectedBets: BetSelection[]
@@ -22,6 +24,8 @@ export function MobileNav({
   activeTab,
 }: MobileNavProps) {
   const [isSlipOpen, setIsSlipOpen] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  useEffect(() => setUserId(getUserId()), [])
 
   return (
     <>
@@ -52,7 +56,7 @@ export function MobileNav({
             <span className="text-[11px] font-medium">Live</span>
           </Link>
           <a
-            href="https://spinxpress.casino"
+            href={spinxpressHref(userId)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex flex-col items-center gap-1 px-3 py-1.5 text-muted-foreground hover:text-primary transition-colors"
