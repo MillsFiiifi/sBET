@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Receipt, Trophy, XCircle, CircleDot, Eye } from 'lucide-react'
+import { Receipt, Trophy, ChevronRight } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
 import { MeSubpageHeader } from '@/components/me-subpage-header'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -126,58 +126,63 @@ function BetRow({ bet, onOpen }: { bet: PlacedBet; onOpen: () => void }) {
   const isWon = bet.status === 'won'
   const isLost = bet.status === 'lost'
   const isPending = bet.status === 'pending'
-  const totalReturn = isWon ? (bet.payout ?? bet.potentialWin) : 0
+  const kind = bet.selections.length > 1 ? 'Multiple' : 'Singles'
+  const totalReturn = isWon ? (bet.payout ?? bet.potentialWin) : isPending ? bet.potentialWin : 0
   const firstMatch = bet.selections[0]
-    ? `${bet.selections[0].match.homeTeam} vs ${bet.selections[0].match.awayTeam}`
+    ? `${bet.selections[0].match.homeTeam} v ${bet.selections[0].match.awayTeam}`
     : 'Bet'
-  const more = bet.selections.length > 1 ? ` (+${bet.selections.length - 1} more)` : ''
+  const more = bet.selections.length > 1 ? ` +${bet.selections.length - 1} more` : ''
+
+  // Status header bar colour — green won / grey lost / dark open.
+  const headerCls = isWon
+    ? 'bg-success text-white'
+    : isLost
+      ? 'bg-zinc-500 text-white'
+      : 'bg-zinc-800 text-white'
+  const statusLabel = isWon ? 'Won' : isLost ? 'Lost' : 'Open'
+  const returnTone = isWon ? 'text-success' : isLost ? 'text-muted-foreground' : 'text-foreground'
 
   return (
-    <li>
+    <li className="rounded-xl overflow-hidden border border-border bg-card shadow-card lift-on-hover">
+      {/* Status header bar */}
       <button
         type="button"
         onClick={onOpen}
-        className="w-full text-left bg-card border border-border rounded-xl p-3 flex items-center gap-3 shadow-card lift-on-hover"
+        className={`w-full flex items-center justify-between px-3 py-2 font-bold text-sm ${headerCls}`}
       >
-        <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-          {isWon ? (
-            <Trophy className="w-4 h-4 text-success" />
-          ) : isLost ? (
-            <XCircle className="w-4 h-4 text-destructive" />
-          ) : (
-            <CircleDot className="w-4 h-4 text-amber-500" />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-sm truncate">{firstMatch}{more}</p>
-          <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
-            <span className="font-mono opacity-80">{bet.code}</span>
-            <span className="opacity-40">·</span>
-            <span>{new Date(bet.placedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-            <span className="opacity-40">·</span>
-            <span className={`px-1.5 py-0.5 rounded-full border text-[9px] uppercase font-bold ${
-              isWon ? 'bg-success/15 text-success border-success/30' :
-              isLost ? 'bg-destructive/15 text-destructive border-destructive/30' :
-              'bg-amber-500/15 text-amber-500 border-amber-500/30'
-            }`}>
-              {bet.status}
-            </span>
-          </p>
-        </div>
-        <div className="text-right shrink-0">
-          {isWon ? (
-            <p className="text-sm font-extrabold tabular-nums text-success">
-              +{bet.currency} {formatMoney(totalReturn, bet.currency)}
-            </p>
-          ) : (
-            <p className="text-sm font-bold tabular-nums">
-              {bet.currency} {formatMoney(bet.stake, bet.currency)}
-            </p>
-          )}
-          <p className="text-[10px] text-muted-foreground tabular-nums">@ {bet.totalOdds.toFixed(2)}</p>
-        </div>
-        <Eye className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <span>{kind}</span>
+        <span className="flex items-center gap-1">
+          {isWon && <Trophy className="w-4 h-4" />}
+          {statusLabel}
+          <ChevronRight className="w-4 h-4" />
+        </span>
       </button>
+
+      {/* Stake + return */}
+      <div className="px-3 py-2.5">
+        <div className="flex items-center justify-between text-sm py-0.5">
+          <span className="text-muted-foreground">Total Stake ({bet.currency})</span>
+          <span className="font-semibold tabular-nums">{formatMoney(bet.stake, bet.currency)}</span>
+        </div>
+        <div className="flex items-center justify-between text-sm py-0.5">
+          <span className="text-muted-foreground">Total Return</span>
+          <span className={`text-base font-extrabold tabular-nums ${returnTone}`}>
+            {formatMoney(totalReturn, bet.currency)}
+          </span>
+        </div>
+
+        {/* Match summary + action */}
+        <div className="mt-2 pt-2 border-t border-border/60 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground truncate min-w-0">{firstMatch}{more}</p>
+          <button
+            type="button"
+            onClick={onOpen}
+            className="shrink-0 h-8 px-3 rounded-md bg-success text-white text-xs font-bold hover:bg-success/90 transition-colors cursor-pointer"
+          >
+            View Bet
+          </button>
+        </div>
+      </div>
     </li>
   )
 }
