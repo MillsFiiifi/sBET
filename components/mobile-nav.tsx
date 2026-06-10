@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { X } from 'lucide-react'
+import { Receipt, X } from 'lucide-react'
 import type { BetSelection } from '@/lib/types'
 import { BetSlipPanel } from '@/components/bet-slip-panel'
 
@@ -72,24 +72,26 @@ export function MobileNav({
             )}
             <span className="text-[11px] font-medium">Me</span>
           </Link>
-          <button
-            onClick={() => setIsSlipOpen(true)}
-            className={`flex flex-col items-center gap-1 px-3 py-2 transition-colors relative ${
-              activeTab === 'betslip'
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <span className="text-lg">📋</span>
-            {selectedBets.length > 0 && (
-              <span className="absolute top-0 right-1 w-5 h-5 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center font-bold">
-                {selectedBets.length}
-              </span>
-            )}
-            <span className="text-[11px] font-medium">Betslip</span>
-          </button>
         </div>
       </nav>
+
+      {/* Floating bet slip button — appears above the nav once you have
+          selections, opens the slip drawer. */}
+      {selectedBets.length > 0 && (
+        <button
+          onClick={() => setIsSlipOpen(true)}
+          aria-label={`Open bet slip, ${selectedBets.length} selection${selectedBets.length > 1 ? 's' : ''}`}
+          className="fixed right-3 bottom-24 z-50 xl:hidden flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-xl shadow-primary/40 ring-1 ring-white/20 active:scale-95 transition-transform animate-in fade-in zoom-in duration-200"
+        >
+          <span className="relative">
+            <Receipt className="w-6 h-6" strokeWidth={2} />
+            <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-extrabold flex items-center justify-center ring-2 ring-card tabular-nums">
+              {selectedBets.length}
+            </span>
+          </span>
+          <span className="text-[9px] font-bold tracking-wide mt-1">BET SLIP</span>
+        </button>
+      )}
 
       <MobileBetSlipDrawer
         isOpen={isSlipOpen}
