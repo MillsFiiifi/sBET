@@ -102,6 +102,7 @@ const PROMOS: Promo[] = [
     Icon: Sparkles,
     gradient: 'from-cyan-500 via-blue-600 to-violet-700',
     accent: 'text-white',
+    image: '/group-young-people-looking-excited-spinning-roulette-roulette-table-casino-black-background.jpg',
   },
 ]
 
@@ -171,9 +172,12 @@ export function PromoCarousel() {
               className="relative flex-shrink-0 w-full"
             >
               <div className={`relative h-full bg-gradient-to-br ${promo.gradient} text-white overflow-hidden ring-1 ring-white/10`}>
-                {/* Optional licensed banner image (overlays under the copy) */}
+                {/* Optional banner image (overlays under the copy) + readability scrim */}
                 {promo.image && (
-                  <Image src={promo.image} alt="" fill priority={active} className="object-cover opacity-90" />
+                  <>
+                    <Image src={promo.image} alt="" fill priority={active} className="object-cover" />
+                    <div aria-hidden className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-black/20" />
+                  </>
                 )}
                 {/* Subtle radial-dot pattern overlay so the gradient doesn't read flat */}
                 <div
