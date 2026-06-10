@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowRight, ChevronLeft, ChevronRight, Gift, Sparkles, Trophy } from 'lucide-react'
 import { getUserId } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
@@ -33,6 +34,9 @@ interface Promo {
   gradient: string
   /** Tailwind text color for the headline. */
   accent: string
+  /** Optional banner image path in /public — overlays under the copy. Drop a
+   *  licensed/commissioned banner here and it replaces the gradient art. */
+  image?: string
 }
 
 // Per-currency amount maps. Tune these per market; they're marketing values,
@@ -70,7 +74,7 @@ const PROMOS: Promo[] = [
     cta: 'Claim now',
     href: (userId) => (userId ? `/users/first-deposit?userId=${userId}` : '/register'),
     Icon: Trophy,
-    gradient: 'from-amber-500 via-orange-500 to-red-600',
+    gradient: 'from-amber-400 via-orange-500 to-rose-600',
     accent: 'text-white',
   },
   {
@@ -84,7 +88,7 @@ const PROMOS: Promo[] = [
     cta: 'Get my link',
     href: (userId) => (userId ? '/me' : '/register'),
     Icon: Gift,
-    gradient: 'from-emerald-500 via-teal-600 to-cyan-600',
+    gradient: 'from-fuchsia-500 via-purple-600 to-indigo-700',
     accent: 'text-white',
   },
   {
@@ -96,7 +100,7 @@ const PROMOS: Promo[] = [
     cta: 'View boost',
     href: () => '/live',
     Icon: Sparkles,
-    gradient: 'from-violet-600 via-purple-600 to-fuchsia-600',
+    gradient: 'from-cyan-500 via-blue-600 to-violet-700',
     accent: 'text-white',
   },
 ]
@@ -166,7 +170,11 @@ export function PromoCarousel() {
               aria-hidden={!active}
               className="relative flex-shrink-0 w-full"
             >
-              <div className={`relative h-full bg-gradient-to-br ${promo.gradient} text-white overflow-hidden`}>
+              <div className={`relative h-full bg-gradient-to-br ${promo.gradient} text-white overflow-hidden ring-1 ring-white/10`}>
+                {/* Optional licensed banner image (overlays under the copy) */}
+                {promo.image && (
+                  <Image src={promo.image} alt="" fill priority={active} className="object-cover opacity-90" />
+                )}
                 {/* Subtle radial-dot pattern overlay so the gradient doesn't read flat */}
                 <div
                   aria-hidden
@@ -177,11 +185,11 @@ export function PromoCarousel() {
                     backgroundSize: '14px 14px',
                   }}
                 />
-                {/* Glow blob behind the icon */}
-                <div
-                  aria-hidden
-                  className="absolute -right-12 -top-10 w-56 h-56 rounded-full bg-white/15 blur-2xl"
-                />
+                {/* Diagonal sheen */}
+                <div aria-hidden className="absolute inset-0 bg-gradient-to-tr from-black/30 via-transparent to-white/15" />
+                {/* Glow blobs */}
+                <div aria-hidden className="absolute -right-12 -top-10 w-56 h-56 rounded-full bg-white/20 blur-2xl" />
+                <div aria-hidden className="absolute -left-16 -bottom-14 w-56 h-56 rounded-full bg-black/25 blur-3xl" />
 
                 <div className="relative h-full px-5 sm:px-6 py-5 flex items-center gap-4">
                   {/* Left: copy + CTA */}
@@ -226,12 +234,12 @@ export function PromoCarousel() {
                     </Link>
                   </div>
 
-                  {/* Right: oversized translucent icon */}
+                  {/* Right: oversized icon in a glowing halo */}
                   <div className="relative shrink-0 flex items-center justify-center w-20 sm:w-32">
-                    <Glyph
-                      className="w-20 h-20 sm:w-32 sm:h-32 text-white/30"
-                      strokeWidth={1.25}
-                    />
+                    <div aria-hidden className="absolute inset-0 m-auto w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-white/15 blur-xl" />
+                    <div className="relative flex items-center justify-center w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-white/10 ring-1 ring-white/25 backdrop-blur-sm">
+                      <Glyph className="w-9 h-9 sm:w-14 sm:h-14 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]" strokeWidth={1.75} />
+                    </div>
                   </div>
                 </div>
               </div>
