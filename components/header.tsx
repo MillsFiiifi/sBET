@@ -63,12 +63,12 @@ export function Header() {
     <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-xl border-b border-border shadow-sm shadow-primary/5">
       <nav className="max-w-[1400px] mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center" aria-label="Prime Bet home">
+          <Link href="/" className="flex items-center" aria-label="Bettivo home">
             <Image
-              src="/primebet.png"
-              alt="Prime Bet"
-              width={282}
-              height={123}
+              src="/bettivo-logo.svg"
+              alt="Bettivo"
+              width={360}
+              height={104}
               priority
               className="logo-img h-7 sm:h-8 w-auto"
             />

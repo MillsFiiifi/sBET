@@ -60,10 +60,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
             <Link href="/admin" className="flex items-center" aria-label="Admin home">
               <Image
-                src="/primebet.png"
-                alt="Prime Bet"
-                width={282}
-                height={123}
+                src="/bettivo-logo.svg"
+                alt="Bettivo"
+                width={360}
+                height={104}
                 className="logo-img h-7 w-auto"
               />
             </Link>
@@ -86,10 +86,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="px-5 py-5 border-b border-border flex items-center gap-3">
           <Link href="/admin" className="flex items-center" aria-label="Admin home">
             <Image
-              src="/primebet.png"
-              alt="Prime Bet"
-              width={282}
-              height={123}
+              src="/bettivo-logo.svg"
+              alt="Bettivo"
+              width={360}
+              height={104}
               className="logo-img h-7 w-auto"
             />
           </Link>
@@ -126,10 +126,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="px-5 py-5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <Image
-                  src="/primebet.png"
-                  alt="Prime Bet"
-                  width={282}
-                  height={123}
+                  src="/bettivo-logo.svg"
+                  alt="Bettivo"
+                  width={360}
+                  height={104}
                   className="logo-img h-7 w-auto"
                 />
                 <span className="text-eyebrow text-primary border border-primary/30 bg-primary/10 rounded-full px-2 py-0.5">

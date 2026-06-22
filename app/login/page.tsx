@@ -49,12 +49,12 @@ export default function LoginPage() {
             <ArrowLeft className="w-5 h-5" />
             <span>Back</span>
           </Link>
-          <Link href="/" className="flex items-center" aria-label="Prime Bet home">
+          <Link href="/" className="flex items-center" aria-label="Bettivo home">
             <Image
-              src="/primebet.png"
-              alt="Prime Bet"
-              width={282}
-              height={123}
+              src="/bettivo-logo.svg"
+              alt="Bettivo"
+              width={360}
+              height={104}
               className="logo-img h-7 w-auto"
             />
           </Link>

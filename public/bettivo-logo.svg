@@ -1,0 +1,26 @@
+<svg width="360" height="104" viewBox="0 0 360 104" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bettivo">
+  <g fill="#15294a" stroke="#15294a">
+    <!-- Circular refresh arrows mark -->
+    <g fill="none" stroke-width="7" stroke-linecap="round">
+      <path d="M21.6 43.1 A26 26 0 0 1 71.6 47.5" />
+      <path d="M70.4 60.9 A26 26 0 0 1 20.4 56.5" />
+    </g>
+    <path stroke="none" d="M71.6 47.5 L80 43 L75.5 55 Z" />
+    <path stroke="none" d="M20.4 56.5 L12 61 L16.5 49 Z" />
+
+    <!-- Crown over the end of the wordmark -->
+    <g stroke="none" transform="translate(250 8)">
+      <path d="M0 25 L7 8 L16 18 L26 3 L36 18 L45 8 L52 25 Z" />
+      <rect x="0" y="24" width="52" height="8" rx="2.5" />
+      <circle cx="7" cy="7" r="3.2" />
+      <circle cx="26" cy="2.5" r="3.2" />
+      <circle cx="45" cy="7" r="3.2" />
+    </g>
+
+    <!-- Wordmark -->
+    <text x="86" y="79" stroke="none"
+      font-family="Arial, Helvetica, system-ui, sans-serif"
+      font-size="56" font-weight="800" font-style="italic"
+      letter-spacing="-1">BETTIVO</text>
+  </g>
+</svg>
