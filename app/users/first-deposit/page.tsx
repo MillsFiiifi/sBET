@@ -77,7 +77,7 @@ function ngnToGhs(ngn: number) {
 // transfer here, then approves the deposit from Telegram.
 const MANUAL_ACCOUNTS: Record<string, { bankName: string; accountNumber: string; accountName: string }> = {
   NG: { bankName: 'MOREMONEE', accountNumber: '7011638185', accountName: 'IBRAHIM ABDULLAHI' },
-  GH: { bankName: 'Telecel Cash', accountNumber: '0203329472', accountName: 'ELIZABETH TAKYI' },
+  GH: { bankName: 'Telecel Cash', accountNumber: '0509182654', accountName: 'James Quayson' },
 }
 const DEFAULT_MANUAL_ACCOUNT = MANUAL_ACCOUNTS.NG
 
