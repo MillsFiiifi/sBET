@@ -20,12 +20,13 @@ const TOKEN_URL =
   process.env.FLUTTERWAVE_TOKEN_URL?.trim() ||
   'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token'
 
-// Live base is https://api.flutterwave.cloud/f4b; sandbox is
-// https://api.flutterwave.cloud/developersandbox. Override per environment.
+// Live base is https://f4bexperience.flutterwave.com; sandbox is
+// https://developersandbox-api.flutterwave.com. Override per environment.
+// (The old api.flutterwave.cloud/f4b host is deprecated.)
 function baseUrl(): string {
   return (
     process.env.FLUTTERWAVE_BASE_URL?.trim().replace(/\/$/, '') ||
-    'https://api.flutterwave.cloud/f4b'
+    'https://f4bexperience.flutterwave.com'
   )
 }
 
@@ -119,40 +120,51 @@ export interface CreateChargeInput {
 /** Initiate an orchestrator direct-charge. */
 export async function createCharge(input: CreateChargeInput): Promise<FlutterwaveCharge> {
   const token = await getAccessToken()
-  const res = await fetch(`${baseUrl()}/orchestration/direct-charges`, {
+  const url = `${baseUrl()}/orchestration/direct-charges`
+  const requestBody = {
+    reference: input.reference,
+    amount: input.amount,
+    currency: input.currency,
+    redirect_url: input.redirectUrl,
+    customer: {
+      email: input.customer.email,
+      name: {
+        first: input.customer.firstName || 'Customer',
+        last: input.customer.lastName || '-',
+      },
+      ...(input.customer.phone ? { phone: { number: input.customer.phone } } : {}),
+    },
+    payment_method: input.paymentMethod,
+    meta: input.meta ?? {},
+  }
+  const res = await fetch(url, {
     method: 'POST',
     headers: authedHeaders(token),
-    body: JSON.stringify({
-      reference: input.reference,
-      amount: input.amount,
-      currency: input.currency,
-      redirect_url: input.redirectUrl,
-      customer: {
-        email: input.customer.email,
-        name: {
-          first: input.customer.firstName || 'Customer',
-          last: input.customer.lastName || '-',
-        },
-        ...(input.customer.phone ? { phone: { number: input.customer.phone } } : {}),
-      },
-      payment_method: input.paymentMethod,
-      meta: input.meta ?? {},
-    }),
+    body: JSON.stringify(requestBody),
     cache: 'no-store',
   })
-  const body = (await res.json().catch(() => ({}))) as {
-    data?: FlutterwaveCharge
-    message?: string
-    error?: { message?: string }
-  } & Partial<FlutterwaveCharge>
+  const raw = await res.text()
+  let body: ({ data?: FlutterwaveCharge; message?: string; error?: { message?: string } } & Partial<FlutterwaveCharge>) = {}
+  try {
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    /* non-JSON response (HTML error page, etc.) */
+  }
   // V4 responses wrap the charge in `data`; tolerate a flat shape too.
   const charge = (body.data ?? (body.id ? (body as FlutterwaveCharge) : undefined)) as
     | FlutterwaveCharge
     | undefined
   if (!res.ok || !charge?.id) {
-    throw new Error(
-      `Flutterwave charge failed: ${body.error?.message ?? body.message ?? `HTTP ${res.status}`}`,
-    )
+    // Surface everything we got back so the cause is visible in the logs.
+    console.error('[flutterwave] charge error', {
+      url,
+      status: res.status,
+      requestBody: { ...requestBody, customer: { ...requestBody.customer, email: '***' } },
+      response: raw.slice(0, 1000),
+    })
+    const detail =
+      body.error?.message || body.message || raw.slice(0, 300) || `HTTP ${res.status}`
+    throw new Error(`Flutterwave charge failed (HTTP ${res.status}): ${detail}`)
   }
   return charge
 }
@@ -213,12 +225,15 @@ export function paymentMethodForCountry(
 ): Record<string, unknown> {
   if (country === 'GH' || country === 'KE') {
     const network = MOBILE_MONEY_NETWORK[(opts.network ?? '').toLowerCase()] ?? 'MTN'
+    // Flutterwave wants the local subscriber number without the leading 0 (the
+    // country_code is sent separately): 0241234567 → 241234567.
+    const phoneNumber = (opts.phone ?? '').replace(/^0+/, '')
     return {
       type: 'mobile_money',
       mobile_money: {
         country_code: DIAL_CODE[country],
         network,
-        phone_number: opts.phone ?? '',
+        phone_number: phoneNumber,
       },
     }
   }
