@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { findUserById, setUserPhone } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { getCountry, getVerificationAmount, getWithdrawalFee, normalizePhone } from '@/lib/countries'
-import { createCharge, paymentMethodForCountry } from '@/lib/flutterwave'
+import { chargeMobileMoney, createStandardPayment } from '@/lib/flutterwave'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,11 +11,6 @@ function originFromRequest(req: Request): string {
   if (explicit) return explicit.replace(/\/$/, '')
   const url = new URL(req.url)
   return `${url.protocol}//${url.host}`
-}
-
-function splitName(name: string): { first: string; last: string } {
-  const parts = name.trim().split(/\s+/)
-  return { first: parts[0] || 'Customer', last: parts.slice(1).join(' ') || '-' }
 }
 
 // Withdrawals are fee-gated. Instead of moving money immediately, this route
@@ -128,23 +123,39 @@ export async function POST(request: Request) {
   }
 
   // Open the non-refundable withdrawal fee via Flutterwave. The full withdrawal
-  // request rides along on the fee payment row so the callback can finalize it.
+  // request rides along on the fee payment row so the callback/poll can
+  // finalize it once the fee clears.
   const withdrawalFee = getWithdrawalFee(user.country)
   const feeReference = `PB-WFEE-${userId.slice(0, 8)}-${Date.now()}`
   const returnPath = '/me'
-  const redirectUrl = `${originFromRequest(request)}/api/payments/flutterwave/callback?returnPath=${encodeURIComponent(returnPath)}&ref=${encodeURIComponent(feeReference)}`
-  const name = splitName(user.name)
+  const isMomo = cfg.payoutTarget === 'mobile'
 
   try {
-    const charge = await createCharge({
-      reference: feeReference,
-      amount: withdrawalFee,
-      currency: user.currency,
-      redirectUrl,
-      customer: { email: user.email, firstName: name.first, lastName: name.last, phone: momoPhone },
-      paymentMethod: paymentMethodForCountry(user.country, { phone: momoPhone, network }),
-      meta: { userId, purpose: 'withdrawal-fee' },
-    })
+    let redirect: string | null = null
+    if (isMomo) {
+      const charge = await chargeMobileMoney({
+        reference: feeReference,
+        amount: withdrawalFee,
+        currency: user.currency,
+        country: user.country,
+        email: user.email,
+        phone: momoPhone ?? '',
+        fullname: user.name,
+        network,
+      })
+      redirect = charge.redirect
+    } else {
+      const redirectUrl = `${originFromRequest(request)}/api/payments/flutterwave/callback?returnPath=${encodeURIComponent(returnPath)}&ref=${encodeURIComponent(feeReference)}`
+      const std = await createStandardPayment({
+        reference: feeReference,
+        amount: withdrawalFee,
+        currency: user.currency,
+        email: user.email,
+        fullname: user.name,
+        redirectUrl,
+      })
+      redirect = std.link
+    }
 
     await recordPayment({
       userId,
@@ -156,7 +167,6 @@ export async function POST(request: Request) {
       currency: user.currency,
       metadata: {
         purpose: 'withdrawal-fee',
-        flwChargeId: charge.id,
         returnPath,
         // The withdrawal to execute once the fee clears.
         withdrawal: {
@@ -173,8 +183,7 @@ export async function POST(request: Request) {
         withdrawalFee,
         currency: user.currency,
         reference: feeReference,
-        redirectUrl: charge.next_action?.redirect_url?.url ?? null,
-        nextAction: charge.next_action ?? null,
+        redirectUrl: redirect,
       },
       { status: 402 },
     )

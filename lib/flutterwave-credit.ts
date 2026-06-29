@@ -1,30 +1,16 @@
-// Shared verify-then-credit pipeline for Flutterwave V4 charges.
+// Verify-then-credit pipeline for Flutterwave v3 charges.
 //
-// Idempotent on our `reference`: once the payment row is marked success we
-// short-circuit to 'already-credited'. We confirm against Flutterwave by the
-// charge id we stored on the pending row at creation time.
-//
-// `credit: false` is used by the withdrawal-fee flow — the fee is verified and
-// marked paid but NEVER added to the wallet balance.
+// Idempotent on our `reference` (== the tx_ref we sent): once the payment row
+// is marked success we short-circuit to 'already-credited'. We confirm against
+// Flutterwave with verify_by_reference. `credit: false` is used by the
+// withdrawal-fee flow — the fee is verified but never added to the wallet.
 
 import { findPaymentByReference, markPaymentResolved } from '@/lib/payments-store'
-import { retrieveCharge, isChargeSuccessful } from '@/lib/flutterwave'
+import { verifyByReference, isChargeSuccessful } from '@/lib/flutterwave'
 import { applyDepositCredit } from '@/lib/deposit-credit'
 
-export type FlutterwaveCreditStatus =
-  | 'success'
-  | 'already-credited'
-  | 'missing-reference'
-  | 'unknown-reference'
-  | 'missing-charge-id'
-  | 'verify-failed'
-  | 'amount-mismatch'
-  | 'no-user'
-  | 'credit-failed'
-  | string
-
 export interface FlutterwaveCreditResult {
-  status: FlutterwaveCreditStatus
+  status: string
   ok: boolean
   reference: string
 }
@@ -41,29 +27,25 @@ export async function verifyAndCreditFlutterwave(
     return { status: 'already-credited', ok: true, reference }
   }
 
-  const chargeId =
-    typeof pending.metadata?.flwChargeId === 'string'
-      ? (pending.metadata.flwChargeId as string)
-      : ''
-  if (!chargeId) return { status: 'missing-charge-id', ok: false, reference }
-
-  let charge
+  let verified
   try {
-    charge = await retrieveCharge(chargeId)
+    verified = await verifyByReference(reference)
   } catch (e) {
-    console.error('[flutterwave-credit] retrieve failed:', e)
+    console.error('[flutterwave-credit] verify failed:', e)
     return { status: 'verify-failed', ok: false, reference }
   }
 
-  if (!isChargeSuccessful(charge.status)) {
-    return { status: charge.status, ok: false, reference }
+  // Not approved yet (or never will be) — report the raw status so the poller
+  // keeps waiting on 'pending' and stops on a terminal failure.
+  if (!isChargeSuccessful(verified.status)) {
+    return { status: verified.found ? verified.status : 'pending', ok: false, reference }
   }
 
-  if (typeof charge.amount === 'number' && Math.abs(charge.amount - pending.amount) > 0.01) {
+  if (typeof verified.amount === 'number' && Math.abs(verified.amount - pending.amount) > 0.01) {
     console.error('[flutterwave-credit] amount mismatch', {
       reference,
       expected: pending.amount,
-      paid: charge.amount,
+      paid: verified.amount,
     })
     return { status: 'amount-mismatch', ok: false, reference }
   }

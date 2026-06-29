@@ -1,90 +1,32 @@
-// Flutterwave V4 integration — covers Ghana (GHS) & Kenya (KES) via mobile
-// money and Nigeria (NGN) / South Africa (ZAR) via bank transfer.
+// Flutterwave v3 integration (classic FLWSECK secret-key API).
 //
-// V4 is OAuth-secured (no static secret key like v3/Paystack):
-//   1. Exchange CLIENT_ID + CLIENT_SECRET for a short-lived access token at the
-//      identity provider (valid ~10 min — we cache it in-memory per instance).
-//   2. POST a charge to {BASE}/orchestration/direct-charges with the access
-//      token + a unique X-Trace-Id and X-Idempotency-Key. The response carries
-//      a `next_action` telling us how the customer finishes paying — usually a
-//      `redirect_url` we send them to (mobile money approval / bank page).
-//   3. After the customer returns, confirm by GET {BASE}/charges/{id} and check
-//      `status === 'succeeded'`.
+// Mobile money gives the on-phone PIN/approval prompt we want:
+//   - Ghana  → POST /v3/charges?type=mobile_money_ghana (MTN/Vodafone/AirtelTigo)
+//   - Kenya  → POST /v3/charges?type=mpesa (STK push)
+// The customer approves on their phone; we then confirm with
+//   GET /v3/transactions/verify_by_reference?tx_ref=<our reference>
+// and credit on a 'successful' status. Amounts are plain major units.
 //
-// Amounts in V4 are plain decimal MAJOR units (e.g. 50.00 GHS), not the minor
-// units Paystack used — so no ×100 conversion here.
+// NG/ZA (bank) fall back to v3 Standard hosted payments (a redirect link).
 
 import type { CountryCode, CurrencyCode } from '@/lib/countries'
 
-const TOKEN_URL =
-  process.env.FLUTTERWAVE_TOKEN_URL?.trim() ||
-  'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token'
+const BASE = 'https://api.flutterwave.com/v3'
 
-// Live base is https://f4bexperience.flutterwave.com; sandbox is
-// https://developersandbox-api.flutterwave.com. Override per environment.
-// (The old api.flutterwave.cloud/f4b host is deprecated.)
-function baseUrl(): string {
-  return (
-    process.env.FLUTTERWAVE_BASE_URL?.trim().replace(/\/$/, '') ||
-    'https://f4bexperience.flutterwave.com'
-  )
-}
-
-function getClientId(): string {
-  const v = process.env.FLUTTERWAVE_CLIENT_ID?.trim()
-  if (!v) throw new Error('FLUTTERWAVE_CLIENT_ID is not configured')
+function getSecretKey(): string {
+  const v = process.env.FLUTTERWAVE_SECRET_KEY?.trim()
+  if (!v) throw new Error('FLUTTERWAVE_SECRET_KEY is not configured')
   return v
 }
 
-function getClientSecret(): string {
-  const v = process.env.FLUTTERWAVE_CLIENT_SECRET?.trim()
-  if (!v) throw new Error('FLUTTERWAVE_CLIENT_SECRET is not configured')
-  return v
+export function getPublicKey(): string | null {
+  return process.env.FLUTTERWAVE_PUBLIC_KEY?.trim() || null
 }
 
-// ---- Access-token cache (per serverless instance) -------------------------
-
-let cachedToken: { value: string; expiresAt: number } | null = null
-
-export async function getAccessToken(): Promise<string> {
-  // Reuse while >30s of life remains.
-  if (cachedToken && cachedToken.expiresAt - Date.now() > 30_000) {
-    return cachedToken.value
-  }
-
-  const res = await flwFetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: getClientId(),
-      client_secret: getClientSecret(),
-      grant_type: 'client_credentials',
-    }),
-    cache: 'no-store',
-  })
-  const body = (await res.json().catch(() => ({}))) as {
-    access_token?: string
-    expires_in?: number
-    error_description?: string
-    error?: string
-  }
-  if (!res.ok || !body.access_token) {
-    throw new Error(
-      `Flutterwave auth failed: ${body.error_description ?? body.error ?? `HTTP ${res.status}`}`,
-    )
-  }
-  const ttlMs = (body.expires_in ?? 600) * 1000
-  cachedToken = { value: body.access_token, expiresAt: Date.now() + ttlMs }
-  return body.access_token
-}
-
-function authedHeaders(token: string): Record<string, string> {
+function authHeaders(): Record<string, string> {
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${getSecretKey()}`,
     'Content-Type': 'application/json',
-    // V4 requires per-request trace + idempotency identifiers.
-    'X-Trace-Id': crypto.randomUUID(),
-    'X-Idempotency-Key': crypto.randomUUID(),
   }
 }
 
@@ -104,7 +46,6 @@ async function flwFetch(
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
     try {
       const res = await fetch(url, { ...init, signal: ctrl.signal })
-      // Retry transient gateway errors; return anything else to the caller.
       if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt < retries) {
         await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
         continue
@@ -123,155 +64,180 @@ async function flwFetch(
   throw lastErr instanceof Error ? lastErr : new Error('flutterwave request failed')
 }
 
-// ---- Charge shapes --------------------------------------------------------
+// ---- Mobile-money network codes ------------------------------------------
 
-export interface FlutterwaveNextAction {
-  type: 'redirect_url' | 'payment_instruction' | string
-  redirect_url?: { url: string }
-  payment_instruction?: Record<string, unknown>
-}
-
-export interface FlutterwaveCharge {
-  id: string
-  reference: string
-  // succeeded | pending | failed | processing | ...
-  status: string
-  amount?: number
-  currency?: string
-  next_action?: FlutterwaveNextAction
-  processor_response?: { code?: string; type?: string }
-}
-
-export interface CreateChargeInput {
-  reference: string
-  amount: number // major units
-  currency: CurrencyCode
-  redirectUrl: string
-  customer: { email: string; firstName?: string; lastName?: string; phone?: string }
-  paymentMethod: Record<string, unknown>
-  meta?: Record<string, unknown>
-}
-
-/** Initiate an orchestrator direct-charge. */
-export async function createCharge(input: CreateChargeInput): Promise<FlutterwaveCharge> {
-  const token = await getAccessToken()
-  const url = `${baseUrl()}/orchestration/direct-charges`
-  const requestBody = {
-    reference: input.reference,
-    amount: input.amount,
-    currency: input.currency,
-    redirect_url: input.redirectUrl,
-    customer: {
-      email: input.customer.email,
-      name: {
-        first: input.customer.firstName || 'Customer',
-        last: input.customer.lastName || '-',
-      },
-      ...(input.customer.phone ? { phone: { number: input.customer.phone } } : {}),
-    },
-    payment_method: input.paymentMethod,
-    meta: input.meta ?? {},
-  }
-  const res = await flwFetch(url, {
-    method: 'POST',
-    headers: authedHeaders(token),
-    body: JSON.stringify(requestBody),
-    cache: 'no-store',
-  })
-  const raw = await res.text()
-  let body: ({ data?: FlutterwaveCharge; message?: string; error?: { message?: string } } & Partial<FlutterwaveCharge>) = {}
-  try {
-    body = raw ? JSON.parse(raw) : {}
-  } catch {
-    /* non-JSON response (HTML error page, etc.) */
-  }
-  // V4 responses wrap the charge in `data`; tolerate a flat shape too.
-  const charge = (body.data ?? (body.id ? (body as FlutterwaveCharge) : undefined)) as
-    | FlutterwaveCharge
-    | undefined
-  if (!res.ok || !charge?.id) {
-    // Surface everything we got back so the cause is visible in the logs.
-    console.error('[flutterwave] charge error', {
-      url,
-      status: res.status,
-      requestBody: { ...requestBody, customer: { ...requestBody.customer, email: '***' } },
-      response: raw.slice(0, 1000),
-    })
-    const detail =
-      body.error?.message || body.message || raw.slice(0, 300) || `HTTP ${res.status}`
-    throw new Error(`Flutterwave charge failed (HTTP ${res.status}): ${detail}`)
-  }
-  return charge
-}
-
-/** Retrieve a charge by its Flutterwave id to confirm final status. */
-export async function retrieveCharge(id: string): Promise<FlutterwaveCharge> {
-  const token = await getAccessToken()
-  const res = await flwFetch(`${baseUrl()}/charges/${encodeURIComponent(id)}`, {
-    method: 'GET',
-    headers: authedHeaders(token),
-    cache: 'no-store',
-  })
-  const body = (await res.json().catch(() => ({}))) as {
-    data?: FlutterwaveCharge
-    message?: string
-  } & Partial<FlutterwaveCharge>
-  const charge = (body.data ?? (body.id ? (body as FlutterwaveCharge) : undefined)) as
-    | FlutterwaveCharge
-    | undefined
-  if (!res.ok || !charge?.id) {
-    throw new Error(`Flutterwave retrieve failed: ${body.message ?? `HTTP ${res.status}`}`)
-  }
-  return charge
-}
-
-/** True once the gateway reports the money has actually landed. */
-export function isChargeSuccessful(status: string): boolean {
-  return status === 'succeeded' || status === 'success' || status === 'successful'
-}
-
-// ---- Per-country payment method ------------------------------------------
-
-// Maps our payout-network keys to Flutterwave V4 mobile-money network codes.
-// CONFIRM these against the networks enabled on your Flutterwave account.
-const MOBILE_MONEY_NETWORK: Record<string, string> = {
+// Our payout-network keys → Flutterwave v3 Ghana mobile-money network codes.
+const GH_NETWORK: Record<string, string> = {
   mtn: 'MTN',
   telecel: 'VODAFONE', // Telecel Ghana is still 'VODAFONE' on Flutterwave
-  airteltigo: 'AIRTELTIGO',
-  mpesa: 'MPESA',
-  airtel: 'AIRTEL',
+  airteltigo: 'TIGO',
 }
 
-const DIAL_CODE: Record<CountryCode, string> = {
-  GH: '233',
-  KE: '254',
-  NG: '234',
-  ZA: '27',
+// ---- Charge --------------------------------------------------------------
+
+export interface MobileMoneyChargeResult {
+  /** Our tx_ref — the key we verify against later. */
+  reference: string
+  /** Flutterwave transaction id (if returned). */
+  flwId: string | null
+  /** Charge status from the create response (usually 'pending'). */
+  status: string
+  /** Some networks (e.g. Vodafone voucher) need a redirect to finish. */
+  redirect: string | null
+  message: string | null
+}
+
+interface ChargeInput {
+  reference: string
+  amount: number
+  currency: CurrencyCode
+  country: CountryCode
+  email: string
+  phone: string
+  fullname: string
+  network?: string
 }
 
 /**
- * Build the V4 `payment_method` object for a country.
- * - GH/KE: mobile money (needs the customer's phone + chosen network).
- * - NG/ZA: bank transfer (Flutterwave returns a redirect / pay-in instruction).
+ * Trigger a mobile-money charge. The customer gets a PIN/approval prompt on
+ * their phone. Only GH and KE are mobile-money countries here.
  */
-export function paymentMethodForCountry(
-  country: CountryCode,
-  opts: { phone?: string; network?: string },
-): Record<string, unknown> {
-  if (country === 'GH' || country === 'KE') {
-    const network = MOBILE_MONEY_NETWORK[(opts.network ?? '').toLowerCase()] ?? 'MTN'
-    // Flutterwave wants the local subscriber number without the leading 0 (the
-    // country_code is sent separately): 0241234567 → 241234567.
-    const phoneNumber = (opts.phone ?? '').replace(/^0+/, '')
-    return {
-      type: 'mobile_money',
-      mobile_money: {
-        country_code: DIAL_CODE[country],
-        network,
-        phone_number: phoneNumber,
-      },
-    }
+export async function chargeMobileMoney(input: ChargeInput): Promise<MobileMoneyChargeResult> {
+  const type = input.country === 'KE' ? 'mpesa' : 'mobile_money_ghana'
+  const payload: Record<string, unknown> = {
+    tx_ref: input.reference,
+    amount: input.amount,
+    currency: input.currency,
+    email: input.email,
+    phone_number: input.phone,
+    fullname: input.fullname || 'Customer',
   }
-  // NG / ZA — bank transfer redirect/instruction flow.
-  return { type: 'bank_transfer' }
+  if (input.country === 'GH') {
+    payload.network = GH_NETWORK[(input.network ?? '').toLowerCase()] ?? 'MTN'
+  }
+
+  const url = `${BASE}/charges?type=${type}`
+  const res = await flwFetch(url, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  })
+  const raw = await res.text()
+  let body: {
+    status?: string
+    message?: string
+    meta?: { authorization?: { redirect?: string; mode?: string } }
+    data?: { id?: number | string; status?: string; tx_ref?: string }
+  } = {}
+  try {
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    /* non-JSON */
+  }
+
+  if (!res.ok || body.status !== 'success') {
+    console.error('[flutterwave] charge error', {
+      url,
+      status: res.status,
+      payload: { ...payload, email: '***', phone_number: '***' },
+      response: raw.slice(0, 1000),
+    })
+    const detail = body.message || raw.slice(0, 300) || `HTTP ${res.status}`
+    throw new Error(`Flutterwave charge failed (HTTP ${res.status}): ${detail}`)
+  }
+
+  return {
+    reference: input.reference,
+    flwId: body.data?.id != null ? String(body.data.id) : null,
+    status: body.data?.status ?? 'pending',
+    redirect: body.meta?.authorization?.redirect ?? null,
+    message: body.message ?? null,
+  }
+}
+
+/**
+ * v3 Standard hosted payment — used for bank countries (NG/ZA) that aren't
+ * mobile money. Returns a hosted checkout link to redirect the customer to.
+ */
+export async function createStandardPayment(input: {
+  reference: string
+  amount: number
+  currency: CurrencyCode
+  email: string
+  fullname: string
+  redirectUrl: string
+}): Promise<{ link: string }> {
+  const res = await flwFetch(`${BASE}/payments`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      tx_ref: input.reference,
+      amount: input.amount,
+      currency: input.currency,
+      redirect_url: input.redirectUrl,
+      customer: { email: input.email, name: input.fullname || 'Customer' },
+      payment_options: 'card,banktransfer,account',
+    }),
+    cache: 'no-store',
+  })
+  const raw = await res.text()
+  let body: { status?: string; message?: string; data?: { link?: string } } = {}
+  try {
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    /* non-JSON */
+  }
+  if (!res.ok || body.status !== 'success' || !body.data?.link) {
+    const detail = body.message || raw.slice(0, 300) || `HTTP ${res.status}`
+    throw new Error(`Flutterwave payment init failed (HTTP ${res.status}): ${detail}`)
+  }
+  return { link: body.data.link }
+}
+
+// ---- Verify --------------------------------------------------------------
+
+export interface FlutterwaveVerifyResult {
+  status: string // 'successful' | 'failed' | 'pending' | ...
+  amount: number | null
+  currency: string | null
+  txRef: string | null
+  found: boolean
+}
+
+/** Confirm a transaction by our own tx_ref (the reference we generated). */
+export async function verifyByReference(reference: string): Promise<FlutterwaveVerifyResult> {
+  const url = `${BASE}/transactions/verify_by_reference?tx_ref=${encodeURIComponent(reference)}`
+  const res = await flwFetch(url, { method: 'GET', headers: authHeaders(), cache: 'no-store' })
+  const raw = await res.text()
+  let body: {
+    status?: string
+    message?: string
+    data?: { status?: string; amount?: number; currency?: string; tx_ref?: string }
+  } = {}
+  try {
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    /* non-JSON */
+  }
+
+  // verify_by_reference 404s while no transaction exists yet (customer hasn't
+  // approved). Treat that as "not found / still pending", not an error.
+  if (res.status === 404 || body.status !== 'success' || !body.data) {
+    return { status: 'pending', amount: null, currency: null, txRef: reference, found: false }
+  }
+
+  return {
+    status: body.data.status ?? 'pending',
+    amount: typeof body.data.amount === 'number' ? body.data.amount : null,
+    currency: body.data.currency ?? null,
+    txRef: body.data.tx_ref ?? reference,
+    found: true,
+  }
+}
+
+/** True once Flutterwave reports the money actually landed. */
+export function isChargeSuccessful(status: string | undefined): boolean {
+  const s = (status ?? '').toLowerCase()
+  return s === 'successful' || s === 'success'
 }

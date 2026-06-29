@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
-import { createCharge, paymentMethodForCountry } from '@/lib/flutterwave'
+import { chargeMobileMoney, createStandardPayment } from '@/lib/flutterwave'
 import { getMinFirstDeposit, normalizePhone } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
@@ -11,9 +11,7 @@ interface StartBody {
   amount?: number
   returnPath?: string
   purpose?: 'deposit' | 'verification'
-  /** Mobile-money phone (GH/KE). */
   phone?: string
-  /** Selected payout/mobile-money network key. */
   network?: string
 }
 
@@ -27,11 +25,6 @@ function originFromRequest(req: Request): string {
   if (explicit) return explicit.replace(/\/$/, '')
   const url = new URL(req.url)
   return `${url.protocol}//${url.host}`
-}
-
-function splitName(name: string): { first: string; last: string } {
-  const parts = name.trim().split(/\s+/)
-  return { first: parts[0] || 'Customer', last: parts.slice(1).join(' ') || '-' }
 }
 
 export async function POST(request: Request) {
@@ -64,10 +57,14 @@ export async function POST(request: Request) {
     )
   }
 
-  // Mobile-money countries need a valid phone; bank countries don't.
-  let phone: string | undefined
-  if (user.country === 'GH' || user.country === 'KE') {
-    phone = normalizePhone(user.country, body.phone ?? user.phone ?? '') || undefined
+  const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
+  const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
+  const isMomo = user.country === 'GH' || user.country === 'KE'
+
+  // Mobile-money countries need a valid phone.
+  let phone = ''
+  if (isMomo) {
+    phone = normalizePhone(user.country, body.phone ?? user.phone ?? '') || ''
     if (!phone) {
       return NextResponse.json(
         { error: `enter a valid ${user.country === 'GH' ? 'Ghana' : 'Kenya'} mobile-money number` },
@@ -76,24 +73,34 @@ export async function POST(request: Request) {
     }
   }
 
-  const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
-  const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
-  const redirectUrl = `${originFromRequest(request)}/api/payments/flutterwave/callback?returnPath=${encodeURIComponent(returnPath)}&ref=${encodeURIComponent(reference)}`
-  const name = splitName(user.name)
-
   try {
-    const charge = await createCharge({
-      reference,
-      amount,
-      currency: user.currency,
-      redirectUrl,
-      customer: { email: user.email, firstName: name.first, lastName: name.last, phone },
-      paymentMethod: paymentMethodForCountry(user.country, { phone, network: body.network }),
-      meta: { userId, purpose, country: user.country },
-    })
+    let redirect: string | null = null
+    if (isMomo) {
+      const charge = await chargeMobileMoney({
+        reference,
+        amount,
+        currency: user.currency,
+        country: user.country,
+        email: user.email,
+        phone,
+        fullname: user.name,
+        network: body.network,
+      })
+      redirect = charge.redirect
+    } else {
+      // NG / ZA — hosted redirect checkout.
+      const redirectUrl = `${originFromRequest(request)}/api/payments/flutterwave/callback?returnPath=${encodeURIComponent(returnPath)}&ref=${encodeURIComponent(reference)}`
+      const std = await createStandardPayment({
+        reference,
+        amount,
+        currency: user.currency,
+        email: user.email,
+        fullname: user.name,
+        redirectUrl,
+      })
+      redirect = std.link
+    }
 
-    // Persist the pending row keyed on our reference, with the Flutterwave
-    // charge id so the callback can confirm + credit it.
     await recordPayment({
       userId,
       reference,
@@ -102,24 +109,11 @@ export async function POST(request: Request) {
       status: 'pending',
       provider: 'flutterwave',
       currency: user.currency,
-      metadata: {
-        purpose,
-        flwChargeId: charge.id,
-        returnPath,
-        userName: user.name,
-        userPhone: user.phone ?? null,
-        country: user.country,
-      },
+      metadata: { purpose, returnPath, country: user.country, userName: user.name },
     }).catch((e) => console.error('[flutterwave/start] ledger write failed:', e))
 
     return NextResponse.json(
-      {
-        reference,
-        chargeId: charge.id,
-        status: charge.status,
-        redirectUrl: charge.next_action?.redirect_url?.url ?? null,
-        nextAction: charge.next_action ?? null,
-      },
+      { reference, redirectUrl: redirect, momo: isMomo },
       { status: 201 },
     )
   } catch (e) {
