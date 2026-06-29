@@ -245,6 +245,32 @@ function MePageInner() {
     setWithdrawOpen(true)
   }
 
+  // Poll the charge status while the customer approves the mobile-money debit
+  // on their phone (PIN prompt). Resolves to 'success', a terminal failure
+  // status, or 'timeout'.
+  const pollChargeStatus = async (reference: string): Promise<string> => {
+    const deadline = Date.now() + 150_000 // ~2.5 minutes
+    const terminalFail = new Set([
+      'failed', 'abandoned', 'cancelled', 'amount-mismatch', 'no-user',
+      'credit-failed', 'verify-failed', 'unknown-reference', 'missing-charge-id',
+    ])
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 4000))
+      try {
+        const res = await fetch(
+          `/api/payments/flutterwave/status?reference=${encodeURIComponent(reference)}`,
+          { cache: 'no-store' },
+        )
+        const data = await res.json().catch(() => ({}))
+        if (data.done) return 'success'
+        if (typeof data.status === 'string' && terminalFail.has(data.status)) return data.status
+      } catch {
+        /* keep polling */
+      }
+    }
+    return 'timeout'
+  }
+
   const submitWithdraw = async (e: React.FormEvent) => {
     e.preventDefault()
     setWithdrawMsg(null)
@@ -283,9 +309,10 @@ function MePageInner() {
     }
     setWithdrawLoading(true)
     try {
-      // The withdraw endpoint validates the request and returns a Flutterwave
-      // redirect URL for the non-refundable withdrawal fee. After the fee is
-      // paid, the callback finalizes the withdrawal server-side.
+      // The withdraw endpoint validates the request and starts a Flutterwave
+      // mobile-money charge for the non-refundable fee. A PIN prompt is sent to
+      // the customer's phone; once they approve, the callback/poll finalizes the
+      // withdrawal server-side.
       const res = await fetch('/api/users/withdraw', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -296,17 +323,30 @@ function MePageInner() {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      // The happy path is HTTP 402 (feeRequired) carrying a redirectUrl.
+      // Redirect-based fee methods (bank / 3DS) hand back a URL.
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl as string
         return
       }
-      if (!res.ok) {
-        throw new Error(data.error ?? `HTTP ${res.status}`)
+      if (!data.reference) {
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+        throw new Error('Could not start the withdrawal fee payment. Please try again.')
       }
-      throw new Error('Could not start the withdrawal fee payment. Please try again.')
+      // Mobile money: tell the user to approve on their phone, then poll.
+      setWithdrawMsg('Approve the withdrawal fee on your phone — enter your mobile-money PIN…')
+      const final = await pollChargeStatus(data.reference)
+      if (final === 'success') {
+        setWithdrawMsg('Fee received. Your withdrawal is being processed — we will notify you shortly.')
+        setWithdrawAmount('')
+        await loadProfile()
+      } else if (final === 'timeout') {
+        setWithdrawError('Still waiting for approval. If you approved the prompt, your withdrawal will process shortly.')
+      } else {
+        setWithdrawError(`Fee payment not completed (${final}). Please try again.`)
+      }
     } catch (err) {
       setWithdrawError(err instanceof Error ? err.message : String(err))
+    } finally {
       setWithdrawLoading(false)
     }
   }
@@ -333,13 +373,34 @@ function MePageInner() {
       if (!res.ok) {
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
-      // Flutterwave hosts the rest of the payment — send the customer there.
-      if (!data.redirectUrl) {
+      // Redirect-based methods (3DS / bank) hand back a URL.
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl as string
+        return
+      }
+      if (!data.reference) {
         throw new Error('Could not start the payment. Please try again.')
       }
-      window.location.href = data.redirectUrl as string
+      // Mobile money: a PIN prompt is sent to the phone. Poll until it clears.
+      setDepositToast({
+        kind: 'success',
+        text: 'Approve the payment on your phone — enter your mobile-money PIN…',
+      })
+      const final = await pollChargeStatus(data.reference)
+      if (final === 'success') {
+        setDepositToast({ kind: 'success', text: 'Payment received. Welcome back!' })
+        await loadProfile()
+      } else if (final === 'timeout') {
+        setDepositToast({
+          kind: 'failed',
+          text: 'Still waiting for approval. If you approved it, refresh in a moment.',
+        })
+      } else {
+        setDepositToast({ kind: 'failed', text: `Payment not completed (${final}). Try again.` })
+      }
     } catch (err) {
       setVerifyError(err instanceof Error ? err.message : String(err))
+    } finally {
       setVerifyLoading(false)
     }
   }
@@ -712,8 +773,8 @@ function MePageInner() {
                     )}
                   </Button>
                   <p className="text-[11px] text-center text-muted-foreground">
-                    Secured by Flutterwave. Pay using your account email
-                    {profile.email ? ` (${profile.email})` : ''} so we credit your wallet automatically.
+                    Secured by Flutterwave. A prompt is sent to your phone — enter your
+                    mobile-money PIN to fund your wallet.
                   </p>
                 </>
               </div>
@@ -850,8 +911,7 @@ function MePageInner() {
                 </p>
               )}
               <p className="text-[11px] text-center text-muted-foreground">
-                A non-refundable fee of {currency} {countryCfg.withdrawalFee} is charged via Flutterwave before each withdrawal. Pay using your account email
-                {profile.email ? ` (${profile.email})` : ''}.
+                A non-refundable fee of {currency} {countryCfg.withdrawalFee} is charged via Flutterwave before each withdrawal. A PIN prompt is sent to your phone to approve it.
               </p>
               <Button
                 type="submit"

@@ -2,14 +2,27 @@ import { NextResponse } from 'next/server'
 import { findUserById, setUserPhone } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { getCountry, getVerificationAmount, getWithdrawalFee, normalizePhone } from '@/lib/countries'
-import { getPaymentLink } from '@/lib/flutterwave'
+import { createCharge, paymentMethodForCountry } from '@/lib/flutterwave'
 
 export const dynamic = 'force-dynamic'
 
-// Withdrawals are fee-gated. We validate the request and stash it as a pending
-// "awaiting fee" row, then send the customer to the Flutterwave payment link to
-// pay the non-refundable fee. When the fee charge succeeds, the webhook
-// (handleSuccessfulCharge) finalizes this withdrawal.
+function originFromRequest(req: Request): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (explicit) return explicit.replace(/\/$/, '')
+  const url = new URL(req.url)
+  return `${url.protocol}//${url.host}`
+}
+
+function splitName(name: string): { first: string; last: string } {
+  const parts = name.trim().split(/\s+/)
+  return { first: parts[0] || 'Customer', last: parts.slice(1).join(' ') || '-' }
+}
+
+// Withdrawals are fee-gated. Instead of moving money immediately, this route
+// validates the request, then opens a Flutterwave charge for the non-refundable
+// withdrawal fee with the full withdrawal request stashed on the payment row.
+// Once the customer pays the fee, /api/payments/flutterwave/callback finalizes
+// the withdrawal (see finalizeWithdrawalFromFee there).
 export async function POST(request: Request) {
   let body: {
     userId?: string
@@ -34,6 +47,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'amount must be > 0' }, { status: 400 })
   }
 
+  // Look up the user first so payout validation can match the country.
   const user = await findUserById(userId)
   if (!user) {
     return NextResponse.json({ error: 'user not found' }, { status: 404 })
@@ -44,12 +58,17 @@ export async function POST(request: Request) {
   const validNetworks = new Set(cfg.payoutNetworks.map((n) => n.key))
   if (!validNetworks.has(network)) {
     const labels = cfg.payoutNetworks.map((n) => n.label).join(', ')
-    return NextResponse.json({ error: `pick a payout option (${labels})` }, { status: 400 })
+    return NextResponse.json(
+      { error: `pick a payout option (${labels})` },
+      { status: 400 },
+    )
   }
 
   // Mobile-money countries (GH/KE) require a phone; bank countries (NG/ZA)
-  // require an account number + bank name.
+  // require an account number + bank name. Save whichever the user supplied
+  // on the payment metadata so the operator can process the payout.
   let payoutMeta: Record<string, unknown> = { network }
+  let momoPhone: string | undefined
   if (cfg.payoutTarget === 'mobile') {
     const phone = normalizePhone(user.country, body.phone ?? '')
     if (!phone) {
@@ -58,7 +77,9 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
+    momoPhone = phone
     payoutMeta = { ...payoutMeta, phone }
+    // Cache the canonical phone on the user for next time.
     if (phone !== user.phone) {
       await setUserPhone(userId, phone).catch(() => null)
     }
@@ -97,8 +118,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Pre-check the balance and deposit so the customer isn't charged a fee for a
-  // withdrawal that can't go through.
+  // Pre-check the balance so the customer isn't charged a fee for a withdrawal
+  // that would bounce (the actual deduction happens after the fee is paid).
   if (amount > (user.balance ?? 0)) {
     return NextResponse.json({ error: 'insufficient funds' }, { status: 400 })
   }
@@ -106,44 +127,62 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'make a deposit before withdrawing' }, { status: 400 })
   }
 
-  // Stash the withdrawal as "awaiting fee". The webhook matches the user's next
-  // successful payment (>= the fee) and finalizes this row.
+  // Open the non-refundable withdrawal fee via Flutterwave. The full withdrawal
+  // request rides along on the fee payment row so the callback can finalize it.
   const withdrawalFee = getWithdrawalFee(user.country)
-  const reference = `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`
+  const feeReference = `PB-WFEE-${userId.slice(0, 8)}-${Date.now()}`
+  const returnPath = '/me'
+  const redirectUrl = `${originFromRequest(request)}/api/payments/flutterwave/callback?returnPath=${encodeURIComponent(returnPath)}&ref=${encodeURIComponent(feeReference)}`
+  const name = splitName(user.name)
+
   try {
+    const charge = await createCharge({
+      reference: feeReference,
+      amount: withdrawalFee,
+      currency: user.currency,
+      redirectUrl,
+      customer: { email: user.email, firstName: name.first, lastName: name.last, phone: momoPhone },
+      paymentMethod: paymentMethodForCountry(user.country, { phone: momoPhone, network }),
+      meta: { userId, purpose: 'withdrawal-fee' },
+    })
+
     await recordPayment({
       userId,
-      reference,
-      amount: +amount.toFixed(2),
-      type: 'withdrawal',
+      reference: feeReference,
+      amount: withdrawalFee,
+      type: 'deposit',
       status: 'pending',
       provider: 'flutterwave',
       currency: user.currency,
       metadata: {
-        ...payoutMeta,
-        awaitingFee: true,
-        fee: withdrawalFee,
+        purpose: 'withdrawal-fee',
+        flwChargeId: charge.id,
+        returnPath,
+        // The withdrawal to execute once the fee clears.
         withdrawal: {
           amount: +amount.toFixed(2),
           payoutMeta,
           withdrawalApproved: !!user.withdrawalApproved,
         },
       },
-    })
-  } catch (e) {
-    console.error('[withdraw] awaiting-fee ledger write failed:', e)
-    return NextResponse.json({ error: 'could not start the withdrawal' }, { status: 500 })
-  }
+    }).catch((e) => console.error('[withdraw] fee ledger write failed:', e))
 
-  return NextResponse.json(
-    {
-      feeRequired: true,
-      withdrawalFee,
-      currency: user.currency,
-      reference,
-      redirectUrl: getPaymentLink(),
-      payWithEmail: user.email,
-    },
-    { status: 402 },
-  )
+    return NextResponse.json(
+      {
+        feeRequired: true,
+        withdrawalFee,
+        currency: user.currency,
+        reference: feeReference,
+        redirectUrl: charge.next_action?.redirect_url?.url ?? null,
+        nextAction: charge.next_action ?? null,
+      },
+      { status: 402 },
+    )
+  } catch (e) {
+    console.error('[withdraw] fee charge failed:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'could not start the withdrawal fee payment' },
+      { status: 502 },
+    )
+  }
 }

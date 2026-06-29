@@ -102,6 +102,8 @@ function DepositForm() {
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // "Approve on your phone" message shown while polling a mobile-money charge.
+  const [pinPrompt, setPinPrompt] = useState<string | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
   const [payMode, setPayMode] = useState<PayMode>('momo')
@@ -205,6 +207,32 @@ function DepositForm() {
     }
   }
 
+  // Poll the charge status while the customer approves the mobile-money debit
+  // on their phone. Resolves to 'success', a terminal failure status, or
+  // 'timeout'.
+  const pollChargeStatus = async (reference: string): Promise<string> => {
+    const deadline = Date.now() + 150_000 // ~2.5 minutes
+    const terminalFail = new Set([
+      'failed', 'abandoned', 'cancelled', 'amount-mismatch', 'no-user',
+      'credit-failed', 'verify-failed', 'unknown-reference', 'missing-charge-id',
+    ])
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 4000))
+      try {
+        const res = await fetch(
+          `/api/payments/flutterwave/status?reference=${encodeURIComponent(reference)}`,
+          { cache: 'no-store' },
+        )
+        const data = await res.json().catch(() => ({}))
+        if (data.done) return 'success'
+        if (typeof data.status === 'string' && terminalFail.has(data.status)) return data.status
+      } catch {
+        /* keep polling */
+      }
+    }
+    return 'timeout'
+  }
+
   // Mobile-money custom UI is GH-only (Paystack Charge API supports MoMo
   // for GHS today). Card flow is the fallback / cross-country default.
   const momoAvailable = gateway === 'paystack' && country === 'GH'
@@ -271,11 +299,28 @@ function DepositForm() {
       if (!res.ok) {
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
-      // Flutterwave hosts the rest of the payment — redirect the customer.
-      if (!data.redirectUrl) {
+      // Redirect-based methods (3DS / bank) hand back a URL.
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl as string
+        return
+      }
+      if (!data.reference) {
         throw new Error('Could not start the payment. Please try again.')
       }
-      window.location.href = data.redirectUrl as string
+      // Mobile money: a PIN prompt is sent to the phone. Poll until it clears.
+      setError(null)
+      setPinPrompt('Approve the payment on your phone — enter your mobile-money PIN…')
+      const final = await pollChargeStatus(data.reference)
+      setPinPrompt(null)
+      if (final === 'success') {
+        await handleDepositSuccess()
+      } else if (final === 'timeout') {
+        setError('Still waiting for approval. If you approved it, refresh your account in a moment.')
+        setLoading(false)
+      } else {
+        setError(`Payment not completed (${final}). Try again.`)
+        setLoading(false)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setLoading(false)
@@ -723,6 +768,13 @@ function DepositForm() {
                     <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                       <span>{error}</span>
+                    </div>
+                  )}
+
+                  {pinPrompt && (
+                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/30 text-xs text-foreground font-medium flex items-start gap-2">
+                      <Loader2 className="w-3.5 h-3.5 mt-0.5 shrink-0 animate-spin" />
+                      <span>{pinPrompt}</span>
                     </div>
                   )}
 
