@@ -81,23 +81,27 @@ export function MobileNav({
         </div>
       </nav>
 
-      {/* Floating bet slip button — appears above the nav once you have
-          selections, opens the slip drawer. */}
-      {selectedBets.length > 0 && (
-        <button
-          onClick={() => setIsSlipOpen(true)}
-          aria-label={`Open bet slip, ${selectedBets.length} selection${selectedBets.length > 1 ? 's' : ''}`}
-          className="fixed right-3 bottom-24 z-50 xl:hidden flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-xl shadow-primary/40 ring-1 ring-white/20 active:scale-95 transition-transform animate-in fade-in zoom-in duration-200"
-        >
-          <span className="relative">
-            <Receipt className="w-6 h-6" strokeWidth={2} />
+      {/* Floating bet slip button — always visible so users can open the slip
+          and load a booking code even with no selections yet. */}
+      <button
+        onClick={() => setIsSlipOpen(true)}
+        aria-label={
+          selectedBets.length > 0
+            ? `Open bet slip, ${selectedBets.length} selection${selectedBets.length > 1 ? 's' : ''}`
+            : 'Open bet slip'
+        }
+        className="fixed right-3 bottom-24 z-50 xl:hidden flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-b from-primary to-primary/85 text-primary-foreground shadow-xl shadow-primary/40 ring-1 ring-white/20 active:scale-95 transition-transform"
+      >
+        <span className="relative">
+          <Receipt className="w-6 h-6" strokeWidth={2} />
+          {selectedBets.length > 0 && (
             <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-extrabold flex items-center justify-center ring-2 ring-card tabular-nums">
               {selectedBets.length}
             </span>
-          </span>
-          <span className="text-[9px] font-bold tracking-wide mt-1">BET SLIP</span>
-        </button>
-      )}
+          )}
+        </span>
+        <span className="text-[9px] font-bold tracking-wide mt-1">BET SLIP</span>
+      </button>
 
       <MobileBetSlipDrawer
         isOpen={isSlipOpen}
