@@ -40,7 +40,7 @@ import {
   DEFAULT_COUNTRY,
   DEFAULT_CURRENCY,
   getCountry,
-  getVerificationAmount,
+  getVerificationSteps,
   isCountryCode,
   isCurrencyCode,
   normalizePhone,
@@ -179,12 +179,13 @@ function MePageInner() {
   const country: CountryCode = isCountryCode(profile?.country) ? (profile!.country as CountryCode) : DEFAULT_COUNTRY
   const currency: CurrencyCode = isCurrencyCode(profile?.currency) ? (profile!.currency as CurrencyCode) : DEFAULT_CURRENCY
   const countryCfg = getCountry(country)
-  const verificationAmount = getVerificationAmount(country)
-  const VERIFICATION_TOTAL = 4
-  function verificationMessageFor(step: number): string {
-    const remaining = Math.max(0, VERIFICATION_TOTAL - step)
-    return `Account verification in progress (${step}/${VERIFICATION_TOTAL}). ${remaining} more qualifying deposit${remaining === 1 ? '' : 's'} of ${currency} ${verificationAmount} required before withdrawal options unlock.`
-  }
+  // Per-step verification deposits (e.g. GH: [500, 200]). The amount required
+  // now depends on which step the user is on.
+  const verificationSteps = getVerificationSteps(country)
+  const VERIFICATION_TOTAL = verificationSteps.length
+  const currentVerificationStep = profile?.verificationStep ?? 0
+  const verificationAmount =
+    verificationSteps[currentVerificationStep] ?? verificationSteps[verificationSteps.length - 1]
 
   // Default the network to the first one the country supports.
   useEffect(() => {
@@ -309,10 +310,6 @@ function MePageInner() {
     }
     setWithdrawLoading(true)
     try {
-      // The withdraw endpoint validates the request and starts a Flutterwave
-      // mobile-money charge for the non-refundable fee. A PIN prompt is sent to
-      // the customer's phone; once they approve, the callback/poll finalizes the
-      // withdrawal server-side.
       const res = await fetch('/api/users/withdraw', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -323,26 +320,23 @@ function MePageInner() {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      // Redirect-based fee methods (bank / 3DS) hand back a URL.
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl as string
-        return
+      if (!res.ok) {
+        throw new Error(data.error ?? `HTTP ${res.status}`)
       }
-      if (!data.reference) {
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-        throw new Error('Could not start the withdrawal fee payment. Please try again.')
-      }
-      // Mobile money: tell the user to approve on their phone, then poll.
-      setWithdrawMsg('Approve the withdrawal fee on your phone — enter your mobile-money PIN…')
-      const final = await pollChargeStatus(data.reference)
-      if (final === 'success') {
-        setWithdrawMsg('Fee received. Your withdrawal is being processed — we will notify you shortly.')
+      // 202 = held server-side (admin hasn't approved yet) — show a friendly
+      // "we're processing" message and leave the balance alone.
+      if (res.status === 202 || data.pending) {
+        setWithdrawMsg(
+          data.message ??
+            'Your withdrawal request has been received and is being processed. We will notify you shortly.',
+        )
         setWithdrawAmount('')
-        await loadProfile()
-      } else if (final === 'timeout') {
-        setWithdrawError('Still waiting for approval. If you approved the prompt, your withdrawal will process shortly.')
       } else {
-        setWithdrawError(`Fee payment not completed (${final}). Please try again.`)
+        setProfile((prev) =>
+          prev ? { ...prev, totalWithdrawn: data.user.totalWithdrawn, balance: data.user.balance } : prev,
+        )
+        setWithdrawMsg(`Withdrew ${currency} ${formatMoney(amt, currency)} successfully.`)
+        setWithdrawAmount('')
       }
     } catch (err) {
       setWithdrawError(err instanceof Error ? err.message : String(err))
@@ -910,9 +904,6 @@ function MePageInner() {
                   {withdrawMsg}
                 </p>
               )}
-              <p className="text-[11px] text-center text-muted-foreground">
-                A non-refundable fee of {currency} {countryCfg.withdrawalFee} is charged via Flutterwave before each withdrawal. A PIN prompt is sent to your phone to approve it.
-              </p>
               <Button
                 type="submit"
                 disabled={withdrawLoading || balance <= 0}
@@ -923,7 +914,7 @@ function MePageInner() {
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing…
                   </>
                 ) : (
-                  `Pay ${currency} ${countryCfg.withdrawalFee} fee & withdraw`
+                  'Withdraw'
                 )}
               </Button>
             </form>

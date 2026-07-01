@@ -23,7 +23,7 @@ import {
 } from '@/lib/users-store'
 import { creditCommission, findSubAdminById } from '@/lib/sub-admins-store'
 import { COMMISSION_RATE, type AppUser } from '@/lib/types'
-import { getVerificationAmount } from '@/lib/countries'
+import { getVerificationSteps } from '@/lib/countries'
 
 export interface ApplyDepositResult {
   user: AppUser
@@ -49,7 +49,11 @@ export async function applyDepositCredit(
   if (!result) return null
 
   let user = result.user
-  const verificationThreshold = getVerificationAmount(userBefore.country)
+  // Per-step verification: the amount required to advance depends on which step
+  // the user is currently on (e.g. GH: 500 for step 0→1, 200 for step 1→2).
+  const verificationSteps = getVerificationSteps(userBefore.country)
+  const currentStep = user.verificationStep ?? 0
+  const stepThreshold = verificationSteps[currentStep] ?? Infinity
 
   // Commission fires on EVERY confirmed deposit (not just the first) as long
   // as the user was referred by an approved sub-admin. Skip reasons are
@@ -97,10 +101,7 @@ export async function applyDepositCredit(
   // Verification step is best-effort: a failure here (stale CHECK constraint,
   // transient DB blip) must not roll back the commission or the wallet
   // credit that already happened above.
-  if (
-    amount >= verificationThreshold &&
-    (user.verificationStep ?? 0) < 4
-  ) {
+  if (currentStep < verificationSteps.length && amount >= stepThreshold) {
     try {
       const advanced = await advanceVerificationStep(userId)
       if (advanced) user = advanced

@@ -5,6 +5,7 @@ import {
   currencyFromCountry,
   DEFAULT_COUNTRY,
   DEFAULT_CURRENCY,
+  getVerificationSteps,
   isCountryCode,
   isCurrencyCode,
   type CountryCode,
@@ -202,14 +203,15 @@ export async function recordWithdrawal(
 }
 
 /**
- * Bump the user's withdrawal-verification step by 1 (capped at 4).
- * Called after each qualifying deposit clears (manual admin credit or
- * Paystack auto-credit). Withdrawals unlock at step 4.
+ * Bump the user's withdrawal-verification step by 1, capped at the country's
+ * number of verification deposits. Called after each qualifying deposit clears.
+ * Withdrawals unlock once the step reaches that count.
  */
 export async function advanceVerificationStep(userId: string): Promise<AppUser | null> {
   const current = await findUserById(userId)
   if (!current) return null
-  const next = Math.min(4, (current.verificationStep ?? 0) + 1)
+  const total = getVerificationSteps(current.country).length
+  const next = Math.min(total, (current.verificationStep ?? 0) + 1)
   if (next === current.verificationStep) return current
   const { data, error } = await supabaseServer()
     .from('users')

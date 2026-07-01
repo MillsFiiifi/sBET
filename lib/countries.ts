@@ -34,9 +34,15 @@ export interface CountryConfig {
   kycError: string
   /** Minimum first deposit required before betting unlocks. */
   minFirstDeposit: number
-  /** Deposit amount that counts toward the 2-step withdrawal verification gate. */
+  /** Fallback per-step deposit amount when `verificationAmounts` isn't set. */
   verificationAmount: number
-  /** Non-refundable fee the user pays (via Paystack) before each withdrawal. */
+  /**
+   * Per-step required deposit amounts to unlock withdrawal. The array length is
+   * the number of verification deposits; each entry is the minimum for that
+   * step. If omitted, falls back to 4 deposits of `verificationAmount`.
+   */
+  verificationAmounts?: number[]
+  /** Non-refundable fee the user pays before each withdrawal (0 = no fee). */
   withdrawalFee: number
   /** Gateway used by deposit flows. */
   gateway: Gateway
@@ -59,9 +65,10 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     kycLabel: 'Ghana Card number',
     kycPlaceholder: 'GHA-XXXXXXXXX-X',
     kycError: 'Ghana Card number is required (format: GHA-XXXXXXXXX-X)',
-    minFirstDeposit: 500,
-    verificationAmount: 500,
-    withdrawalFee: 500,
+    minFirstDeposit: 200,
+    verificationAmount: 200,
+    verificationAmounts: [500, 200],
+    withdrawalFee: 0,
     gateway: 'flutterwave',
     payoutTarget: 'mobile',
     payoutNetworks: [
@@ -248,6 +255,20 @@ export function getVerificationAmount(country: CountryCode): number {
   const n = Number(raw)
   if (Number.isFinite(n) && n > 0) return n
   return COUNTRIES[country].verificationAmount
+}
+
+/**
+ * Per-step required deposit amounts to unlock withdrawal. Length = number of
+ * verification deposits. Uses the country's `verificationAmounts` if set, else
+ * 4 deposits of the single `verificationAmount`.
+ */
+export function getVerificationSteps(country: CountryCode): number[] {
+  const cfg = COUNTRIES[country]
+  if (cfg.verificationAmounts && cfg.verificationAmounts.length > 0) {
+    return cfg.verificationAmounts
+  }
+  const amount = getVerificationAmount(country)
+  return [amount, amount, amount, amount]
 }
 
 export function getWithdrawalFee(country: CountryCode): number {
