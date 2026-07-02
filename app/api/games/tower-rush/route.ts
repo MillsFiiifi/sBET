@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server'
 import { createHash, createHmac, randomBytes, randomUUID } from 'crypto'
 import { creditBalance, debitBalance, findUserById } from '@/lib/users-store'
+import { checkRecentDeposit, DEPOSIT_REQUIRED_MESSAGE } from '@/lib/deposit-gate'
 import {
   findActiveRoundForUser,
   findRoundById,
@@ -73,6 +74,16 @@ export async function POST(request: Request) {
 
     const user = await findUserById(cleanUserId)
     if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
+
+    // 24h stake gate: require a deposit within the last 24 hours before a new
+    // round, so players can't keep recycling their existing balance.
+    const gate = await checkRecentDeposit(cleanUserId)
+    if (!gate.allowed) {
+      return NextResponse.json(
+        { error: DEPOSIT_REQUIRED_MESSAGE, code: 'deposit-required' },
+        { status: 402 },
+      )
+    }
 
     // Forfeit any abandoned open round (stake was already taken at its start).
     const existing = await findActiveRoundForUser(cleanUserId)

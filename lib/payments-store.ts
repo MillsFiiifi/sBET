@@ -101,6 +101,33 @@ export async function recordPayment(input: RecordPaymentInput): Promise<PaymentR
   return rowToRecord(data as PaymentRow)
 }
 
+/**
+ * Timestamp of the user's most recent *successful deposit*, or null if they've
+ * never had one clear. Used by the 24h stake gate so a player must keep
+ * topping up instead of recycling the same wallet balance forever.
+ *
+ * The `metadata->>'type'` filter isn't cleanly typed in supabase-js, so we pull
+ * the newest successful rows and filter for deposits in JS (a user's payment
+ * history stays small). We prefer `verified_at` — when the money actually
+ * cleared — and fall back to `created_at`.
+ */
+export async function latestSuccessfulDepositAt(userId: string): Promise<string | null> {
+  const { data, error } = await supabaseServer()
+    .from('payments')
+    .select('created_at, verified_at, metadata')
+    .eq('user_id', userId)
+    .eq('status', 'success')
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw new Error(`payments.latestDeposit: ${error.message}`)
+  for (const row of (data ?? []) as PaymentRow[]) {
+    const meta = row.metadata ?? {}
+    const type = typeof meta.type === 'string' ? meta.type : 'deposit'
+    if (type !== 'withdrawal') return row.verified_at ?? row.created_at
+  }
+  return null
+}
+
 export async function listPaymentsForUser(userId: string): Promise<PaymentRecord[]> {
   const { data, error } = await supabaseServer()
     .from('payments')

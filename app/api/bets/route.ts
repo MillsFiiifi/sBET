@@ -9,6 +9,7 @@ import {
   generateUniqueCode,
 } from '@/lib/bets-store'
 import { creditBalance, debitBalance, findUserById } from '@/lib/users-store'
+import { checkRecentDeposit, DEPOSIT_REQUIRED_MESSAGE } from '@/lib/deposit-gate'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import type { BetSelection, PlacedBet } from '@/lib/types'
 
@@ -92,6 +93,16 @@ export async function POST(request: Request) {
   const userBefore = await findUserById(cleanUserId)
   if (!userBefore) {
     return NextResponse.json({ error: 'user not found' }, { status: 404 })
+  }
+
+  // 24h stake gate: a player must have deposited within the last 24 hours to
+  // place a bet, so they can't just keep recycling their existing balance.
+  const gate = await checkRecentDeposit(cleanUserId)
+  if (!gate.allowed) {
+    return NextResponse.json(
+      { error: DEPOSIT_REQUIRED_MESSAGE, code: 'deposit-required' },
+      { status: 402 },
+    )
   }
 
   // Atomically pull the stake off the user's balance before persisting the
