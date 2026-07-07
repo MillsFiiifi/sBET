@@ -28,6 +28,7 @@ interface SubAdminRow {
   referrals: number
   withDeposit: number
   commissionsCount: number
+  referredWithdrawnByCurrency: Record<string, number>
 }
 
 interface PlatformTotals {
@@ -285,18 +286,19 @@ export default function AdminSubAdminsPage() {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
-          <div className="hidden md:grid grid-cols-[1fr_100px_80px_80px_100px_100px] gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border bg-secondary/40">
+          <div className="hidden md:grid grid-cols-[1fr_100px_70px_70px_100px_110px_100px] gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border bg-secondary/40">
             <span>Partner</span>
             <span>Code</span>
             <span className="text-right">Refs</span>
             <span className="text-right">Deps</span>
             <span className="text-right">Balance</span>
+            <span className="text-right">Withdrawn</span>
             <span>Actions</span>
           </div>
           <ul className="divide-y divide-border">
             {filtered.map((r) => (
               <li key={r.id} className="px-4 py-3">
-                <div className="md:grid md:grid-cols-[1fr_100px_80px_80px_100px_100px] md:gap-3 md:items-center flex flex-col gap-2">
+                <div className="md:grid md:grid-cols-[1fr_100px_70px_70px_100px_110px_100px] md:gap-3 md:items-center flex flex-col gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm truncate">{r.name}</p>
@@ -329,6 +331,20 @@ export default function AdminSubAdminsPage() {
                       <span className="text-muted-foreground font-normal">—</span>
                     ) : (
                       Object.entries(r.commissionBalances ?? {})
+                        .filter(([, v]) => v > 0)
+                        .map(([cur, amt]) => (
+                          <div key={cur}>
+                            {cur} {formatMoney(amt, cur)}
+                          </div>
+                        ))
+                    )}
+                  </div>
+                  <div className="md:text-right text-sm font-semibold tabular-nums space-y-0.5">
+                    <span className="md:hidden text-muted-foreground text-xs mr-1">Withdrawn:</span>
+                    {Object.entries(r.referredWithdrawnByCurrency ?? {}).filter(([, v]) => v > 0).length === 0 ? (
+                      <span className="text-muted-foreground font-normal">—</span>
+                    ) : (
+                      Object.entries(r.referredWithdrawnByCurrency ?? {})
                         .filter(([, v]) => v > 0)
                         .map(([cur, amt]) => (
                           <div key={cur}>

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { readSubAdmins } from '@/lib/sub-admins-store'
 import { readUsers, readCommissions } from '@/lib/users-store'
+import { listAllPayments } from '@/lib/payments-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,11 +14,24 @@ export async function GET() {
   if (!(await isValidSessionCookie(token))) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
-  const [subAdmins, users, commissions] = await Promise.all([
+  const [subAdmins, users, commissions, withdrawalPayments] = await Promise.all([
     readSubAdmins(),
     readUsers(),
     readCommissions(),
+    listAllPayments({ type: 'withdrawal', limit: 5000 }),
   ])
+
+  // Sum each sub-admin's referred users' *successful* withdrawals, per currency.
+  const subAdminByUserId = new Map(users.map((u) => [u.id, u.referredBySubAdminId]))
+  const withdrawnBySubAdmin: Record<string, Record<string, number>> = {}
+  for (const p of withdrawalPayments) {
+    if (p.status !== 'success' || !p.userId) continue
+    const said = subAdminByUserId.get(p.userId)
+    if (!said) continue
+    const cur = p.currency || 'GHS'
+    withdrawnBySubAdmin[said] ??= {}
+    withdrawnBySubAdmin[said][cur] = +(((withdrawnBySubAdmin[said][cur] ?? 0) + p.amount)).toFixed(2)
+  }
 
   // Enrich each sub-admin with referral / commission stats
   const enriched = subAdmins.map((sa) => {
@@ -40,6 +54,8 @@ export async function GET() {
       referrals: refs.length,
       withDeposit,
       commissionsCount: myCommissions.length,
+      // Total their referred users have successfully withdrawn, per currency.
+      referredWithdrawnByCurrency: withdrawnBySubAdmin[sa.id] ?? {},
     }
   })
 

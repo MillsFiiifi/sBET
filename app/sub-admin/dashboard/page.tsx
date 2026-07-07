@@ -151,6 +151,15 @@ export default function SubAdminDashboardPage() {
     }
   }
 
+  // Total successfully withdrawn by referred users, per currency.
+  const withdrawnByCurrency: Record<string, number> = {}
+  let withdrawnCount = 0
+  for (const w of data.withdrawals) {
+    if (w.status !== 'success') continue
+    withdrawnByCurrency[w.currency] = +(((withdrawnByCurrency[w.currency] ?? 0) + w.amount)).toFixed(2)
+    withdrawnCount++
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border sticky top-0 z-30">
@@ -259,7 +268,7 @@ export default function SubAdminDashboardPage() {
         </section>
 
         {/* KPI tiles */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Kpi
             icon={<Users className="w-4 h-4 text-primary" />}
             label="Referrals"
@@ -272,6 +281,12 @@ export default function SubAdminDashboardPage() {
             value={formatCurrencyMap(todayCommissions)}
             sub={`${todayCount} deposit${todayCount === 1 ? '' : 's'} today`}
             tone="good"
+          />
+          <Kpi
+            icon={<Banknote className="w-4 h-4 text-muted-foreground" />}
+            label="Users' withdrawals"
+            value={formatCurrencyMap(withdrawnByCurrency)}
+            sub={`${withdrawnCount} paid out`}
           />
         </section>
 
