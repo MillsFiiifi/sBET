@@ -751,16 +751,24 @@ function MePageInner() {
               .
             </p>
             <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-              Complete your verification with a{' '}
+              Complete your verification with{' '}
               <span className="font-semibold text-foreground">
+                {Math.max(1, VERIFICATION_TOTAL - currentVerificationStep)} deposit
+                {Math.max(1, VERIFICATION_TOTAL - currentVerificationStep) === 1 ? '' : 's'} of{' '}
                 {currency} {verificationAmount}
               </span>{' '}
-              deposit to increase your withdrawal limit to up to{' '}
+              to increase your withdrawal limit to up to{' '}
               <span className="font-semibold text-foreground">
                 {currency} {withdrawalMaxVerified.toLocaleString()}
               </span>{' '}
               per transaction.
             </p>
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Verification progress</span>
+              <span className="tabular-nums font-semibold">
+                {currentVerificationStep} / {VERIFICATION_TOTAL}
+              </span>
+            </div>
             <div className="mt-5 flex flex-col gap-2">
               <Button
                 type="button"
