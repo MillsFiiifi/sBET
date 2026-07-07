@@ -129,11 +129,12 @@ export async function POST(request: Request) {
     )
   }
 
-  // Unverified users get exactly ONE withdrawal. After that they must pay for
-  // verification (the qualifying deposits) before they can withdraw again.
-  // (A failed+refunded payout flips to 'failed' and no longer counts.)
+  // Unverified users get exactly ONE withdrawal ATTEMPT. After that they must
+  // pay for verification before they can withdraw again. We count every attempt
+  // (pending, success, AND failed) so a user can't keep retrying — one is all
+  // an unverified account gets, whatever the outcome.
   if (!verified) {
-    const priorWithdrawals = await countWithdrawals(userId)
+    const priorWithdrawals = await countWithdrawals(userId, ['pending', 'success', 'failed'])
     if (priorWithdrawals >= 1) {
       const verifyAmount = steps[step] ?? steps[0]
       const raisedCap = getWithdrawalMaxVerified(user.country)
