@@ -336,7 +336,8 @@ function MePageInner() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(data.error ?? `HTTP ${res.status}`)
+        const base = data.error ?? `HTTP ${res.status}`
+        throw new Error(data.detail ? `${base} — ${data.detail}` : base)
       }
       // 202 = processing. Mobile-money payouts are queued with Flutterwave and
       // the balance is already reserved (debited) — reflect the returned balance

@@ -182,7 +182,12 @@ export async function POST(request: Request) {
       }).catch((e) => console.error('[withdraw] failed-transfer ledger write failed:', e))
 
       return NextResponse.json(
-        { error: 'We could not start your payout. Please try again shortly.' },
+        {
+          error: 'We could not start your payout. Please try again shortly.',
+          // Surfaced so the operator can see exactly why Flutterwave declined
+          // (transfers not enabled, insufficient FLW balance, bad code, etc.).
+          detail: transfer.message ?? undefined,
+        },
         { status: 502 },
       )
     }
