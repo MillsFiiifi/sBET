@@ -205,7 +205,8 @@ export async function POST(request: Request) {
       network,
       phone,
       beneficiaryName: user.name,
-      narration: 'Prime Bet withdrawal',
+      // Payout description shown on the transfer = the user's own username.
+      narration: user.name,
     })
 
     if (!transfer.ok) {
