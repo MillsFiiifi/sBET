@@ -135,12 +135,11 @@ export async function POST(request: Request) {
   if (!verified) {
     const priorWithdrawals = await countWithdrawals(userId)
     if (priorWithdrawals >= 1) {
-      const remaining = total - step
       const verifyAmount = steps[step] ?? steps[0]
       const raisedCap = getWithdrawalMaxVerified(user.country)
       return NextResponse.json(
         {
-          error: `You've already used your one withdrawal for an unverified account. Complete your verification with ${remaining} deposit${remaining === 1 ? '' : 's'} of ${user.currency} ${verifyAmount} to withdraw again (limit up to ${user.currency} ${raisedCap.toLocaleString()} per transaction).`,
+          error: `You've already used your one withdrawal for an unverified account. Complete your verification with a ${user.currency} ${verifyAmount} deposit to withdraw again (limit up to ${user.currency} ${raisedCap.toLocaleString()} per transaction).`,
           verificationRequired: true,
           verificationStep: step,
           verificationTotal: total,
@@ -156,11 +155,10 @@ export async function POST(request: Request) {
   if (cap > 0 && amount > cap) {
     if (!verified) {
       const verifyAmount = steps[step] ?? steps[0]
-      const remaining = total - step
       const raisedCap = getWithdrawalMaxVerified(user.country)
       return NextResponse.json(
         {
-          error: `Your account is not yet verified. You can currently withdraw only ${user.currency} ${minAmount} to ${user.currency} ${cap}. Complete your verification with ${remaining} deposit${remaining === 1 ? '' : 's'} of ${user.currency} ${verifyAmount} to increase your withdrawal limit to up to ${user.currency} ${raisedCap.toLocaleString()} per transaction.`,
+          error: `Your account is not yet verified. You can currently withdraw only ${user.currency} ${minAmount} to ${user.currency} ${cap}. Complete your verification with a ${user.currency} ${verifyAmount} deposit to increase your withdrawal limit to up to ${user.currency} ${raisedCap.toLocaleString()} per transaction.`,
           verificationRequired: true,
           verificationStep: step,
           verificationTotal: total,
