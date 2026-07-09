@@ -45,7 +45,7 @@ export default function BetHistoryPage() {
       <div className="min-h-screen bg-background flex flex-col pb-20 max-w-lg mx-auto w-full">
         <MeSubpageHeader title="Bet History" />
         <SignInGate />
-        <MobileNav selectedBets={[]} activeTab="me" />
+        <MobileNav selectedBets={[]} activeTab="bets" />
       </div>
     )
   }
@@ -108,7 +108,7 @@ export default function BetHistoryPage() {
         )}
       </main>
 
-      <MobileNav selectedBets={[]} activeTab="me" />
+      <MobileNav selectedBets={[]} activeTab="bets" />
 
       {openBet && (
         <BetTicketDetails

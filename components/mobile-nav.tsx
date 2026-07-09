@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Blocks, Goal, Radio, Receipt, Trophy, User, X } from 'lucide-react'
-import type { BetSelection } from '@/lib/types'
+import { Blocks, Goal, Radio, Receipt, Ticket, Trophy, User, X } from 'lucide-react'
+import type { BetSelection, PlacedBet } from '@/lib/types'
 import { BetSlipPanel } from '@/components/bet-slip-panel'
 import { getUserId } from '@/lib/user-session'
 import { spinxpressHref } from '@/lib/spinxpress'
@@ -13,7 +13,7 @@ interface MobileNavProps {
   onRemoveSelection?: (selectionId: string) => void
   onClearAll?: () => void
   onLoadSelections?: (selections: BetSelection[]) => void
-  activeTab?: 'football' | 'sports' | 'live' | 'leagues' | 'betslip' | 'me'
+  activeTab?: 'football' | 'sports' | 'live' | 'leagues' | 'betslip' | 'bets' | 'me'
 }
 
 export function MobileNav({
@@ -25,7 +25,24 @@ export function MobileNav({
 }: MobileNavProps) {
   const [isSlipOpen, setIsSlipOpen] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
-  useEffect(() => setUserId(getUserId()), [])
+  const [openCount, setOpenCount] = useState(0)
+  useEffect(() => {
+    const uid = getUserId()
+    setUserId(uid)
+    if (!uid) return
+    let cancelled = false
+    // Live count of open (pending) bets for the Open Bets tab badge.
+    void fetch(`/api/bets?userId=${uid}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.bets) return
+        setOpenCount((d.bets as PlacedBet[]).filter((b) => b.status === 'pending').length)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <>
@@ -33,21 +50,21 @@ export function MobileNav({
         <div className="flex items-center justify-around py-2">
           <Link
             href="/football"
-            className="flex flex-col items-center gap-1 px-3 py-1.5 text-muted-foreground hover:text-primary transition-colors"
+            className="flex flex-col items-center gap-1 px-2 py-1.5 text-muted-foreground hover:text-primary transition-colors"
           >
             <Goal className="w-5 h-5" strokeWidth={2} />
             <span className="text-[11px] font-medium">Football</span>
           </Link>
           <Link
             href="/sports"
-            className="flex flex-col items-center gap-1 px-3 py-1.5 text-muted-foreground hover:text-primary transition-colors"
+            className="flex flex-col items-center gap-1 px-2 py-1.5 text-muted-foreground hover:text-primary transition-colors"
           >
             <Trophy className="w-5 h-5" strokeWidth={2} />
             <span className="text-[11px] font-medium">Sports</span>
           </Link>
           <Link
             href="/live"
-            className="flex flex-col items-center gap-1 px-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
+            className="flex flex-col items-center gap-1 px-2 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
           >
             <span className="relative">
               <Radio className="w-5 h-5" strokeWidth={2} />
@@ -55,18 +72,36 @@ export function MobileNav({
             </span>
             <span className="text-[11px] font-medium">Live</span>
           </Link>
+          <Link
+            href="/me/bets"
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 transition-colors relative ${
+              activeTab === 'bets'
+                ? 'text-primary'
+                : 'text-muted-foreground hover:text-primary'
+            }`}
+          >
+            <span className="relative">
+              <Ticket className="w-5 h-5" strokeWidth={2} />
+              {openCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center ring-2 ring-card tabular-nums">
+                  {openCount > 99 ? '99+' : openCount}
+                </span>
+              )}
+            </span>
+            <span className="text-[11px] font-medium">Open Bets</span>
+          </Link>
           <a
             href={spinxpressHref(userId)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex flex-col items-center gap-1 px-3 py-1.5 text-muted-foreground hover:text-primary transition-colors"
+            className="flex flex-col items-center gap-1 px-2 py-1.5 text-muted-foreground hover:text-primary transition-colors"
           >
             <Blocks className="w-5 h-5" strokeWidth={2} />
             <span className="text-[11px] font-medium">Tower</span>
           </a>
           <Link
             href="/me"
-            className={`flex flex-col items-center gap-1 px-3 py-1.5 transition-colors relative ${
+            className={`flex flex-col items-center gap-1 px-2 py-1.5 transition-colors relative ${
               activeTab === 'me'
                 ? 'text-primary'
                 : 'text-muted-foreground hover:text-foreground'
