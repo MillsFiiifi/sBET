@@ -19,6 +19,8 @@ export default function BetHistoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [openBet, setOpenBet] = useState<PlacedBet | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [settlingId, setSettlingId] = useState<string | null>(null)
 
   useEffect(() => {
     const uid = getUserId()
@@ -35,10 +37,34 @@ export default function BetHistoryPage() {
         setBets((data.bets ?? []) as PlacedBet[])
       })
       .catch((e) => !cancelled && setError(String(e)))
+    // Only admins get the settle (Won/Lost) controls on open bets.
+    void fetch('/api/admin/me', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { admin: false }))
+      .then((d) => !cancelled && setIsAdmin(d?.admin === true))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [])
+
+  const handleSettle = async (id: string, status: 'won' | 'lost') => {
+    setSettlingId(id)
+    setError(null)
+    try {
+      const res = await fetch(`/api/bets/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setBets((prev) => (prev ?? []).map((b) => (b.id === id ? (data.bet as PlacedBet) : b)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSettlingId(null)
+    }
+  }
 
   if (!userId) {
     return (
@@ -102,7 +128,14 @@ export default function BetHistoryPage() {
         ) : (
           <ul className="space-y-2">
             {filtered.map((b) => (
-              <BetRow key={b.id} bet={b} onOpen={() => setOpenBet(b)} />
+              <BetRow
+                key={b.id}
+                bet={b}
+                onOpen={() => setOpenBet(b)}
+                isAdmin={isAdmin}
+                settling={settlingId === b.id}
+                onSettle={(status) => handleSettle(b.id, status)}
+              />
             ))}
           </ul>
         )}
@@ -122,7 +155,19 @@ export default function BetHistoryPage() {
   )
 }
 
-function BetRow({ bet, onOpen }: { bet: PlacedBet; onOpen: () => void }) {
+function BetRow({
+  bet,
+  onOpen,
+  isAdmin = false,
+  settling = false,
+  onSettle,
+}: {
+  bet: PlacedBet
+  onOpen: () => void
+  isAdmin?: boolean
+  settling?: boolean
+  onSettle?: (status: 'won' | 'lost') => void
+}) {
   const isWon = bet.status === 'won'
   const isLost = bet.status === 'lost'
   const isPending = bet.status === 'pending'
@@ -182,6 +227,31 @@ function BetRow({ bet, onOpen }: { bet: PlacedBet; onOpen: () => void }) {
             View Bet
           </button>
         </div>
+
+        {/* Admin-only settle controls for open bets */}
+        {isAdmin && isPending && onSettle && (
+          <div className="mt-2 pt-2 border-t border-border/60 flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold shrink-0">
+              Settle
+            </span>
+            <button
+              type="button"
+              onClick={() => onSettle('won')}
+              disabled={settling}
+              className="flex-1 h-8 rounded-md bg-success/10 border border-success/40 text-success text-xs font-bold hover:bg-success/20 disabled:opacity-50 transition-colors"
+            >
+              {settling ? '…' : 'Won'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onSettle('lost')}
+              disabled={settling}
+              className="flex-1 h-8 rounded-md bg-destructive/10 border border-destructive/40 text-destructive text-xs font-bold hover:bg-destructive/20 disabled:opacity-50 transition-colors"
+            >
+              {settling ? '…' : 'Lost'}
+            </button>
+          </div>
+        )}
       </div>
     </li>
   )
