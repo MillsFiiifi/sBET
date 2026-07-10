@@ -204,6 +204,9 @@ function DepositForm() {
       saveUserSession(profile.id)
       setShowSuccess(true)
       setLoading(false)
+      // Briefly show the "Deposit successful" card, then take them back into
+      // the site (their account, now showing the new balance).
+      setTimeout(() => router.push('/me'), 2500)
     }
   }
 
