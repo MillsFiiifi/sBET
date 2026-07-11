@@ -82,7 +82,9 @@ const COUNTRIES: Record<CountryCode, CountryConfig> = {
     withdrawalMin: 1,
     withdrawalMaxUnverified: 20,
     withdrawalMaxVerified: 75000,
-    gateway: 'flutterwave',
+    // Manual mobile-money deposit — customer pays to 0509182654, operator/admin
+    // confirms and credits (Flutterwave paused while compliance is pending).
+    gateway: 'manual',
     payoutTarget: 'mobile',
     payoutNetworks: [
       { key: 'mtn', label: 'MTN MoMo' },

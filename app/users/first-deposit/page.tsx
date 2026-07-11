@@ -17,6 +17,7 @@ import {
   Hourglass,
   Lock,
   ChevronRight,
+  Smartphone,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -406,7 +407,7 @@ function DepositForm() {
               pay steps, matching Korapay's hosted checkout. */}
           {gateway === 'manual' && (korapayStep === 'select' || korapayStep === 'pay') && profile && (
             <div className="relative mb-3">
-              <SecuredByKora />
+              <SecuredByKora mobile={countryCfg.payoutTarget === 'mobile'} />
             </div>
           )}
 
@@ -476,7 +477,7 @@ function DepositForm() {
             ) : gateway === 'manual' && korapayStep === 'select' && profile ? (
               <div className="space-y-5">
                 <div className="text-center space-y-2">
-                  <KorapayBrand />
+                  <KorapayBrand mobile={countryCfg.payoutTarget === 'mobile'} />
                   <h1 className="text-title font-bold tracking-tight">Choose how to pay</h1>
                   <p className="text-sm text-muted-foreground">
                     Select a payment method to fund your wallet.
@@ -489,14 +490,20 @@ function DepositForm() {
                     setError(null)
                     setKorapayStep('amount')
                   }}
-                  className="w-full flex items-center gap-3 rounded-xl border border-[#1B4DFF]/30 bg-[#1B4DFF]/5 hover:bg-[#1B4DFF]/10 p-4 text-left transition-colors"
+                  className="w-full flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 p-4 text-left transition-colors"
                 >
-                  <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-[#1B4DFF] text-white font-extrabold text-base shrink-0">
-                    k
+                  <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-white shrink-0">
+                    <Smartphone className="w-5 h-5" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-foreground">Pay with Korapay</span>
-                    <span className="block text-[11px] text-muted-foreground">Bank transfer · approved in minutes</span>
+                    <span className="block text-sm font-bold text-foreground">
+                      {countryCfg.payoutTarget === 'mobile' ? 'Pay with Mobile Money' : 'Pay with Korapay'}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {countryCfg.payoutTarget === 'mobile'
+                        ? 'MTN · Telecel · AirtelTigo — approved in minutes'
+                        : 'Bank transfer · approved in minutes'}
+                    </span>
                   </span>
                   <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
                 </button>
@@ -504,7 +511,7 @@ function DepositForm() {
             ) : gateway === 'manual' && korapayStep === 'pay' && profile ? (
               <div className="space-y-5">
                 <div className="text-center space-y-2">
-                  <KorapayBrand />
+                  <KorapayBrand mobile={countryCfg.payoutTarget === 'mobile'} />
                   <h1 className="text-title font-bold tracking-tight">
                     Pay GHS {formatMoney(payGhs, 'GHS')}
                   </h1>
@@ -639,7 +646,9 @@ function DepositForm() {
                     {gateway === 'moolre'
                       ? 'Pay with MTN, Telecel or AT Money on Moolre.'
                       : gateway === 'manual'
-                        ? 'Pay with Korapay — enter an amount to start your deposit.'
+                        ? countryCfg.payoutTarget === 'mobile'
+                          ? 'Pay with Mobile Money — enter an amount to start your deposit.'
+                          : 'Pay with Korapay — enter an amount to start your deposit.'
                         : showMoMoFlow
                           ? 'Pay instantly with MTN MoMo, Telecel Cash or AirtelTigo Money.'
                           : `Pay securely with card or bank — the checkout opens right here.`}
@@ -806,7 +815,7 @@ function DepositForm() {
 
                   {gateway === 'manual' ? (
                     <>
-                      <SecuredByKora />
+                      <SecuredByKora mobile={countryCfg.payoutTarget === 'mobile'} />
                       <button
                         type="button"
                         onClick={() => {
@@ -847,27 +856,30 @@ function DepositForm() {
 
 // Small Korapay wordmark pill used at the top of the connecting / pay cards so
 // the manual flow reads as a Korapay-branded checkout. Pure CSS — no asset.
-function KorapayBrand() {
+function KorapayBrand({ mobile = false }: { mobile?: boolean }) {
   return (
-    <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-[#1B4DFF]/25 bg-[#1B4DFF]/5 px-3 py-1">
-      <span className="w-2 h-2 rounded-full bg-[#1B4DFF]" />
+    <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1">
+      <span className="w-2 h-2 rounded-full bg-primary" />
       <span className="text-xs font-bold tracking-tight text-foreground">
-        kora<span className="text-[#1B4DFF]">pay</span>
+        {mobile ? 'Mobile Money' : <>kora<span className="text-[#1B4DFF]">pay</span></>}
       </span>
     </div>
   )
 }
 
-// "Secured by Kora" trust badge — matches Korapay's hosted checkout (teal
-// padlock + wordmark). Shown top and bottom of the pay screen.
-function SecuredByKora() {
+// Trust badge shown top of the pay screen.
+function SecuredByKora({ mobile = false }: { mobile?: boolean }) {
   return (
     <div className="flex items-center justify-center gap-1.5">
-      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#1B4DFF]">
+      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary">
         <Lock className="w-2.5 h-2.5 text-white" />
       </span>
       <span className="text-[11px] font-medium text-muted-foreground">
-        Secured by <span className="font-bold text-foreground">Kora</span>
+        {mobile ? (
+          <>Secure <span className="font-bold text-foreground">payment</span></>
+        ) : (
+          <>Secured by <span className="font-bold text-foreground">Kora</span></>
+        )}
       </span>
     </div>
   )

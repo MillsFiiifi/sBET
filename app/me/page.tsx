@@ -392,6 +392,12 @@ function MePageInner() {
   const startVerificationDeposit = async () => {
     if (!profile) return
     setVerifyError(null)
+    // Manual gateway (GH): send them to the deposit page to pay the operator's
+    // mobile-money number — no automated charge to start here.
+    if (countryCfg.gateway === 'manual') {
+      window.location.href = `/users/first-deposit?userId=${profile.id}&purpose=verification`
+      return
+    }
     setVerifyLoading(true)
     try {
       const res = await fetch('/api/payments/flutterwave/start', {
