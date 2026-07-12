@@ -392,9 +392,9 @@ function MePageInner() {
   const startVerificationDeposit = async () => {
     if (!profile) return
     setVerifyError(null)
-    // Manual gateway (GH): send them to the deposit page to pay the operator's
-    // mobile-money number — no automated charge to start here.
-    if (countryCfg.gateway === 'manual') {
+    // Manual / Paystack (GH): the verification deposit runs through the deposit
+    // page's in-app checkout, not an automated charge started from here.
+    if (countryCfg.gateway === 'manual' || countryCfg.gateway === 'paystack') {
       window.location.href = `/users/first-deposit?userId=${profile.id}&purpose=verification`
       return
     }

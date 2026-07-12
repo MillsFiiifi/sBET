@@ -43,7 +43,7 @@ const ENDPOINTS = {
   paystack: {
     start: '/api/payments/paystack/momo/start',
     status: (ref: string) => `/api/payments/paystack/momo/status?reference=${encodeURIComponent(ref)}`,
-    validate: null as string | null,
+    validate: '/api/payments/paystack/momo/validate' as string | null,
   },
   flutterwave: {
     start: '/api/payments/flutterwave/momo/start',
