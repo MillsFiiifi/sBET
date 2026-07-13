@@ -83,6 +83,13 @@ export async function chargeMobileMoney(input: {
     console.error('[paystack] charge error', { status: res.status, response: raw.slice(0, 500) })
     throw new Error(body.message || raw.slice(0, 300) || `Paystack charge failed (HTTP ${res.status})`)
   }
+  // Log the exact charge outcome so we can see how Paystack wants the customer
+  // to authorize (auto-prompt vs "dial *170#" vs OTP).
+  console.log('[paystack] charge ok', {
+    reference: body.data.reference,
+    status: body.data.status,
+    display_text: body.data.display_text,
+  })
   return {
     reference: body.data.reference ?? input.reference,
     status: body.data.status ?? 'pending',
