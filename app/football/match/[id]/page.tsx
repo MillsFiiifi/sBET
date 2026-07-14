@@ -10,6 +10,7 @@ import { BetSlip } from '@/components/bet-slip'
 import { MobileNav } from '@/components/mobile-nav'
 import { MarketsPanel } from '@/components/markets-panel'
 import { TeamCrest } from '@/components/team-crest'
+import { LiveTracker } from '@/components/live-tracker'
 import { getBettingState } from '@/lib/match-betting'
 import {
   make1X2Selection,
@@ -192,6 +193,9 @@ export default function MatchDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* Live Tracker — animated pitch for in-play matches */}
+            {match.isLive && <LiveTracker match={match} />}
 
             {/* 1X2 — Match Result */}
             <div className="bg-card border border-border rounded-xl p-4 shadow-card">
