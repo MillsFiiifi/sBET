@@ -242,10 +242,10 @@ export function MobileMoneyForm({
   }
 
   if (phase.kind === 'awaiting') {
-    // Only show the on-screen OTP box when the gateway actually requested a code
-    // (authMode 'otp'). MTN Ghana etc. use a phone approval — no code to type.
-    const canOtp =
-      Boolean((endpoints as { validate?: string | null }).validate) && phase.needsOtp
+    // Show the code box whenever the gateway supports validating one — some
+    // networks (e.g. MTN GH on Flutterwave) send an SMS code to enter here;
+    // others authorize by phone prompt (the box notes that too).
+    const canOtp = Boolean((endpoints as { validate?: string | null }).validate)
     return (
       <AwaitingPrompt
         provider={PROVIDERS.find((p) => p.key === provider)!}

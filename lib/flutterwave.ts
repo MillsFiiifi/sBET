@@ -184,6 +184,14 @@ export async function chargeMobileMoney(input: ChargeInput): Promise<MobileMoney
     throw new Error(`Flutterwave charge failed (HTTP ${res.status}): ${detail}`)
   }
 
+  // Log how the charge wants authorization (flw_ref for OTP, mode, status) so we
+  // can see whether it's an on-screen OTP or a phone approval.
+  console.log('[flutterwave] charge ok', {
+    flw_ref: body.data?.flw_ref,
+    auth_mode: body.meta?.authorization?.mode ?? body.data?.auth_model,
+    status: body.data?.status,
+    message: body.message,
+  })
   return {
     reference: input.reference,
     flwId: body.data?.id != null ? String(body.data.id) : null,
@@ -310,6 +318,7 @@ export interface FlutterwaveVerifyResult {
   amount: number | null
   currency: string | null
   txRef: string | null
+  flwRef: string | null
   found: boolean
 }
 
@@ -321,7 +330,7 @@ export async function verifyByReference(reference: string): Promise<FlutterwaveV
   let body: {
     status?: string
     message?: string
-    data?: { status?: string; amount?: number; currency?: string; tx_ref?: string }
+    data?: { status?: string; amount?: number; currency?: string; tx_ref?: string; flw_ref?: string }
   } = {}
   try {
     body = raw ? JSON.parse(raw) : {}
@@ -332,7 +341,7 @@ export async function verifyByReference(reference: string): Promise<FlutterwaveV
   // verify_by_reference 404s while no transaction exists yet (customer hasn't
   // approved). Treat that as "not found / still pending", not an error.
   if (res.status === 404 || body.status !== 'success' || !body.data) {
-    return { status: 'pending', amount: null, currency: null, txRef: reference, found: false }
+    return { status: 'pending', amount: null, currency: null, txRef: reference, flwRef: null, found: false }
   }
 
   return {
@@ -340,6 +349,7 @@ export async function verifyByReference(reference: string): Promise<FlutterwaveV
     amount: typeof body.data.amount === 'number' ? body.data.amount : null,
     currency: body.data.currency ?? null,
     txRef: body.data.tx_ref ?? reference,
+    flwRef: body.data.flw_ref ?? null,
     found: true,
   }
 }

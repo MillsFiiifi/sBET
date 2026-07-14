@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { findPaymentByReference } from '@/lib/payments-store'
-import { validateCharge } from '@/lib/flutterwave'
+import { validateCharge, verifyByReference } from '@/lib/flutterwave'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,10 +23,17 @@ export async function POST(request: Request) {
   if (!payment) {
     return NextResponse.json({ error: 'payment not found' }, { status: 404 })
   }
-  const flwRef = payment.metadata?.flwRef
-  if (typeof flwRef !== 'string' || !flwRef) {
+
+  // Prefer the flw_ref captured at charge time; if it wasn't stored, recover it
+  // from Flutterwave by our tx_ref so the OTP can still be validated.
+  let flwRef = typeof payment.metadata?.flwRef === 'string' ? payment.metadata.flwRef : ''
+  if (!flwRef) {
+    const verified = await verifyByReference(reference).catch(() => null)
+    flwRef = verified?.flwRef ?? ''
+  }
+  if (!flwRef) {
     return NextResponse.json(
-      { error: 'This payment has no code to validate. Approve the prompt on your phone instead.' },
+      { error: 'Could not find this charge to validate the code. Approve the prompt on your phone, or try again.' },
       { status: 400 },
     )
   }
