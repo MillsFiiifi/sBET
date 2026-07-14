@@ -33,7 +33,10 @@ export function LiveTracker({ match }: { match: Match }) {
   const away = match.awayTeam
   const hs = match.homeScore ?? 0
   const as = match.awayScore ?? 0
-  const { clock, half, isBreak } = parseMinute(match.minute ?? '')
+  const live = !!match.isLive
+  const { clock, half, isBreak: brk } = parseMinute(match.minute ?? '')
+  // Only run the live overlay (ball/momentum/clock) when the match is in play.
+  const isBreak = brk || !live
 
   // Home share of momentum (0..100), nudged toward whoever is leading.
   const bias = 50 + Math.max(-16, Math.min(16, (hs - as) * 8))
@@ -65,12 +68,18 @@ export function LiveTracker({ match }: { match: Match }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4 text-primary" fill="currentColor" />
-          <h2 className="font-bold text-sm">Live Tracker</h2>
+          <h2 className="font-bold text-sm">{live ? 'Live Tracker' : 'Match Tracker'}</h2>
         </div>
-        <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-live px-1.5 py-0.5 rounded-full border border-live/30 bg-live/10">
-          <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse" />
-          Live
-        </span>
+        {live ? (
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-live px-1.5 py-0.5 rounded-full border border-live/30 bg-live/10">
+            <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse" />
+            Live
+          </span>
+        ) : (
+          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground px-1.5 py-0.5 rounded-full border border-border bg-secondary/60">
+            Pre-match
+          </span>
+        )}
       </div>
 
       <div
@@ -94,13 +103,15 @@ export function LiveTracker({ match }: { match: Match }) {
         <div className="absolute top-1/2 -translate-y-1/2 right-1 w-2 h-[22%] border-2 border-r-0 border-white/40" />
 
         {/* Score + clock chips */}
-        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/55 backdrop-blur-sm rounded-full pl-2 pr-2.5 py-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse" />
-          <span className="text-[11px] font-bold text-white tabular-nums">{clock}</span>
-          <span className="text-[10px] text-white/70">{half}</span>
-        </div>
+        {live && (
+          <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/55 backdrop-blur-sm rounded-full pl-2 pr-2.5 py-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse" />
+            <span className="text-[11px] font-bold text-white tabular-nums">{clock}</span>
+            <span className="text-[10px] text-white/70">{half}</span>
+          </div>
+        )}
         <div className="absolute top-2.5 right-2.5 bg-black/60 rounded-md px-2 py-0.5 text-white text-sm font-extrabold tabular-nums">
-          {hs} - {as}
+          {live ? `${hs} - ${as}` : 'vs'}
         </div>
 
         {/* Ball — glides toward the attacking half */}
@@ -137,14 +148,16 @@ export function LiveTracker({ match }: { match: Match }) {
         {isBreak && (
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="bg-black/60 rounded-full px-3 py-1 text-xs font-bold text-white">
-              {half}
+              {live ? half : match.startTime ? `Kick-off ${match.startTime}` : 'Awaiting kick-off'}
             </span>
           </div>
         )}
       </div>
 
       <p className="mt-2 text-[10px] text-muted-foreground text-center">
-        Visual tracker · momentum is indicative, not live event data.
+        {live
+          ? 'Visual tracker · momentum is indicative, not live event data.'
+          : 'Visual tracker · updates once the match kicks off.'}
       </p>
     </div>
   )

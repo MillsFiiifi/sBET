@@ -194,8 +194,9 @@ export default function MatchDetailPage() {
               )}
             </div>
 
-            {/* Live Tracker — animated pitch for in-play matches */}
-            {match.isLive && <LiveTracker match={match} />}
+            {/* Live Tracker — animated pitch for in-play matches (and custom
+                matches, which always show the pitch even before kick-off). */}
+            {(match.isLive || match.custom) && <LiveTracker match={match} />}
 
             {/* 1X2 — Match Result */}
             <div className="bg-card border border-border rounded-xl p-4 shadow-card">
