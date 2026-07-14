@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   Lock,
+  Zap,
 } from 'lucide-react'
 import type { BetSelection, PlacedBet } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useBets } from '@/hooks/use-bets'
+import { computeCashout } from '@/lib/cashout'
 import { getUserId } from '@/lib/user-session'
 import { getBettingState } from '@/lib/match-betting'
 import { hydrateLegacySelection } from '@/lib/bet-slip-utils'
@@ -87,7 +89,7 @@ export function BetSlipPanel({
   const pendingIdsRef = useRef<Set<string>>(new Set())
   const [celebrationBet, setCelebrationBet] = useState<PlacedBet | null>(null)
 
-  const { bets, placeBet, settleBet, removeBet, lookupCode, loading, error, errorCode, lastErrorCodeRef } =
+  const { bets, placeBet, settleBet, removeBet, lookupCode, cashOut, loading, error, errorCode, lastErrorCodeRef } =
     useBets()
 
   // The 24h deposit gate (server code 'deposit-required') pops a modal prompting
@@ -553,6 +555,9 @@ export function BetSlipPanel({
           allBets={bets}
           onSettle={(id, status) => void settleBet(id, status)}
           onDelete={(id) => void removeBet(id)}
+          onCashOut={async (id) => {
+            await cashOut(id)
+          }}
         />
       )}
 
@@ -600,11 +605,30 @@ interface BetHistoryProps {
   allBets: PlacedBet[]
   onSettle: (id: string, status: 'won' | 'lost') => void
   onDelete: (id: string) => void
+  onCashOut?: (id: string) => Promise<void> | void
 }
 
-function BetHistory({ mode, bets, allBets, onSettle, onDelete }: BetHistoryProps) {
+function BetHistory({ mode, bets, allBets, onSettle, onDelete, onCashOut }: BetHistoryProps) {
   const [filter, setFilter] = useState<SettledFilter>('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [cashingId, setCashingId] = useState<string | null>(null)
+  // Tick so the live cash-out value refreshes on the open tab.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (mode !== 'open') return
+    const t = setInterval(() => setNow(Date.now()), 15_000)
+    return () => clearInterval(t)
+  }, [mode])
+
+  const handleCashOut = async (id: string) => {
+    if (!onCashOut) return
+    setCashingId(id)
+    try {
+      await onCashOut(id)
+    } finally {
+      setCashingId(null)
+    }
+  }
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -713,6 +737,9 @@ function BetHistory({ mode, bets, allBets, onSettle, onDelete }: BetHistoryProps
               onToggle={() => toggleExpand(bet.id)}
               onSettle={(status) => onSettle(bet.id, status)}
               onDelete={() => onDelete(bet.id)}
+              cashoutValue={mode === 'open' ? computeCashout(bet, now) : 0}
+              cashingOut={cashingId === bet.id}
+              onCashOut={onCashOut ? () => void handleCashOut(bet.id) : undefined}
             />
           ))}
         </div>
@@ -780,9 +807,21 @@ interface BetCardProps {
   onToggle: () => void
   onSettle: (status: 'won' | 'lost') => void
   onDelete: () => void
+  cashoutValue?: number
+  cashingOut?: boolean
+  onCashOut?: () => void
 }
 
-function BetCard({ bet, expanded, onToggle, onSettle, onDelete }: BetCardProps) {
+function BetCard({
+  bet,
+  expanded,
+  onToggle,
+  onSettle,
+  onDelete,
+  cashoutValue = 0,
+  cashingOut = false,
+  onCashOut,
+}: BetCardProps) {
   const [copied, setCopied] = useState(false)
   const [ticketOpen, setTicketOpen] = useState(false)
 
@@ -842,6 +881,30 @@ function BetCard({ bet, expanded, onToggle, onSettle, onDelete }: BetCardProps) 
           )}
         </div>
       </button>
+
+      {/* Cash Out — running bets only */}
+      {bet.status === 'pending' && onCashOut && cashoutValue > 0 && (
+        <div className="px-3 pb-3">
+          <button
+            type="button"
+            onClick={onCashOut}
+            disabled={cashingOut}
+            className="w-full h-11 rounded-xl bg-gradient-to-b from-amber-400 to-amber-500 text-black font-extrabold flex items-center justify-center gap-2 shadow-md active:scale-[0.99] transition-transform disabled:opacity-60"
+          >
+            {cashingOut ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <Zap className="w-4 h-4" fill="currentColor" />
+                Cash Out
+                <span className="px-2 py-0.5 rounded-md bg-black/10 text-sm tabular-nums">
+                  {bet.currency} {cashoutValue.toFixed(2)}
+                </span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {expanded && (
         <div className="px-3 pb-3 space-y-3 border-t border-border/50">

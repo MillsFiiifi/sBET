@@ -98,6 +98,29 @@ export function useBets(options: UseBetsOptions = {}) {
     [],
   )
 
+  const cashOut = useCallback(
+    async (id: string): Promise<{ bet: PlacedBet; cashout: number } | null> => {
+      setError(null)
+      try {
+        const userId = options.scope && options.scope !== 'admin' ? options.scope : getUserId()
+        const res = await fetch(`/api/bets/${id}/cashout`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+        const bet = data.bet as PlacedBet
+        setBets((prev) => prev.map((b) => (b.id === id ? bet : b)))
+        return { bet, cashout: data.cashout as number }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+        return null
+      }
+    },
+    [options.scope],
+  )
+
   const lookupCode = useCallback(async (code: string): Promise<PlacedBet | null> => {
     setError(null)
     try {
@@ -146,5 +169,5 @@ export function useBets(options: UseBetsOptions = {}) {
     return () => clearInterval(t)
   }, [options.scope, refresh])
 
-  return { bets, loading, error, errorCode, lastErrorCodeRef, refresh, placeBet, settleBet, removeBet, lookupCode }
+  return { bets, loading, error, errorCode, lastErrorCodeRef, refresh, placeBet, settleBet, removeBet, lookupCode, cashOut }
 }
