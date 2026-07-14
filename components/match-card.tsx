@@ -86,12 +86,12 @@ export function MatchCard({ match, selections, onToggleSelection }: MatchCardPro
           <TeamRow
             name={match.homeTeam}
             url={match.homeFlagUrl}
-            score={match.isLive ? match.homeScore : undefined}
+            score={match.isLive ? (match.homeScore ?? 0) : undefined}
           />
           <TeamRow
             name={match.awayTeam}
             url={match.awayFlagUrl}
-            score={match.isLive ? match.awayScore : undefined}
+            score={match.isLive ? (match.awayScore ?? 0) : undefined}
           />
         </div>
 
