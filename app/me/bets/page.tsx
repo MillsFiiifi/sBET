@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Receipt, Trophy, ChevronRight, Zap, Loader2 } from 'lucide-react'
+import { Receipt, Trophy, ChevronRight, Zap, Loader2, Radio } from 'lucide-react'
 import { MobileNav } from '@/components/mobile-nav'
 import { MeSubpageHeader } from '@/components/me-subpage-header'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,7 +10,7 @@ import { BetTicketDetails } from '@/components/bet-ticket-details'
 import { getUserId, getUserName } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
 import { computeCashout } from '@/lib/cashout'
-import type { PlacedBet } from '@/lib/types'
+import type { PlacedBet, Match } from '@/lib/types'
 
 type Filter = 'all' | 'pending' | 'won' | 'lost'
 
@@ -28,6 +28,29 @@ export default function BetHistoryPage() {
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 15_000)
     return () => clearInterval(t)
+  }, [])
+
+  // Current match states (keyed by id) so open bets can show live status/score,
+  // since the selections stored on the bet are a placement-time snapshot.
+  const [liveMatches, setLiveMatches] = useState<Record<string, Match>>({})
+  useEffect(() => {
+    let cancelled = false
+    const load = () =>
+      fetch('/api/matches', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d?.matches) return
+          const map: Record<string, Match> = {}
+          for (const m of d.matches as Match[]) map[m.id] = m
+          setLiveMatches(map)
+        })
+        .catch(() => {})
+    void load()
+    const t = setInterval(load, 20_000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
   }, [])
 
   const handleCashOut = async (id: string) => {
@@ -165,6 +188,7 @@ export default function BetHistoryPage() {
                 cashoutValue={computeCashout(b, now)}
                 cashingOut={cashingId === b.id}
                 onCashOut={() => handleCashOut(b.id)}
+                liveMatches={liveMatches}
               />
             ))}
           </ul>
@@ -194,6 +218,7 @@ function BetRow({
   cashoutValue = 0,
   cashingOut = false,
   onCashOut,
+  liveMatches = {},
 }: {
   bet: PlacedBet
   onOpen: () => void
@@ -203,6 +228,7 @@ function BetRow({
   cashoutValue?: number
   cashingOut?: boolean
   onCashOut?: () => void
+  liveMatches?: Record<string, Match>
 }) {
   const isWon = bet.status === 'won'
   const isLost = bet.status === 'lost'
@@ -246,23 +272,38 @@ function BetRow({
 
         {/* Selections */}
         <div className="mt-2.5 space-y-2">
-          {bet.selections.map((s) => (
-            <div key={s.id} className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-foreground truncate">{s.outcomeLabel}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{s.marketLabel}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    {s.match.homeTeam} vs {s.match.awayTeam}
-                  </p>
+          {bet.selections.map((s) => {
+            const lm = liveMatches[s.matchId]
+            const live = !!lm?.isLive
+            return (
+              <div key={s.id} className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground truncate">{s.outcomeLabel}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{s.marketLabel}</p>
+                    <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+                      <span className="truncate">
+                        {s.match.homeTeam} vs {s.match.awayTeam}
+                      </span>
+                      {live && (
+                        <span className="inline-flex items-center gap-1 shrink-0 text-live font-bold">
+                          <Radio className="w-2.5 h-2.5" />
+                          {lm?.minute}
+                          <span className="text-foreground tabular-nums">
+                            {lm?.homeScore ?? 0}-{lm?.awayScore ?? 0}
+                          </span>
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </div>
+                <span className="text-sm font-bold text-success tabular-nums shrink-0">
+                  {s.odds.toFixed(2)}
+                </span>
               </div>
-              <span className="text-sm font-bold text-success tabular-nums shrink-0">
-                {s.odds.toFixed(2)}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Stake / To Return */}
