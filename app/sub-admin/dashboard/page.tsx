@@ -88,7 +88,10 @@ export default function SubAdminDashboardPage() {
         router.push('/sub-admin/login?next=/sub-admin/dashboard')
         return
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? `HTTP ${res.status}`)
+      }
       setData((await res.json()) as MeResponse)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

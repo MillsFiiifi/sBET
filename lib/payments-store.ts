@@ -157,13 +157,25 @@ export async function countWithdrawals(
  */
 export async function listWithdrawalsForUsers(userIds: string[]): Promise<PaymentRecord[]> {
   if (userIds.length === 0) return []
-  const { data, error } = await supabaseServer()
-    .from('payments')
-    .select('*')
-    .in('user_id', userIds)
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`payments.listWithdrawalsForUsers: ${error.message}`)
-  return ((data ?? []) as PaymentRow[]).map(rowToRecord).filter((p) => p.type === 'withdrawal')
+  // Batch the id list so a partner with many referred users can't produce a
+  // query that's too large for the `in(...)` filter.
+  const CHUNK = 100
+  const out: PaymentRecord[] = []
+  for (let i = 0; i < userIds.length; i += CHUNK) {
+    const chunk = userIds.slice(i, i + CHUNK)
+    const { data, error } = await supabaseServer()
+      .from('payments')
+      .select('*')
+      .in('user_id', chunk)
+      .order('created_at', { ascending: false })
+    if (error) throw new Error(`payments.listWithdrawalsForUsers: ${error.message}`)
+    for (const row of (data ?? []) as PaymentRow[]) {
+      const rec = rowToRecord(row)
+      if (rec.type === 'withdrawal') out.push(rec)
+    }
+  }
+  out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  return out
 }
 
 export async function listPaymentsForUser(userId: string): Promise<PaymentRecord[]> {
