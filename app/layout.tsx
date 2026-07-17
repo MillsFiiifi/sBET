@@ -53,8 +53,23 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Apply the saved theme + accent before first paint to avoid a flash.
+  const themeScript = `(function(){try{
+    var raw=localStorage.getItem('sbet_settings'); if(!raw)return;
+    var s=JSON.parse(raw); var root=document.documentElement;
+    var t=s.theme==='light'?'light':'dark';
+    root.classList.remove('light','dark'); root.classList.add(t);
+    var A={blue:['#2f7bff','#ffffff'],orange:['#f97316','#0b1220'],green:['#22c55e','#0b1220'],purple:['#a855f7','#ffffff'],red:['#ef4444','#ffffff'],pink:['#ec4899','#ffffff']};
+    var a=A[s.accent]||A.blue; var set=function(k,v){root.style.setProperty(k,v)};
+    set('--primary',a[0]);set('--primary-foreground',a[1]);set('--accent',a[0]);set('--accent-foreground',a[1]);set('--ring',a[0]);
+    set('--sidebar-primary',a[0]);set('--sidebar-primary-foreground',a[1]);set('--sidebar-accent',a[0]);set('--sidebar-accent-foreground',a[1]);set('--sidebar-ring',a[0]);
+  }catch(e){}})();`
+
   return (
     <html lang="en" className={`dark ${inter.variable} ${cinzel.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="antialiased bg-background text-foreground">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}

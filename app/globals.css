@@ -56,8 +56,7 @@
  *   Deep Navy     : #0b1220 (background) Near-white: #e8eef7 (foreground)
  */
 :root,
-.dark,
-:root:not(.light) {
+.dark {
   color-scheme: dark;
   --background: #0b1220;
   --foreground: #e8eef7;
@@ -90,6 +89,42 @@
   --sidebar-accent: #38bdf8;
   --sidebar-accent-foreground: #06111f;
   --sidebar-border: #26324c;
+  --sidebar-ring: #2f7bff;
+}
+
+/* Light theme — applied when <html> has the `light` class (Settings toggle). */
+.light {
+  color-scheme: light;
+  --background: #f4f6fb;
+  --foreground: #0b1220;
+  --card: #ffffff;
+  --card-foreground: #0b1220;
+  --popover: #ffffff;
+  --popover-foreground: #0b1220;
+  --primary: #2f7bff;
+  --primary-foreground: #ffffff;
+  --secondary: #e7edf6;
+  --secondary-foreground: #0b1220;
+  --muted: #e2e8f0;
+  --muted-foreground: #55627a;
+  --accent: #2f7bff;
+  --accent-foreground: #ffffff;
+  --destructive: #e11d48;
+  --border: #d4dced;
+  --input: #ffffff;
+  --ring: #2f7bff;
+  --chart-1: #2f7bff;
+  --chart-2: #38bdf8;
+  --chart-3: #60a5fa;
+  --chart-4: #818cf8;
+  --chart-5: #22d3ee;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b1220;
+  --sidebar-primary: #2f7bff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2f7bff;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #d4dced;
   --sidebar-ring: #2f7bff;
 }
 

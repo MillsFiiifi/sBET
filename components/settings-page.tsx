@@ -1,25 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import {
+  ACCENTS,
+  applySettings,
+  getSettings,
+  saveSettings,
+  type AppSettings,
+  type ThemeMode,
+} from '@/lib/settings'
 
 interface SettingsPageProps {
   onClose: () => void
 }
 
-const THEMES = [
-  { id: 'dark', name: 'Dark Theme', colors: '#1a1f28' },
-  { id: 'light', name: 'Light Theme', colors: '#ffffff' },
+const THEMES: { id: ThemeMode; name: string }[] = [
+  { id: 'dark', name: 'Dark Theme' },
+  { id: 'light', name: 'Light Theme' },
 ]
 
-const COLORS = [
-  { id: 'blue', name: 'Blue', value: '#0066cc' },
-  { id: 'orange', name: 'Orange', value: '#ff6b35' },
-  { id: 'green', name: 'Green', value: '#00d4ff' },
-  { id: 'purple', name: 'Purple', value: '#a78bfa' },
-  { id: 'red', name: 'Red', value: '#ff4444' },
-  { id: 'pink', name: 'Pink', value: '#f97316' },
-]
+const COLORS = Object.entries(ACCENTS).map(([id, c]) => ({ id, name: c.label, value: c.value }))
 
 const LANGUAGES = [
   { id: 'en', name: 'English', flag: '🇺🇸' },
@@ -29,12 +30,12 @@ const LANGUAGES = [
 ]
 
 const SPORTS_LIST = [
-  { id: 'soccer', name: 'Soccer', selected: true },
-  { id: 'basketball', name: 'Basketball', selected: true },
-  { id: 'tennis', name: 'Tennis', selected: true },
-  { id: 'hockey', name: 'Ice Hockey', selected: false },
-  { id: 'american-football', name: 'American Football', selected: false },
-  { id: 'baseball', name: 'Baseball', selected: false },
+  { id: 'soccer', name: 'Soccer' },
+  { id: 'basketball', name: 'Basketball' },
+  { id: 'tennis', name: 'Tennis' },
+  { id: 'hockey', name: 'Ice Hockey' },
+  { id: 'american-football', name: 'American Football' },
+  { id: 'baseball', name: 'Baseball' },
 ]
 
 const ODDS_FORMATS = [
@@ -44,20 +45,41 @@ const ODDS_FORMATS = [
 ]
 
 export function SettingsPage({ onClose }: SettingsPageProps) {
-  const [selectedTheme, setSelectedTheme] = useState('dark')
-  const [selectedColor, setSelectedColor] = useState('orange')
-  const [selectedLanguage, setSelectedLanguage] = useState('en')
-  const [selectedOdds, setSelectedOdds] = useState('decimal')
-  const [selectedSports, setSelectedSports] = useState(
-    SPORTS_LIST.filter((s) => s.selected).map((s) => s.id)
-  )
+  const [settings, setSettings] = useState<AppSettings>(getSettings)
+  // Snapshot of what was saved when the modal opened, to revert on Cancel.
+  const savedRef = useRef<AppSettings>(getSettings())
 
-  const toggleSport = (sportId: string) => {
-    setSelectedSports((prev) =>
-      prev.includes(sportId)
-        ? prev.filter((id) => id !== sportId)
-        : [...prev, sportId]
-    )
+  useEffect(() => {
+    const current = getSettings()
+    savedRef.current = current
+    setSettings(current)
+  }, [])
+
+  // Live preview: apply theme + accent to the page as the user changes them.
+  const patch = (p: Partial<AppSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...p }
+      applySettings(next)
+      return next
+    })
+  }
+
+  const toggleSport = (sportId: string) =>
+    patch({
+      sports: settings.sports.includes(sportId)
+        ? settings.sports.filter((id) => id !== sportId)
+        : [...settings.sports, sportId],
+    })
+
+  const handleSave = () => {
+    saveSettings(settings)
+    applySettings(settings)
+    onClose()
+  }
+
+  const handleCancel = () => {
+    applySettings(savedRef.current) // revert preview
+    onClose()
   }
 
   return (
@@ -65,11 +87,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       <div className="bg-card border border-border rounded-lg max-w-2xl w-full mx-4 my-8">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-xl font-bold text-foreground">Settings & Customization</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-secondary rounded-lg transition-colors"
-          >
+          <h2 className="text-xl font-bold text-foreground">Settings &amp; Customization</h2>
+          <button onClick={handleCancel} className="p-2 hover:bg-secondary rounded-lg transition-colors">
             <X className="w-5 h-5 text-foreground" />
           </button>
         </div>
@@ -80,19 +99,17 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             {/* Interface Theme */}
             <section>
               <h3 className="text-lg font-semibold text-foreground mb-4">Interface</h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-3 block">
-                    Main Theme
-                  </label>
+                  <label className="text-sm font-medium text-foreground mb-3 block">Main Theme</label>
                   <div className="grid grid-cols-2 gap-3">
                     {THEMES.map((theme) => (
                       <button
                         key={theme.id}
-                        onClick={() => setSelectedTheme(theme.id)}
+                        onClick={() => patch({ theme: theme.id })}
                         className={`p-3 rounded-lg border-2 transition-colors text-left ${
-                          selectedTheme === theme.id
-                            ? 'border-accent bg-accent bg-opacity-10'
+                          settings.theme === theme.id
+                            ? 'border-accent bg-accent/10'
                             : 'border-border hover:border-accent'
                         }`}
                       >
@@ -103,27 +120,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-3 block">
-                    Secondary colors
-                  </label>
+                  <label className="text-sm font-medium text-foreground mb-3 block">Accent color</label>
                   <div className="grid grid-cols-3 gap-3">
                     {COLORS.map((color) => (
                       <button
                         key={color.id}
-                        onClick={() => setSelectedColor(color.id)}
+                        onClick={() => patch({ accent: color.id })}
                         className={`p-4 rounded-lg border-2 transition-colors ${
-                          selectedColor === color.id
-                            ? 'border-accent'
-                            : 'border-border'
+                          settings.accent === color.id ? 'border-accent' : 'border-border hover:border-accent/50'
                         }`}
                       >
-                        <div
-                          className="w-full h-8 rounded mb-2"
-                          style={{ backgroundColor: color.value }}
-                        />
-                        <p className="text-xs font-medium text-foreground text-center">
-                          {color.name}
-                        </p>
+                        <div className="w-full h-8 rounded mb-2" style={{ backgroundColor: color.value }} />
+                        <p className="text-xs font-medium text-foreground text-center">{color.name}</p>
                       </button>
                     ))}
                   </div>
@@ -133,46 +141,38 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
             {/* Language & Time */}
             <section>
-              <h3 className="text-lg font-semibold text-foreground mb-4">Language & Location</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Language &amp; Location</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Language
-                  </label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Language</label>
                   <select
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                    value={settings.language}
+                    onChange={(e) => patch({ language: e.target.value })}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     {LANGUAGES.map((lang) => (
-                      <option key={lang.id} value={lang.id}>
-                        {lang.flag} {lang.name}
-                      </option>
+                      <option key={lang.id} value={lang.id}>{lang.flag} {lang.name}</option>
                     ))}
                   </select>
                 </div>
-
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Date Format
-                  </label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Date Format</label>
                   <select
-                    defaultValue="dmy"
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                    value={settings.dateFormat}
+                    onChange={(e) => patch({ dateFormat: e.target.value })}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="mdy">MM/DD/YYYY</option>
                     <option value="dmy">DD/MM/YYYY</option>
                     <option value="ymd">YYYY-MM-DD</option>
                   </select>
                 </div>
-
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    Time Zone
-                  </label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Time Zone</label>
                   <select
-                    defaultValue="utc"
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                    value={settings.timeZone}
+                    onChange={(e) => patch({ timeZone: e.target.value })}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="utc">GMT+0 (UTC)</option>
                     <option value="est">GMT-5 (EST)</option>
@@ -187,17 +187,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             <section>
               <h3 className="text-lg font-semibold text-foreground mb-4">Betting Preferences</h3>
               <div>
-                <label className="text-sm font-medium text-foreground mb-3 block">
-                  Odds Format
-                </label>
+                <label className="text-sm font-medium text-foreground mb-3 block">Odds Format</label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {ODDS_FORMATS.map((format) => (
                     <button
                       key={format.id}
-                      onClick={() => setSelectedOdds(format.id)}
+                      onClick={() => patch({ oddsFormat: format.id })}
                       className={`p-4 rounded-lg border-2 transition-colors text-left ${
-                        selectedOdds === format.id
-                          ? 'border-accent bg-accent bg-opacity-10'
+                        settings.oddsFormat === format.id
+                          ? 'border-accent bg-accent/10'
                           : 'border-border hover:border-accent'
                       }`}
                     >
@@ -220,43 +218,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   >
                     <input
                       type="checkbox"
-                      checked={selectedSports.includes(sport.id)}
+                      checked={settings.sports.includes(sport.id)}
                       onChange={() => toggleSport(sport.id)}
-                      className="w-4 h-4 rounded border border-border checked:bg-accent"
+                      className="w-4 h-4 accent-primary"
                     />
                     <span className="text-foreground">{sport.name}</span>
                   </label>
                 ))}
-              </div>
-            </section>
-
-            {/* Display Options */}
-            <section>
-              <h3 className="text-lg font-semibold text-foreground mb-4">Display Options</h3>
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="w-4 h-4 rounded border border-border checked:bg-accent"
-                  />
-                  <span className="text-foreground">Show odds format</span>
-                </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="w-4 h-4 rounded border border-border checked:bg-accent"
-                  />
-                  <span className="text-foreground">Display even banners</span>
-                </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary cursor-pointer transition-colors">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 rounded border border-border checked:bg-accent"
-                  />
-                  <span className="text-foreground">Hide zero handicap</span>
-                </label>
               </div>
             </section>
           </div>
@@ -265,14 +233,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         {/* Footer */}
         <div className="flex gap-3 p-6 border-t border-border">
           <button
-            onClick={onClose}
+            onClick={handleCancel}
             className="flex-1 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-secondary transition-colors font-medium"
           >
             Cancel
           </button>
           <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-opacity-90 transition-colors font-medium"
+            onClick={handleSave}
+            className="flex-1 px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
           >
             Save Changes
           </button>
