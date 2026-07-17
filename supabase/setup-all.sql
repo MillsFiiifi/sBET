@@ -635,3 +635,20 @@ create index if not exists idx_transactions_status
 alter table public.transactions enable row level security;
 -- No anon access — the app reads/writes these through the service-role key.
 
+-- ===== migrations/0024_bookings.sql =====
+-- Shareable booking codes (SportyBet-style). A booking stores a set of match
+-- ids (and optional richer selections). Paste the code on the site and the
+-- games load. Read/write goes through the service-role key, so no anon policy.
+create table if not exists public.bookings (
+  id          uuid primary key default gen_random_uuid(),
+  code        text not null unique check (code = upper(code)),
+  match_ids   jsonb not null default '[]'::jsonb,
+  selections  jsonb,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz
+);
+
+create index if not exists idx_bookings_code on public.bookings (code);
+
+alter table public.bookings enable row level security;
+

@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { MatchCard } from './match-card'
 import { SPORT_ICONS } from '@/components/sport-icons'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getFavorites } from '@/lib/favorites'
 import type { UiMatch } from '@/lib/ui-match'
-import { TrendingUp, Calendar, Trophy, Radio } from 'lucide-react'
+import { TrendingUp, Calendar, Trophy, Radio, Ticket, X, Copy, Check } from 'lucide-react'
 
 interface HomepageProps {
   onMatchClick?: (match: UiMatch) => void
@@ -13,6 +14,81 @@ interface HomepageProps {
 
 export function Homepage({ onMatchClick }: HomepageProps) {
   const [matches, setMatches] = useState<UiMatch[] | null>(null)
+
+  // ── Booking code (SportyBet-style) ──
+  const [codeInput, setCodeInput] = useState('')
+  const [loadedCode, setLoadedCode] = useState<string | null>(null)
+  const [loadedMatches, setLoadedMatches] = useState<UiMatch[] | null>(null)
+  const [bookingBusy, setBookingBusy] = useState(false)
+  const [bookingMsg, setBookingMsg] = useState<string | null>(null)
+  const [createdCode, setCreatedCode] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const loadBooking = async (raw?: string) => {
+    const code = (raw ?? codeInput).trim().toUpperCase()
+    if (!code) return
+    setBookingBusy(true)
+    setBookingMsg(null)
+    setCreatedCode(null)
+    try {
+      const res = await fetch(`/api/bookings/${encodeURIComponent(code)}`, { cache: 'no-store' })
+      const data = await res.json()
+      if (!res.ok) {
+        setBookingMsg(data.error ?? 'Could not load that code')
+        return
+      }
+      if (!data.matches || data.matches.length === 0) {
+        setBookingMsg('That booking has no available games right now.')
+        return
+      }
+      setLoadedCode(data.code)
+      setLoadedMatches(data.matches)
+      setCodeInput('')
+    } catch {
+      setBookingMsg('Network error — please try again.')
+    } finally {
+      setBookingBusy(false)
+    }
+  }
+
+  const bookFavorites = async () => {
+    const ids = getFavorites()
+    if (ids.length === 0) {
+      setBookingMsg('Star some matches first, then create a booking code.')
+      return
+    }
+    setBookingBusy(true)
+    setBookingMsg(null)
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchIds: ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setBookingMsg(data.error ?? 'Could not create a booking')
+        return
+      }
+      setCreatedCode(data.code)
+      setBookingMsg(null)
+    } catch {
+      setBookingMsg('Network error — please try again.')
+    } finally {
+      setBookingBusy(false)
+    }
+  }
+
+  const copyCode = async () => {
+    if (!createdCode) return
+    try {
+      await navigator.clipboard.writeText(createdCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard blocked — user can copy manually */
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -46,6 +122,82 @@ export function Homepage({ onMatchClick }: HomepageProps) {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 lg:space-y-8">
+        {/* Booking code bar (SportyBet-style) */}
+        <section className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Ticket className="w-5 h-5 text-accent" />
+            <h2 className="font-bold text-foreground">Load a booking code</h2>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === 'Enter' && loadBooking()}
+              placeholder="Paste code e.g. K7P2QX"
+              className="flex-1 bg-input border border-border rounded-lg px-4 py-2.5 text-base tracking-wider uppercase text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/40 placeholder:text-muted-foreground placeholder:normal-case placeholder:tracking-normal"
+            />
+            <button
+              onClick={() => loadBooking()}
+              disabled={bookingBusy}
+              className="bg-accent text-accent-foreground font-bold px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
+            >
+              {bookingBusy ? 'Loading…' : 'Load'}
+            </button>
+          </div>
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2">
+            <button
+              onClick={bookFavorites}
+              disabled={bookingBusy}
+              className="text-xs font-medium text-accent hover:underline disabled:opacity-60"
+            >
+              Create a code from my ★ favorites
+            </button>
+            {bookingMsg && <span className="text-xs text-destructive">{bookingMsg}</span>}
+          </div>
+          {createdCode && (
+            <div className="mt-3 flex items-center justify-between gap-3 bg-secondary rounded-lg px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Your booking code — share it</p>
+                <p className="text-xl font-extrabold tracking-widest text-foreground">{createdCode}</p>
+              </div>
+              <button
+                onClick={copyCode}
+                className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-semibold px-3 py-2 rounded-lg hover:opacity-90 transition-opacity shrink-0"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Loaded booking — the games from a pasted code */}
+        {loadedMatches && loadedCode && (
+          <section className="border border-accent/40 bg-accent/5 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-foreground flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-accent" />
+                Booking {loadedCode}
+                <span className="text-sm font-normal text-muted-foreground">
+                  ({loadedMatches.length} {loadedMatches.length === 1 ? 'game' : 'games'})
+                </span>
+              </h2>
+              <button
+                onClick={() => { setLoadedMatches(null); setLoadedCode(null) }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                aria-label="Clear booking"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {loadedMatches.map((match) => (
+                <MatchCard key={match.id} match={match} onClick={() => onMatchClick?.(match)} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Quick Stats — real */}
         <section>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

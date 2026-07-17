@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabase'
+import type { UiMatch } from '@/lib/ui-match'
 
 /**
  * Admin-added matches. These are the real, editable matches players bet on —
@@ -61,6 +62,36 @@ function rowToMatch(r: Row): CustomMatch {
     oddsDraw: Number(r.odds_draw ?? 0),
     oddsAway: Number(r.odds_away),
     createdAt: r.created_at,
+  }
+}
+
+/** Map a stored match to the public UI shape used across the site. */
+export function toUiMatch(m: CustomMatch): UiMatch {
+  const hasScore = m.homeScore != null && m.awayScore != null
+  const state: UiMatch['state'] = m.isLive ? 'LIVE' : hasScore ? 'FINISHED' : 'UPCOMING'
+  const time = m.isLive
+    ? (m.minute ? `${m.minute}'` : 'LIVE')
+    : (m.startTime || 'Upcoming')
+  return {
+    id: m.id,
+    homeTeam: m.homeTeam,
+    awayTeam: m.awayTeam,
+    homeScore: m.homeScore ?? 0,
+    awayScore: m.awayScore ?? 0,
+    hasScore,
+    time,
+    status: m.isLive ? 'LIVE' : 'UPCOMING',
+    state,
+    league: m.league,
+    sport: m.sport,
+    odds: {
+      home: m.oddsHome,
+      ...(m.oddsDraw > 0 ? { draw: m.oddsDraw } : {}),
+      away: m.oddsAway,
+    },
+    locked: m.locked,
+    startTime: m.startTime ?? undefined,
+    createdAt: m.createdAt,
   }
 }
 
