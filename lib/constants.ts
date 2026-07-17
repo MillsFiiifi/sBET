@@ -1,0 +1,223 @@
+// Sports categories. Icons are real SVG components keyed by `id`
+// in components/sport-icons.tsx (no more emoji glyphs).
+export const SPORTS = [
+  { id: 'soccer', name: 'Soccer', matches: 24 },
+  { id: 'basketball', name: 'Basketball', matches: 18 },
+  { id: 'tennis', name: 'Tennis', matches: 12 },
+  { id: 'hockey', name: 'Ice Hockey', matches: 8 },
+  { id: 'american-football', name: 'American Football', matches: 6 },
+  { id: 'baseball', name: 'Baseball', matches: 10 },
+  { id: 'volleyball', name: 'Volleyball', matches: 5 },
+]
+
+// Mock match data
+export const LIVE_MATCHES = [
+  {
+    id: 1,
+    homeTeam: 'Manchester United',
+    awayTeam: 'Liverpool',
+    homeScore: 2,
+    awayScore: 1,
+    time: '45',
+    status: 'LIVE',
+    league: 'Premier League',
+    sport: 'soccer',
+    odds: {
+      home: 1.85,
+      draw: 3.5,
+      away: 4.2,
+    },
+  },
+  {
+    id: 2,
+    homeTeam: 'Young Boys',
+    awayTeam: 'Manchester United',
+    homeScore: 0,
+    awayScore: 0,
+    time: '0',
+    status: 'UPCOMING',
+    league: 'UEFA Champions League',
+    sport: 'soccer',
+    odds: {
+      home: 2.1,
+      draw: 3.4,
+      away: 3.8,
+    },
+  },
+  {
+    id: 3,
+    homeTeam: 'Boston Celtics',
+    awayTeam: 'Los Angeles Lakers',
+    homeScore: 48,
+    awayScore: 42,
+    time: '2Q',
+    status: 'LIVE',
+    league: 'NBA',
+    sport: 'basketball',
+    odds: {
+      home: 1.72,
+      away: 2.15,
+    },
+  },
+  {
+    id: 4,
+    homeTeam: 'New York Rangers',
+    awayTeam: 'Toronto Maple Leafs',
+    homeScore: 0,
+    awayScore: 0,
+    time: '0',
+    status: 'UPCOMING',
+    league: 'NHL',
+    sport: 'hockey',
+    odds: {
+      home: 2.3,
+      away: 1.65,
+    },
+  },
+  {
+    id: 5,
+    homeTeam: 'Andy Murray',
+    awayTeam: 'Novak Djokovic',
+    homeScore: 2,
+    awayScore: 1,
+    time: '2nd Set',
+    status: 'LIVE',
+    league: 'ATP Masters',
+    sport: 'tennis',
+    odds: {
+      home: 1.95,
+      away: 1.85,
+    },
+  },
+]
+
+// Upcoming events for featured section
+export const FEATURED_EVENTS = [
+  {
+    id: 'f1',
+    title: 'Champions League Final',
+    sport: 'soccer',
+    date: 'Jun 10, 2024',
+    time: '20:00',
+    matchups: 'TBD',
+  },
+  {
+    id: 'f2',
+    title: 'NBA Finals Game 5',
+    sport: 'basketball',
+    date: 'Jun 14, 2024',
+    time: '21:00',
+    matchups: 'Celtics vs Mavericks',
+  },
+  {
+    id: 'f3',
+    title: 'Wimbledon Final',
+    sport: 'tennis',
+    date: 'Jul 14, 2024',
+    time: '14:00',
+    matchups: 'Men\'s Singles',
+  },
+]
+
+// Wallet transactions
+export const TRANSACTIONS = [
+  {
+    id: 1,
+    type: 'deposit',
+    amount: 500.0,
+    method: 'Credit Card',
+    date: '2024-06-15 14:30',
+    status: 'completed',
+  },
+  {
+    id: 2,
+    type: 'withdrawal',
+    amount: 250.0,
+    method: 'Bank Transfer',
+    date: '2024-06-14 10:15',
+    status: 'completed',
+  },
+  {
+    id: 3,
+    type: 'bet_win',
+    amount: 145.75,
+    method: 'Live Bet Settlement',
+    date: '2024-06-13 21:45',
+    status: 'completed',
+  },
+  {
+    id: 4,
+    type: 'deposit',
+    amount: 100.0,
+    method: 'E-wallet',
+    date: '2024-06-12 09:00',
+    status: 'completed',
+  },
+  {
+    id: 5,
+    type: 'withdrawal',
+    amount: 350.0,
+    method: 'Credit Card',
+    date: '2024-06-11 16:20',
+    status: 'processing',
+  },
+]
+
+// Promotional bonuses
+export const PROMOTIONS = [
+  {
+    id: 1,
+    title: 'Welcome Bonus',
+    description: 'Get 100% match bonus on your first deposit up to $500',
+    bonus: '+500.00',
+    percentage: '100%',
+    expiresIn: '7 days',
+    requirements: '5x rollover',
+    status: 'active',
+    badge: 'Active',
+  },
+  {
+    id: 2,
+    title: 'Friday Accumulator',
+    description: 'Get 10% extra bonus on all accumulator bets',
+    bonus: '+10%',
+    percentage: '10%',
+    expiresIn: '2 days',
+    requirements: 'Min 3 selections',
+    status: 'active',
+    badge: 'Active',
+  },
+  {
+    id: 3,
+    title: 'Loyalty Rewards',
+    description: 'Earn points on every bet and redeem for free bets',
+    bonus: '100 pts',
+    percentage: '1pt per $1',
+    expiresIn: 'Ongoing',
+    requirements: 'No minimum',
+    status: 'active',
+    badge: 'Ongoing',
+  },
+  {
+    id: 4,
+    title: 'VIP Cashback',
+    description: 'Up to 15% cashback on losing bets for VIP members',
+    bonus: '+15%',
+    percentage: '15%',
+    expiresIn: '10 days',
+    requirements: 'VIP Status',
+    status: 'claimed',
+    badge: 'Claimed',
+  },
+  {
+    id: 5,
+    title: 'Live Bet Boost',
+    description: 'Get enhanced odds on selected live matches',
+    bonus: '+20%',
+    percentage: 'Varies',
+    expiresIn: '3 days',
+    requirements: 'Live bets only',
+    status: 'available',
+    badge: 'Available',
+  },
+]
