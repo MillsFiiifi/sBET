@@ -1,19 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { LIVE_MATCHES } from '@/lib/constants'
 import { MatchVisualization } from './match-visualization'
 import { MatchStatistics } from './match-statistics'
 import { BettingPanel } from './betting-panel'
+import type { UiMatch } from '@/lib/ui-match'
 import { ChevronLeft, Share2, MessageSquare } from 'lucide-react'
 
 interface LiveMatchDetailProps {
-  matchId: number
+  match: UiMatch | null
   onBack: () => void
 }
 
-export function LiveMatchDetail({ matchId, onBack }: LiveMatchDetailProps) {
-  const match = LIVE_MATCHES.find((m) => m.id === matchId)
+export function LiveMatchDetail({ match, onBack }: LiveMatchDetailProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'odds'>('stats')
 
   if (!match) {
@@ -23,6 +22,8 @@ export function LiveMatchDetail({ matchId, onBack }: LiveMatchDetailProps) {
       </div>
     )
   }
+
+  const isLive = match.status === 'LIVE'
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
@@ -70,14 +71,15 @@ export function LiveMatchDetail({ matchId, onBack }: LiveMatchDetailProps) {
                   <p className="text-foreground font-semibold">{match.homeTeam}</p>
                 </div>
                 <div className="flex flex-col items-center gap-2 px-8">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
-                    <span className="text-sm font-semibold text-accent">LIVE</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {match.time}
-                    {match.sport === 'basketball' || match.sport === 'hockey' ? '' : "'"}
-                  </p>
+                  {isLive ? (
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-destructive animate-pulse"></span>
+                      <span className="text-sm font-semibold text-destructive">LIVE</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm font-semibold text-accent">UPCOMING</span>
+                  )}
+                  <p className="text-sm text-muted-foreground">{match.time}</p>
                 </div>
                 <div className="text-center flex-1">
                   <h2 className="text-4xl font-bold text-foreground mb-2">

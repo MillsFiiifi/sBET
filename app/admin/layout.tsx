@@ -4,6 +4,13 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 
+const NAV = [
+  { href: '/admin', label: 'Overview' },
+  { href: '/admin/matches', label: 'Matches' },
+  { href: '/admin/promotions', label: 'Promotions' },
+  { href: '/admin/transactions', label: 'Wallet requests' },
+]
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -44,6 +51,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
         </div>
+        <nav className="px-6 flex items-center gap-1 border-t border-border overflow-x-auto">
+          {NAV.map((item) => {
+            const active =
+              item.href === '/admin'
+                ? pathname === '/admin'
+                : pathname.startsWith(item.href)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  active
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
       </header>
       <main className="flex-1 min-w-0">{children}</main>
     </div>

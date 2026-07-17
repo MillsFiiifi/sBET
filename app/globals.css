@@ -6,8 +6,8 @@
 
 @theme inline {
   --font-sans: var(--font-inter);
-  --font-display: var(--font-cinzel);
-  --color-success: #4ca66b;
+  --font-display: var(--font-inter);
+  --color-success: #22c55e;
   --animate-shimmer: shimmer 2.4s linear infinite;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -50,47 +50,47 @@
 }
 
 /*
- * Earthly Richness palette — Deep Green, Brown & Gold.
- * Radiates wealth, nature and comfort. A single, cohesive dark theme.
- *   Deep Green : #2e6b4f (primary)   Gold  : #c9a227 (accent)
- *   Brown      : #3b2c1b (secondary) Cream : #f3ead3 (foreground)
+ * Voltage palette — Electric Blue on Deep Navy.
+ * A cool, modern, high-trust sportsbook look. Single cohesive dark theme.
+ *   Electric Blue : #2f7bff (primary)   Sky/Cyan : #38bdf8 (accent)
+ *   Deep Navy     : #0b1220 (background) Near-white: #e8eef7 (foreground)
  */
 :root,
 .dark,
 :root:not(.light) {
   color-scheme: dark;
-  --background: #12100b;
-  --foreground: #f3ead3;
-  --card: #1c1810;
-  --card-foreground: #f3ead3;
-  --popover: #1c1810;
-  --popover-foreground: #f3ead3;
-  --primary: #2e6b4f;
-  --primary-foreground: #f3ead3;
-  --secondary: #3b2c1b;
-  --secondary-foreground: #f3ead3;
-  --muted: #4a3a28;
-  --muted-foreground: #c2b08d;
-  --accent: #c9a227;
-  --accent-foreground: #12100b;
-  --destructive: #b23a2e;
-  --border: #3a2e1f;
-  --input: #1c1810;
-  --ring: #c9a227;
-  --chart-1: #c9a227;
-  --chart-2: #2e6b4f;
-  --chart-3: #a87d3c;
-  --chart-4: #6b4a2a;
-  --chart-5: #556b2f;
+  --background: #0b1220;
+  --foreground: #e8eef7;
+  --card: #131c2e;
+  --card-foreground: #e8eef7;
+  --popover: #131c2e;
+  --popover-foreground: #e8eef7;
+  --primary: #2f7bff;
+  --primary-foreground: #ffffff;
+  --secondary: #1b2740;
+  --secondary-foreground: #e8eef7;
+  --muted: #24314d;
+  --muted-foreground: #9fb2cf;
+  --accent: #38bdf8;
+  --accent-foreground: #06111f;
+  --destructive: #f43f5e;
+  --border: #26324c;
+  --input: #131c2e;
+  --ring: #2f7bff;
+  --chart-1: #38bdf8;
+  --chart-2: #2f7bff;
+  --chart-3: #60a5fa;
+  --chart-4: #818cf8;
+  --chart-5: #22d3ee;
   --radius: 0.625rem;
-  --sidebar: #17130c;
-  --sidebar-foreground: #f3ead3;
-  --sidebar-primary: #2e6b4f;
-  --sidebar-primary-foreground: #f3ead3;
-  --sidebar-accent: #c9a227;
-  --sidebar-accent-foreground: #12100b;
-  --sidebar-border: #3a2e1f;
-  --sidebar-ring: #c9a227;
+  --sidebar: #0d1526;
+  --sidebar-foreground: #e8eef7;
+  --sidebar-primary: #2f7bff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #38bdf8;
+  --sidebar-accent-foreground: #06111f;
+  --sidebar-border: #26324c;
+  --sidebar-ring: #2f7bff;
 }
 
 /* Utility classes used by the ported nextwin admin/partner dashboards,
@@ -129,7 +129,7 @@
     background-image: linear-gradient(
       90deg,
       transparent,
-      rgba(243, 234, 211, 0.08),
+      rgba(232, 238, 247, 0.08),
       transparent
     );
     background-size: 200% 100%;

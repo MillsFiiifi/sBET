@@ -1,7 +1,7 @@
 'use client'
 
 interface Match {
-  id: number
+  id: string
   homeTeam: string
   awayTeam: string
   homeScore: number

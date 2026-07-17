@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react'
 
 interface MatchCardProps {
   match: {
-    id: number
+    id: string
     homeTeam: string
     awayTeam: string
     homeScore: number

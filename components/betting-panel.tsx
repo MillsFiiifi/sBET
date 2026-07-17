@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Trash2, Plus, Minus } from 'lucide-react'
 
 interface Match {
-  id: number
+  id: string
   homeTeam: string
   awayTeam: string
   homeScore: number

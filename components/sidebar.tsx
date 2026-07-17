@@ -27,12 +27,12 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   const [expandedOther, setExpandedOther] = useState(true)
 
   const mainMenu = [
-    { id: 'in-play', label: 'In-Play', icon: Home, badge: 24 },
+    { id: 'in-play', label: 'In-Play', icon: Home, badge: 0 },
     { id: 'favorites', label: 'Favorites', icon: Heart, badge: 0 },
     { id: 'schedule', label: 'Schedule', icon: Calendar, badge: 0 },
     { id: 'results', label: 'Results', icon: TrendingUp, badge: 0 },
     { id: 'wallet', label: 'Wallet', icon: Wallet, badge: 0 },
-    { id: 'promotions', label: 'Promotions', icon: Gift, badge: 3 },
+    { id: 'promotions', label: 'Promotions', icon: Gift, badge: 0 },
   ]
 
   const otherMenu = [
@@ -104,9 +104,6 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
               >
                 {Icon && <Icon className="w-5 h-5 shrink-0" />}
                 <span className="flex-1 text-left">{sport.name}</span>
-                <span className="text-xs text-sidebar-foreground opacity-60">
-                  {sport.matches}
-                </span>
               </button>
               )
             })}
@@ -131,21 +128,18 @@ export function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
         {expandedOther && (
           <div className="mt-3 space-y-1">
             {[
-              { id: 'other-soccer', name: 'Soccer', badge: 12 },
-              { id: 'other-hockey', name: 'Ice Hockey', badge: 5 },
-              { id: 'other-basketball', name: 'Basketball', badge: 8 },
-              { id: 'other-tennis', name: 'Tennis', badge: 3 },
-              { id: 'other-volleyball', name: 'Volleyball', badge: 2 },
-              { id: 'other-baseball', name: 'Baseball', badge: 4 },
+              { id: 'other-soccer', name: 'Soccer' },
+              { id: 'other-hockey', name: 'Ice Hockey' },
+              { id: 'other-basketball', name: 'Basketball' },
+              { id: 'other-tennis', name: 'Tennis' },
+              { id: 'other-volleyball', name: 'Volleyball' },
+              { id: 'other-baseball', name: 'Baseball' },
             ].map((sport) => (
               <button
                 key={sport.id}
                 className="w-full flex items-center gap-3 px-4 py-2 rounded text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:bg-opacity-10 transition-colors"
               >
                 <span className="flex-1 text-left">{sport.name}</span>
-                <span className="text-xs text-sidebar-foreground opacity-60">
-                  {sport.badge}
-                </span>
               </button>
             ))}
           </div>

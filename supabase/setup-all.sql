@@ -573,3 +573,59 @@ create table if not exists goal_notifications (
   updated_at  timestamptz not null default now()
 );
 
+-- ===== migrations/0022_promotions.sql =====
+-- Admin-managed promotions shown on the player Promotions page.
+-- Replaces the old hard-coded PROMOTIONS constant with real, editable rows.
+create table if not exists public.promotions (
+  id           uuid primary key default gen_random_uuid(),
+  title        text not null check (char_length(title) between 2 and 120),
+  description  text not null default '',
+  bonus        text not null default '',
+  percentage   text not null default '',
+  requirements text not null default '',
+  expires_in   text not null default '',
+  status       text not null default 'active'
+               check (status in ('active', 'available', 'claimed')),
+  badge        text not null default 'Active',
+  sort_order   integer not null default 0,
+  active       boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_promotions_active
+  on public.promotions (active, sort_order) where active = true;
+
+alter table public.promotions enable row level security;
+
+-- Players (anon key in the browser) may read active promotions only.
+drop policy if exists "anon read active promotions" on public.promotions;
+create policy "anon read active promotions" on public.promotions
+  for select to anon using (active = true);
+
+-- ===== migrations/0023_transactions.sql =====
+-- Real wallet ledger: deposits, withdrawals, and bet settlements. Deposit /
+-- withdrawal rows start 'pending' and an admin approves them, which credits or
+-- debits the user's balance. Replaces the old hard-coded TRANSACTIONS constant.
+create table if not exists public.transactions (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid references public.users(id) on delete cascade,
+  type         text not null
+               check (type in ('deposit', 'withdrawal', 'bet_win', 'bet_loss', 'bonus', 'adjustment')),
+  amount       numeric(18, 2) not null check (amount >= 0),
+  currency     text not null default 'GHS',
+  method       text not null default '',
+  status       text not null default 'pending'
+               check (status in ('pending', 'completed', 'failed', 'cancelled')),
+  note         text,
+  created_at   timestamptz not null default now(),
+  processed_at timestamptz
+);
+
+create index if not exists idx_transactions_user
+  on public.transactions (user_id, created_at desc);
+create index if not exists idx_transactions_status
+  on public.transactions (status, created_at desc);
+
+alter table public.transactions enable row level security;
+-- No anon access — the app reads/writes these through the service-role key.
+

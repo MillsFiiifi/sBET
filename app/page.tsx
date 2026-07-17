@@ -11,14 +11,15 @@ import { PromotionsPage } from '@/components/promotions-page'
 import { FavoritesPage } from '@/components/favorites-page'
 import { SchedulePage } from '@/components/schedule-page'
 import { ResultsPage } from '@/components/results-page'
+import type { UiMatch } from '@/lib/ui-match'
 
 export default function Home() {
   const [activeSection, setActiveSection] = useState('in-play')
   const [showSettings, setShowSettings] = useState(false)
-  const [selectedMatch, setSelectedMatch] = useState<number | null>(null)
+  const [selectedMatch, setSelectedMatch] = useState<UiMatch | null>(null)
 
-  const handleMatchClick = (matchId: number) => {
-    setSelectedMatch(matchId)
+  const handleMatchClick = (match: UiMatch) => {
+    setSelectedMatch(match)
   }
 
   const handleBackFromMatch = () => {
@@ -61,7 +62,7 @@ export default function Home() {
               )}
             </>
           ) : (
-            <LiveMatchDetail matchId={selectedMatch} onBack={handleBackFromMatch} />
+            <LiveMatchDetail match={selectedMatch} onBack={handleBackFromMatch} />
           )}
         </main>
       </div>
