@@ -32,9 +32,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-              ₹
+              P
             </span>
-            <span className="font-display font-bold tracking-wide text-foreground">SBET</span>
+            <span className="font-display font-bold tracking-wide text-foreground">PowerStakeBet</span>
             <span className="text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/40 bg-accent/10 rounded-full px-2 py-0.5">
               Admin
             </span>

@@ -32,10 +32,10 @@ export function AuthCard({
         <div className="bg-card border border-border rounded-2xl p-7 shadow-xl">
           <div className="flex items-center gap-2 mb-6">
             <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
-              ₹
+              P
             </span>
             <span className="font-display text-xl font-bold tracking-wide text-foreground">
-              SBET
+              PowerStakeBet
             </span>
             {badge && (
               <span className="ml-1 text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/40 bg-accent/10 rounded-full px-2 py-0.5">

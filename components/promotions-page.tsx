@@ -216,7 +216,7 @@ export function PromotionsPage() {
                 <li>Bonuses must be used within the specified expiration date</li>
                 <li>Rollover requirements must be met before withdrawing bonus funds</li>
                 <li>Promotions cannot be combined unless explicitly stated</li>
-                <li>S-Bet reserves the right to modify or cancel promotions</li>
+                <li>PowerStakeBet reserves the right to modify or cancel promotions</li>
               </ul>
             </div>
           </div>

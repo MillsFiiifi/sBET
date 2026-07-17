@@ -61,9 +61,9 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col justify-between p-12 text-primary-foreground">
           <div className="flex items-center gap-2">
             <span className="w-9 h-9 rounded-lg bg-primary-foreground text-primary flex items-center justify-center font-extrabold">
-              S
+              P
             </span>
-            <span className="font-display text-2xl font-bold tracking-wide">SBET</span>
+            <span className="font-display text-2xl font-bold tracking-wide">PowerStakeBet</span>
           </div>
           <div className="space-y-6">
             <h2 className="text-4xl font-extrabold leading-tight">
@@ -81,7 +81,7 @@ export default function LoginPage() {
               </li>
             </ul>
           </div>
-          <p className="text-sm text-primary-foreground/70">© {'2026'} SBET. Play responsibly. 18+</p>
+          <p className="text-sm text-primary-foreground/70">© {'2026'} PowerStakeBet. Play responsibly. 18+</p>
         </div>
       </aside>
 
@@ -101,9 +101,9 @@ export default function LoginPage() {
             {/* Brand — mobile */}
             <div className="lg:hidden flex items-center gap-2 mb-6">
               <span className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-extrabold">
-                S
+                P
               </span>
-              <span className="font-display text-2xl font-bold tracking-wide text-foreground">SBET</span>
+              <span className="font-display text-2xl font-bold tracking-wide text-foreground">PowerStakeBet</span>
             </div>
 
             <h1 className="text-2xl font-extrabold text-foreground mb-1">Log In</h1>
@@ -216,7 +216,7 @@ export default function LoginPage() {
 
             <div className="flex items-center gap-3 my-6">
               <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">New to SBET?</span>
+              <span className="text-xs text-muted-foreground">New to PowerStakeBet?</span>
               <div className="flex-1 h-px bg-border" />
             </div>
 

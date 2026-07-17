@@ -70,9 +70,9 @@ export function Sidebar({ activeSection, onSectionChange, open = false, onClose 
       <div className="p-6 border-b border-sidebar-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-sidebar-primary rounded flex items-center justify-center text-sidebar-primary-foreground font-bold">
-            S
+            P
           </div>
-          <span className="font-display text-xl font-bold tracking-wide text-sidebar-foreground">SBET</span>
+          <span className="font-display text-lg font-bold tracking-wide text-sidebar-foreground">PowerStakeBet</span>
         </div>
         <button
           onClick={onClose}

@@ -19,8 +19,8 @@ const cinzel = Cinzel({
 })
 
 export const metadata: Metadata = {
-  title: 'S-Bet - Sports Betting Platform',
-  description: 'Next-generation sports betting platform with live matches and real-time odds',
+  title: 'PowerStakeBet — Sports Betting Platform',
+  description: 'PowerStakeBet — next-generation sports betting with live matches and real-time odds',
   generator: 'v0.app',
   icons: {
     icon: [
