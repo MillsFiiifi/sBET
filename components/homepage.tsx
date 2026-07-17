@@ -45,7 +45,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-8 space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
         {/* Quick Stats — real */}
         <section>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

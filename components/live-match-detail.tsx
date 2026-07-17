@@ -29,18 +29,18 @@ export function LiveMatchDetail({ match, onBack }: LiveMatchDetailProps) {
     <div className="flex-1 overflow-y-auto bg-background">
       {/* Header */}
       <div className="bg-card border-b border-border sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <button
               onClick={onBack}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              className="p-2 hover:bg-secondary rounded-lg transition-colors shrink-0"
               aria-label="Go back"
             >
               <ChevronLeft className="w-5 h-5 text-foreground" />
             </button>
-            <div>
-              <p className="text-sm text-muted-foreground">{match.league}</p>
-              <h1 className="text-xl font-bold text-foreground">
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">{match.league}</p>
+              <h1 className="text-base sm:text-xl font-bold text-foreground truncate">
                 {match.homeTeam} vs {match.awayTeam}
               </h1>
             </div>
@@ -57,12 +57,12 @@ export function LiveMatchDetail({ match, onBack }: LiveMatchDetailProps) {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Left Column - Match Visualization & Stats */}
           <div className="lg:col-span-2 space-y-6">
             {/* Score Display */}
-            <div className="bg-card border border-border rounded-lg p-8">
+            <div className="bg-card border border-border rounded-lg p-4 sm:p-8">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-center flex-1">
                   <h2 className="text-4xl font-bold text-foreground mb-2">

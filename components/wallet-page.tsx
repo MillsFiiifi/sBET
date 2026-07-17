@@ -87,7 +87,7 @@ export function WalletPage() {
   if (loggedOut) {
     return (
       <main className="flex-1 overflow-y-auto">
-        <div className="p-8 max-w-md mx-auto text-center mt-16">
+        <div className="p-4 sm:p-8 max-w-md mx-auto text-center mt-16">
           <CreditCard className="w-12 h-12 text-accent mx-auto mb-4 opacity-70" />
           <h1 className="text-2xl font-bold text-foreground mb-2">Sign in to view your wallet</h1>
           <p className="text-muted-foreground mb-6">Your real balance, deposits and withdrawals live here.</p>
@@ -104,7 +104,7 @@ export function WalletPage() {
 
   return (
     <main className="flex-1 overflow-y-auto">
-      <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 lg:space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Wallet</h1>
           <p className="text-muted-foreground">Manage your balance, deposits, and withdrawals</p>

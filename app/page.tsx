@@ -17,6 +17,7 @@ export default function Home() {
   const [activeSection, setActiveSection] = useState('in-play')
   const [showSettings, setShowSettings] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState<UiMatch | null>(null)
+  const [navOpen, setNavOpen] = useState(false)
 
   const handleMatchClick = (match: UiMatch) => {
     setSelectedMatch(match)
@@ -32,12 +33,21 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      {selectedMatch === null && <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />}
+      {selectedMatch === null && (
+        <Sidebar
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+        />
+      )}
 
       {/* Main Content */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Header */}
-        {selectedMatch === null && <Header onSettingsClick={() => setShowSettings(true)} />}
+        {selectedMatch === null && (
+          <Header onSettingsClick={() => setShowSettings(true)} onMenuClick={() => setNavOpen(true)} />
+        )}
 
         {/* Content Area — flex column so each page's `flex-1 overflow-y-auto`
             root gets a bounded height and can actually scroll */}
