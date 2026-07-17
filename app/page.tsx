@@ -19,6 +19,13 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState<UiMatch | null>(null)
   const [navOpen, setNavOpen] = useState(false)
+  const [walletOpenDeposit, setWalletOpenDeposit] = useState(false)
+
+  const goDeposit = () => {
+    setActiveSection('wallet')
+    setWalletOpenDeposit(true)
+  }
+  const goWallet = () => setActiveSection('wallet')
 
   const handleMatchClick = (match: UiMatch) => {
     setSelectedMatch(match)
@@ -47,7 +54,12 @@ export default function Home() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Header */}
         {selectedMatch === null && (
-          <Header onSettingsClick={() => setShowSettings(true)} onMenuClick={() => setNavOpen(true)} />
+          <Header
+            onSettingsClick={() => setShowSettings(true)}
+            onMenuClick={() => setNavOpen(true)}
+            onDeposit={goDeposit}
+            onWallet={goWallet}
+          />
         )}
 
         {/* Content Area — flex column so each page's `flex-1 overflow-y-auto`
@@ -59,7 +71,12 @@ export default function Home() {
               {activeSection === 'favorites' && <FavoritesPage onMatchClick={handleMatchClick} />}
               {activeSection === 'schedule' && <SchedulePage onMatchClick={handleMatchClick} />}
               {activeSection === 'results' && <ResultsPage onMatchClick={handleMatchClick} />}
-              {activeSection === 'wallet' && <WalletPage />}
+              {activeSection === 'wallet' && (
+                <WalletPage
+                  openDeposit={walletOpenDeposit}
+                  onDepositConsumed={() => setWalletOpenDeposit(false)}
+                />
+              )}
               {activeSection === 'promotions' && <PromotionsPage />}
               {!mainSections.includes(activeSection) && (
                 <div className="flex items-center justify-center h-full">

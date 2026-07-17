@@ -72,6 +72,23 @@ export default function AdminMatchesPage() {
     await load()
   }
 
+  const addDemo = async () => {
+    setSaving(true)
+    const demos = [
+      { sport: 'soccer', league: 'Premier League', country: 'England', homeTeam: 'Arsenal', awayTeam: 'Chelsea', isLive: true, minute: '35', homeScore: '1', awayScore: '0', oddsHome: '1.95', oddsDraw: '3.40', oddsAway: '3.80' },
+      { sport: 'soccer', league: 'La Liga', country: 'Spain', homeTeam: 'Real Madrid', awayTeam: 'Barcelona', isLive: false, startTime: 'Today 20:45', oddsHome: '2.10', oddsDraw: '3.30', oddsAway: '3.20' },
+    ]
+    for (const d of demos) {
+      await fetch('/api/admin/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(d),
+      })
+    }
+    setSaving(false)
+    await load()
+  }
+
   const field = (k: keyof typeof form, label: string, type = 'text', placeholder = '') => (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-muted-foreground">{label}</span>
@@ -147,8 +164,15 @@ export default function AdminMatchesPage() {
 
       {/* Match list */}
       <div className="bg-card border border-border rounded-xl shadow-card">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
           <h2 className="font-semibold text-title">All matches ({matches.length})</h2>
+          <button
+            onClick={addDemo}
+            disabled={saving}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border text-foreground hover:border-accent transition-colors disabled:opacity-50"
+          >
+            + Add 2 demo matches
+          </button>
         </div>
         {matches.length === 0 ? (
           <div className="m-4 border border-dashed border-border rounded-xl p-6 text-center">

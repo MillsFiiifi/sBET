@@ -652,3 +652,18 @@ create index if not exists idx_bookings_code on public.bookings (code);
 
 alter table public.bookings enable row level security;
 
+-- ===== seed: two demo matches (only when there are no matches yet) =====
+-- Gives a fresh install something to test with: one LIVE game and one
+-- UPCOMING game. Safe to re-run — inserts nothing once any match exists.
+insert into public.custom_matches
+  (sport, league, country, home_team, away_team, home_score, away_score,
+   minute, minute_set_at, start_time, is_live, odds_home, odds_draw, odds_away)
+select v.* from (values
+  ('soccer', 'Premier League', 'England', 'Arsenal', 'Chelsea',
+   1, 0, '35', now(), null::text, true,  1.95, 3.40, 3.80),
+  ('soccer', 'La Liga', 'Spain', 'Real Madrid', 'Barcelona',
+   null::int, null::int, null::text, null::timestamptz, 'Today 20:45', false, 2.10, 3.30, 3.20)
+) as v(sport, league, country, home_team, away_team, home_score, away_score,
+       minute, minute_set_at, start_time, is_live, odds_home, odds_draw, odds_away)
+where not exists (select 1 from public.custom_matches);
+

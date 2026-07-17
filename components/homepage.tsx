@@ -16,6 +16,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
   const [matches, setMatches] = useState<UiMatch[] | null>(null)
 
   // ── Booking code (SportyBet-style) ──
+  const [bookingOpen, setBookingOpen] = useState(false)
   const [codeInput, setCodeInput] = useState('')
   const [loadedCode, setLoadedCode] = useState<string | null>(null)
   const [loadedMatches, setLoadedMatches] = useState<UiMatch[] | null>(null)
@@ -122,11 +123,30 @@ export function Homepage({ onMatchClick }: HomepageProps) {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 lg:space-y-8">
-        {/* Booking code bar (SportyBet-style) */}
+        {/* Booking code — compact chip that expands on press */}
+        {!bookingOpen ? (
+          <div className="flex justify-end">
+            <button
+              onClick={() => setBookingOpen(true)}
+              className="inline-flex items-center gap-2 bg-card border border-border rounded-full px-4 py-2 text-sm font-semibold text-foreground hover:border-accent transition-colors"
+            >
+              <Ticket className="w-4 h-4 text-accent" /> Booking code
+            </button>
+          </div>
+        ) : (
         <section className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Ticket className="w-5 h-5 text-accent" />
-            <h2 className="font-bold text-foreground">Load a booking code</h2>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Ticket className="w-5 h-5 text-accent" />
+              <h2 className="font-bold text-foreground">Load a booking code</h2>
+            </div>
+            <button
+              onClick={() => setBookingOpen(false)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
@@ -170,6 +190,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
             </div>
           )}
         </section>
+        )}
 
         {/* Loaded booking — the games from a pasted code */}
         {loadedMatches && loadedCode && (

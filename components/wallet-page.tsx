@@ -31,7 +31,13 @@ interface WalletData {
 
 const CREDIT_TYPES = new Set(['deposit', 'bet_win', 'bonus'])
 
-export function WalletPage() {
+interface WalletPageProps {
+  /** When true, open the deposit dialog on mount (e.g. header Deposit button). */
+  openDeposit?: boolean
+  onDepositConsumed?: () => void
+}
+
+export function WalletPage({ openDeposit, onDepositConsumed }: WalletPageProps = {}) {
   const [showBalance, setShowBalance] = useState(true)
   const [wallet, setWallet] = useState<WalletData | null>(null)
   const [loggedOut, setLoggedOut] = useState(false)
@@ -54,6 +60,16 @@ export function WalletPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Open the deposit dialog when the header's Deposit button routed us here.
+  useEffect(() => {
+    if (openDeposit) {
+      setDialog('deposit')
+      setMsg(null)
+      setAmount('')
+      onDepositConsumed?.()
+    }
+  }, [openDeposit, onDepositConsumed])
 
   const submitRequest = async () => {
     const userId = getUserId()
