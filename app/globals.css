@@ -7,6 +7,8 @@
 @theme inline {
   --font-sans: var(--font-inter);
   --font-display: var(--font-cinzel);
+  --color-success: #4ca66b;
+  --animate-shimmer: shimmer 2.4s linear infinite;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -89,6 +91,58 @@
   --sidebar-accent-foreground: #12100b;
   --sidebar-border: #3a2e1f;
   --sidebar-ring: #c9a227;
+}
+
+/* Utility classes used by the ported nextwin admin/partner dashboards,
+   mapped to the Earthly Richness theme. */
+@layer utilities {
+  .text-title {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .text-eyebrow {
+    font-size: 0.625rem;
+    line-height: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .shadow-card {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+  .shadow-card-pressed {
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+  .shadow-popover {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+  .lift-on-hover {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .lift-on-hover:hover {
+    transform: translateY(-2px);
+  }
+  .animate-shimmer {
+    animation: var(--animate-shimmer);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(243, 234, 211, 0.08),
+      transparent
+    );
+    background-size: 200% 100%;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @layer base {
