@@ -552,8 +552,14 @@ alter table match_overrides
 -- Booking codes expire once their games are done. We stamp expires_at at
 -- creation (latest selection kickoff + a match-duration buffer); loading a code
 -- past that time is rejected. Null = never expires (legacy rows).
-alter table bookings
-  add column if not exists expires_at timestamptz;
+-- Guarded: the `bookings` table is created by an earlier feature migration that
+-- isn't part of this consolidated file, so only add the column when it exists.
+do $$
+begin
+  if to_regclass('public.bookings') is not null then
+    alter table bookings add column if not exists expires_at timestamptz;
+  end if;
+end $$;
 
 -- ===== migrations/0021_push_and_goal_alerts.sql =====
 create table if not exists push_subscriptions (
