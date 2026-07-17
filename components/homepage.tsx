@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { MatchList } from './match-list'
 import { PromoBanner } from './promo-banner'
+import { FeaturedMatches } from './featured-matches'
 import { SPORT_ICONS } from '@/components/sport-icons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getFavorites } from '@/lib/favorites'
@@ -116,6 +117,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
 
   const live = (matches ?? []).filter((m) => m.state === 'LIVE')
   const upcoming = (matches ?? []).filter((m) => m.state === 'UPCOMING')
+  const featured = [...live, ...upcoming].slice(0, 8)
 
   // Sports overview counts derived from real matches.
   const sportCounts = new Map<string, number>()
@@ -250,21 +252,24 @@ export function Homepage({ onMatchClick }: HomepageProps) {
           </div>
         </section>
 
-        {/* Sports Overview */}
+        {/* Trending carousel */}
+        {filter === 'all' && <FeaturedMatches matches={featured} onMatchClick={onMatchClick} />}
+
+        {/* Sports Overview — horizontal scroll */}
         {sportsWithMatches.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-foreground mb-4">Popular Sports</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {sportsWithMatches.map(([sport, count]) => {
                 const Icon = SPORT_ICONS[sport]
                 return (
                   <div
                     key={sport}
-                    className="bg-card border border-border rounded-lg p-4 cursor-pointer hover:border-accent hover:shadow-lg transition-all"
+                    className="shrink-0 w-32 bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-accent transition-all"
                   >
-                    {Icon && <Icon className="w-9 h-9 mb-2 text-accent" />}
-                    <h3 className="font-semibold text-foreground mb-1 capitalize">{sport.replace('-', ' ')}</h3>
-                    <p className="text-sm text-muted-foreground">{count} {count === 1 ? 'match' : 'matches'}</p>
+                    {Icon && <Icon className="w-8 h-8 mb-2 text-accent" />}
+                    <h3 className="font-semibold text-foreground mb-0.5 capitalize truncate">{sport.replace('-', ' ')}</h3>
+                    <p className="text-xs text-muted-foreground">{count} {count === 1 ? 'match' : 'matches'}</p>
                   </div>
                 )
               })}
