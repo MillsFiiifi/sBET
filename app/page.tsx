@@ -12,6 +12,7 @@ import { FavoritesPage } from '@/components/favorites-page'
 import { SchedulePage } from '@/components/schedule-page'
 import { ResultsPage } from '@/components/results-page'
 import { BottomNav } from '@/components/bottom-nav'
+import { BetSlip } from '@/components/bet-slip'
 import type { UiMatch } from '@/lib/ui-match'
 
 export default function Home() {
@@ -102,6 +103,9 @@ export default function Home() {
 
       {/* Settings Modal */}
       {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+
+      {/* Global bet slip (floating trigger + sheet) */}
+      <BetSlip />
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { MatchList } from './match-list'
+import { PromoBanner } from './promo-banner'
 import { SPORT_ICONS } from '@/components/sport-icons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getFavorites } from '@/lib/favorites'
@@ -126,6 +127,9 @@ export function Homepage({ onMatchClick }: HomepageProps) {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 lg:space-y-8">
+        {/* Promotional banner carousel */}
+        <PromoBanner />
+
         {/* Booking code — compact chip that expands on press */}
         {!bookingOpen ? (
           <div className="flex justify-end">

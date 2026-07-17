@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronRight, Star } from 'lucide-react'
 import { FAVORITES_EVENT, getFavorites, toggleFavorite } from '@/lib/favorites'
+import { BETSLIP_EVENT, getSelections, toggleSelection } from '@/lib/betslip'
 import type { UiMatch } from '@/lib/ui-match'
 
 interface MatchListProps {
@@ -10,10 +11,13 @@ interface MatchListProps {
   onMatchClick?: (match: UiMatch) => void
 }
 
+const OUTCOME_LABEL: Record<string, string> = { home: 'Home', draw: 'Draw', away: 'Away' }
+
 /** SportyBet-style match rows: grouped by league, with team logos, live
  *  minute/score and a 1 · X · 2 odds strip. Works the same on mobile + desktop. */
 export function MatchList({ matches, onMatchClick }: MatchListProps) {
   const [favs, setFavs] = useState<string[]>([])
+  const [picks, setPicks] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const sync = () => setFavs(getFavorites())
@@ -21,6 +25,28 @@ export function MatchList({ matches, onMatchClick }: MatchListProps) {
     window.addEventListener(FAVORITES_EVENT, sync)
     return () => window.removeEventListener(FAVORITES_EVENT, sync)
   }, [])
+
+  useEffect(() => {
+    const sync = () =>
+      setPicks(new Set(getSelections().map((s) => `${s.matchId}:${s.outcomeKey}`)))
+    sync()
+    window.addEventListener(BETSLIP_EVENT, sync)
+    return () => window.removeEventListener(BETSLIP_EVENT, sync)
+  }, [])
+
+  const pick = (m: UiMatch, outcome: 'home' | 'draw' | 'away', odds: number) =>
+    toggleSelection({
+      key: `${m.id}:1x2`,
+      matchId: m.id,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      league: m.league,
+      marketKey: '1x2',
+      marketLabel: 'Match Result',
+      outcomeKey: outcome,
+      outcomeLabel: OUTCOME_LABEL[outcome],
+      odds,
+    })
 
   // Group by league, preserving order of first appearance.
   const groups: { league: string; items: UiMatch[] }[] = []
@@ -85,11 +111,11 @@ export function MatchList({ matches, onMatchClick }: MatchListProps) {
                     <TeamRow name={m.awayTeam} flag={m.awayFlagUrl} score={showScore ? m.awayScore : undefined} />
                   </button>
 
-                  {/* Odds strip */}
+                  {/* Odds strip — tap to add to bet slip */}
                   <div className="flex items-center gap-1 shrink-0 py-2">
-                    <Odd label="1" value={m.odds.home} locked={m.locked} onClick={() => onMatchClick?.(m)} />
-                    <Odd label="X" value={m.odds.draw} locked={m.locked} onClick={() => onMatchClick?.(m)} />
-                    <Odd label="2" value={m.odds.away} locked={m.locked} onClick={() => onMatchClick?.(m)} />
+                    <Odd label="1" value={m.odds.home} locked={m.locked} selected={picks.has(`${m.id}:home`)} onClick={() => pick(m, 'home', m.odds.home)} />
+                    <Odd label="X" value={m.odds.draw} locked={m.locked} selected={picks.has(`${m.id}:draw`)} onClick={() => m.odds.draw && pick(m, 'draw', m.odds.draw)} />
+                    <Odd label="2" value={m.odds.away} locked={m.locked} selected={picks.has(`${m.id}:away`)} onClick={() => pick(m, 'away', m.odds.away)} />
                   </div>
 
                   {/* More markets */}
@@ -131,11 +157,13 @@ function Odd({
   label,
   value,
   locked,
+  selected,
   onClick,
 }: {
   label: string
   value?: number
   locked?: boolean
+  selected?: boolean
   onClick?: () => void
 }) {
   if (value === undefined || value === null) {
@@ -145,9 +173,13 @@ function Odd({
     <button
       onClick={onClick}
       disabled={locked}
-      className="w-11 sm:w-14 h-9 rounded bg-secondary hover:bg-accent hover:text-accent-foreground text-foreground flex flex-col items-center justify-center leading-none transition-colors disabled:opacity-40"
+      className={`w-11 sm:w-14 h-9 rounded flex flex-col items-center justify-center leading-none transition-colors disabled:opacity-40 ${
+        selected
+          ? 'bg-accent text-accent-foreground'
+          : 'bg-secondary text-foreground hover:bg-accent/80 hover:text-accent-foreground'
+      }`}
     >
-      <span className="text-[9px] text-muted-foreground">{label}</span>
+      <span className={`text-[9px] ${selected ? 'text-accent-foreground/80' : 'text-muted-foreground'}`}>{label}</span>
       <span className="text-sm font-bold tabular-nums">{value.toFixed(2)}</span>
     </button>
   )

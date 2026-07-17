@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Search, Bell, Settings, User, Menu, Wallet, LogOut, LogIn, ChevronRight } from 'lucide-react'
 import { clearUserSession, getUserId, getUserName } from '@/lib/user-session'
 import { formatMoneyWithCurrency } from '@/lib/format-money'
+import { BALANCE_EVENT } from '@/lib/betslip'
 
 interface HeaderProps {
   onSettingsClick?: () => void
@@ -41,7 +42,8 @@ export function Header({ onSettingsClick, onMenuClick, onDeposit, onWallet }: He
     }
     void load()
     const t = setInterval(load, 15_000)
-    return () => { cancelled = true; clearInterval(t) }
+    window.addEventListener(BALANCE_EVENT, load)
+    return () => { cancelled = true; clearInterval(t); window.removeEventListener(BALANCE_EVENT, load) }
   }, [])
 
   // Close the account menu on outside click.
