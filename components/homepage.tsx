@@ -8,7 +8,7 @@ import { SPORT_ICONS } from '@/components/sport-icons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getFavorites } from '@/lib/favorites'
 import type { UiMatch } from '@/lib/ui-match'
-import { TrendingUp, Calendar, Trophy, Radio, Ticket, X, Copy, Check } from 'lucide-react'
+import { TrendingUp, Calendar, Radio, Ticket, X, Copy, Check, Star } from 'lucide-react'
 
 interface HomepageProps {
   onMatchClick?: (match: UiMatch) => void
@@ -20,7 +20,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
   const [matches, setMatches] = useState<UiMatch[] | null>(null)
   const [filter, setFilter] = useState<MatchFilter>('all')
 
-  // ── Booking code (SportyBet-style) ──
+  // ── Booking code ──
   const [bookingOpen, setBookingOpen] = useState(false)
   const [codeInput, setCodeInput] = useState('')
   const [loadedCode, setLoadedCode] = useState<string | null>(null)
@@ -39,10 +39,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
     try {
       const res = await fetch(`/api/bookings/${encodeURIComponent(code)}`, { cache: 'no-store' })
       const data = await res.json()
-      if (!res.ok) {
-        setBookingMsg(data.error ?? 'Could not load that code')
-        return
-      }
+      if (!res.ok) { setBookingMsg(data.error ?? 'Could not load that code'); return }
       if (!data.matches || data.matches.length === 0) {
         setBookingMsg('That booking has no available games right now.')
         return
@@ -59,10 +56,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
 
   const bookFavorites = async () => {
     const ids = getFavorites()
-    if (ids.length === 0) {
-      setBookingMsg('Star some matches first, then create a booking code.')
-      return
-    }
+    if (ids.length === 0) { setBookingMsg('Star some matches first, then create a booking code.'); return }
     setBookingBusy(true)
     setBookingMsg(null)
     try {
@@ -72,10 +66,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         body: JSON.stringify({ matchIds: ids }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        setBookingMsg(data.error ?? 'Could not create a booking')
-        return
-      }
+      if (!res.ok) { setBookingMsg(data.error ?? 'Could not create a booking'); return }
       setCreatedCode(data.code)
       setBookingMsg(null)
     } catch {
@@ -91,9 +82,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
       await navigator.clipboard.writeText(createdCode)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* clipboard blocked — user can copy manually */
-    }
+    } catch { /* clipboard blocked */ }
   }
 
   useEffect(() => {
@@ -109,225 +98,185 @@ export function Homepage({ onMatchClick }: HomepageProps) {
     }
     void load()
     const t = setInterval(load, 20_000)
-    return () => {
-      cancelled = true
-      clearInterval(t)
-    }
+    return () => { cancelled = true; clearInterval(t) }
   }, [])
 
   const live = (matches ?? []).filter((m) => m.state === 'LIVE')
   const upcoming = (matches ?? []).filter((m) => m.state === 'UPCOMING')
   const featured = [...live, ...upcoming].slice(0, 8)
 
-  // Sports overview counts derived from real matches.
   const sportCounts = new Map<string, number>()
-  for (const m of matches ?? []) {
-    sportCounts.set(m.sport, (sportCounts.get(m.sport) ?? 0) + 1)
-  }
+  for (const m of matches ?? []) sportCounts.set(m.sport, (sportCounts.get(m.sport) ?? 0) + 1)
   const sportsWithMatches = Array.from(sportCounts.entries()).sort((a, b) => b[1] - a[1])
+
+  const SEGMENTS: { key: MatchFilter; label: string; count: number; live?: boolean }[] = [
+    { key: 'all', label: 'All', count: (matches ?? []).length },
+    { key: 'live', label: 'Live', count: live.length, live: true },
+    { key: 'upcoming', label: 'Upcoming', count: upcoming.length },
+  ]
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 lg:space-y-8">
-        {/* Promotional banner carousel */}
+      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 max-w-6xl mx-auto">
+        {/* Hero */}
         <PromoBanner />
 
-        {/* Booking code — compact chip that expands on press */}
-        {!bookingOpen ? (
-          <div className="flex justify-end">
-            <button
-              onClick={() => setBookingOpen(true)}
-              className="inline-flex items-center gap-2 bg-card border border-border rounded-full px-4 py-2 text-sm font-semibold text-foreground hover:border-accent transition-colors"
-            >
-              <Ticket className="w-4 h-4 text-accent" /> Booking code
-            </button>
+        {/* Action bar: segmented filter + booking chip */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex bg-card border border-border rounded-full p-1">
+            {SEGMENTS.map((s) => {
+              const active = filter === s.key
+              return (
+                <button
+                  key={s.key}
+                  onClick={() => setFilter(s.key)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                    active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {s.live && <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-accent-foreground' : 'bg-destructive'} ${s.live ? 'animate-pulse' : ''}`} />}
+                  {s.label}
+                  <span className={`text-xs tabular-nums ${active ? 'text-accent-foreground/80' : 'text-muted-foreground/70'}`}>{s.count}</span>
+                </button>
+              )
+            })}
           </div>
-        ) : (
-        <section className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Ticket className="w-5 h-5 text-accent" />
-              <h2 className="font-bold text-foreground">Load a booking code</h2>
-            </div>
-            <button
-              onClick={() => setBookingOpen(false)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && loadBooking()}
-              placeholder="Paste code e.g. K7P2QX"
-              className="flex-1 bg-input border border-border rounded-lg px-4 py-2.5 text-base tracking-wider uppercase text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/40 placeholder:text-muted-foreground placeholder:normal-case placeholder:tracking-normal"
-            />
-            <button
-              onClick={() => loadBooking()}
-              disabled={bookingBusy}
-              className="bg-accent text-accent-foreground font-bold px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
-            >
-              {bookingBusy ? 'Loading…' : 'Load'}
-            </button>
-          </div>
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2">
-            <button
-              onClick={bookFavorites}
-              disabled={bookingBusy}
-              className="text-xs font-medium text-accent hover:underline disabled:opacity-60"
-            >
-              Create a code from my ★ favorites
-            </button>
-            {bookingMsg && <span className="text-xs text-destructive">{bookingMsg}</span>}
-          </div>
-          {createdCode && (
-            <div className="mt-3 flex items-center justify-between gap-3 bg-secondary rounded-lg px-4 py-3">
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Your booking code — share it</p>
-                <p className="text-xl font-extrabold tracking-widest text-foreground">{createdCode}</p>
-              </div>
+
+          <button
+            onClick={() => setBookingOpen((o) => !o)}
+            className={`ml-auto inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors border ${
+              bookingOpen ? 'border-accent text-accent bg-accent/10' : 'border-border text-foreground hover:border-accent'
+            }`}
+          >
+            <Ticket className="w-4 h-4 text-accent" /> Booking code
+          </button>
+        </div>
+
+        {/* Booking panel */}
+        {bookingOpen && (
+          <section className="bg-card border border-border rounded-2xl p-4 shadow-card">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && loadBooking()}
+                placeholder="Paste code e.g. K7P2QX"
+                className="flex-1 bg-input border border-border rounded-lg px-4 py-2.5 text-base tracking-wider uppercase text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/40 placeholder:text-muted-foreground placeholder:normal-case placeholder:tracking-normal"
+              />
               <button
-                onClick={copyCode}
-                className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-semibold px-3 py-2 rounded-lg hover:opacity-90 transition-opacity shrink-0"
+                onClick={() => loadBooking()}
+                disabled={bookingBusy}
+                className="bg-accent text-accent-foreground font-bold px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60"
               >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied' : 'Copy'}
+                {bookingBusy ? 'Loading…' : 'Load'}
               </button>
             </div>
-          )}
-        </section>
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2">
+              <button onClick={bookFavorites} disabled={bookingBusy} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline disabled:opacity-60">
+                Create a code from my <Star className="w-3 h-3 fill-current" /> favorites
+              </button>
+              {bookingMsg && <span className="text-xs text-destructive">{bookingMsg}</span>}
+            </div>
+            {createdCode && (
+              <div className="mt-3 flex items-center justify-between gap-3 bg-secondary rounded-lg px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Your booking code — share it</p>
+                  <p className="text-xl font-extrabold tracking-widest text-foreground">{createdCode}</p>
+                </div>
+                <button onClick={copyCode} className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-semibold px-3 py-2 rounded-lg hover:opacity-90 transition-opacity shrink-0">
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            )}
+          </section>
         )}
 
-        {/* Loaded booking — the games from a pasted code */}
+        {/* Loaded booking */}
         {loadedMatches && loadedCode && (
-          <section className="border border-accent/40 bg-accent/5 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-foreground flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-accent" />
-                Booking {loadedCode}
-                <span className="text-sm font-normal text-muted-foreground">
-                  ({loadedMatches.length} {loadedMatches.length === 1 ? 'game' : 'games'})
-                </span>
-              </h2>
-              <button
-                onClick={() => { setLoadedMatches(null); setLoadedCode(null) }}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                aria-label="Clear booking"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          <section className="border border-accent/40 bg-accent/5 rounded-2xl p-4">
+            <SectionHeading
+              icon={<Ticket className="w-4 h-4" />}
+              title={`Booking ${loadedCode}`}
+              sub={`${loadedMatches.length} ${loadedMatches.length === 1 ? 'game' : 'games'}`}
+              right={
+                <button onClick={() => { setLoadedMatches(null); setLoadedCode(null) }} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors" aria-label="Clear booking">
+                  <X className="w-4 h-4" />
+                </button>
+              }
+            />
             <MatchList matches={loadedMatches} onMatchClick={onMatchClick} />
           </section>
         )}
 
-        {/* Quick filter tiles (SportyBet-style, horizontal scroll) */}
-        <section className="-mx-1">
-          <div className="flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <FilterTile
-              active={filter === 'all'}
-              onClick={() => setFilter('all')}
-              icon={<Trophy className="w-5 h-5" />}
-              label="All"
-              count={(matches ?? []).length}
-            />
-            <FilterTile
-              active={filter === 'live'}
-              onClick={() => setFilter('live')}
-              icon={<Radio className="w-5 h-5" />}
-              label="Live"
-              count={live.length}
-              live
-            />
-            <FilterTile
-              active={filter === 'upcoming'}
-              onClick={() => setFilter('upcoming')}
-              icon={<Calendar className="w-5 h-5" />}
-              label="Upcoming"
-              count={upcoming.length}
-            />
-          </div>
-        </section>
-
-        {/* Trending carousel */}
+        {/* Trending (own header inside) */}
         {filter === 'all' && <FeaturedMatches matches={featured} onMatchClick={onMatchClick} />}
 
-        {/* Sports Overview — horizontal scroll */}
+        {/* Popular sports */}
         {sportsWithMatches.length > 0 && (
           <section>
-            <h2 className="text-xl font-bold text-foreground mb-4">Popular Sports</h2>
+            <SectionHeading icon={<TrendingUp className="w-4 h-4" />} title="Popular Sports" />
             <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {sportsWithMatches.map(([sport, count]) => {
                 const Icon = SPORT_ICONS[sport]
                 return (
-                  <div
+                  <button
                     key={sport}
-                    className="shrink-0 w-32 bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-accent transition-all"
+                    className="shrink-0 w-28 bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-2 hover:border-accent hover:-translate-y-0.5 transition-all"
                   >
-                    {Icon && <Icon className="w-8 h-8 mb-2 text-accent" />}
-                    <h3 className="font-semibold text-foreground mb-0.5 capitalize truncate">{sport.replace('-', ' ')}</h3>
-                    <p className="text-xs text-muted-foreground">{count} {count === 1 ? 'match' : 'matches'}</p>
-                  </div>
+                    <span className="w-12 h-12 rounded-full bg-accent/15 flex items-center justify-center">
+                      {Icon && <Icon className="w-6 h-6 text-accent" />}
+                    </span>
+                    <span className="text-sm font-semibold text-foreground capitalize truncate w-full text-center">{sport.replace('-', ' ')}</span>
+                    <span className="text-xs text-muted-foreground">{count} {count === 1 ? 'match' : 'matches'}</span>
+                  </button>
                 )
               })}
             </div>
           </section>
         )}
 
-        {/* Loading skeletons */}
+        {/* Loading */}
         {matches === null && (
-          <section>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-56 rounded-lg" />
-              ))}
-            </div>
-          </section>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+          </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty */}
         {matches !== null && matches.length === 0 && (
-          <section>
-            <div className="bg-card border border-dashed border-border rounded-lg p-12 text-center">
-              <TrendingUp className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">No matches yet</h3>
-              <p className="text-sm text-muted-foreground">
-                An admin can add matches from the dashboard. They&apos;ll appear here in real time.
-              </p>
-            </div>
-          </section>
+          <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
+            <TrendingUp className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">No matches yet</h3>
+            <p className="text-sm text-muted-foreground">
+              An admin can add matches from the dashboard. They&apos;ll appear here in real time.
+            </p>
+          </div>
         )}
 
-        {/* Live Matches */}
+        {/* Live */}
         {filter !== 'upcoming' && live.length > 0 && (
           <section>
-            <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" /> Live Matches
-            </h2>
+            <SectionHeading icon={<Radio className="w-4 h-4" />} title="Live Matches" tone="live" />
             <MatchList matches={live} onMatchClick={onMatchClick} />
           </section>
         )}
 
-        {/* Upcoming Matches */}
+        {/* Upcoming */}
         {filter !== 'live' && upcoming.length > 0 && (
           <section>
-            <h2 className="text-xl font-bold text-foreground mb-4">Upcoming Matches</h2>
+            <SectionHeading icon={<Calendar className="w-4 h-4" />} title="Upcoming Matches" />
             <MatchList matches={upcoming} onMatchClick={onMatchClick} />
           </section>
         )}
 
-        {/* Filter yielded nothing (but matches exist under another filter) */}
+        {/* Filter empty */}
         {matches !== null && matches.length > 0 &&
           ((filter === 'live' && live.length === 0) || (filter === 'upcoming' && upcoming.length === 0)) && (
-            <div className="bg-card border border-dashed border-border rounded-xl p-10 text-center">
+            <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
               <p className="text-sm text-muted-foreground">
                 No {filter} matches right now.{' '}
-                <button onClick={() => setFilter('all')} className="text-accent font-medium hover:underline">
-                  Show all
-                </button>
+                <button onClick={() => setFilter('all')} className="text-accent font-medium hover:underline">Show all</button>
               </p>
             </div>
           )}
@@ -336,31 +285,32 @@ export function Homepage({ onMatchClick }: HomepageProps) {
   )
 }
 
-function FilterTile({
-  active,
-  onClick,
+function SectionHeading({
   icon,
-  label,
-  count,
-  live,
+  title,
+  sub,
+  right,
+  tone,
 }: {
-  active: boolean
-  onClick: () => void
   icon: React.ReactNode
-  label: string
-  count: number
-  live?: boolean
+  title: string
+  sub?: string
+  right?: React.ReactNode
+  tone?: 'live'
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 w-[104px] rounded-xl border p-3 flex flex-col items-start gap-1 transition-colors ${
-        active ? 'border-accent bg-accent/10' : 'border-border bg-card hover:border-accent/50'
-      }`}
-    >
-      <span className={live ? 'text-destructive' : 'text-accent'}>{icon}</span>
-      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
-      <span className="text-2xl font-extrabold tabular-nums text-foreground leading-none">{count}</span>
-    </button>
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tone === 'live' ? 'bg-destructive/15 text-destructive' : 'bg-accent/15 text-accent'}`}>
+          {icon}
+        </span>
+        <h2 className="text-lg font-bold text-foreground truncate flex items-center gap-1.5">
+          {tone === 'live' && <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />}
+          {title}
+        </h2>
+        {sub && <span className="text-sm text-muted-foreground shrink-0">{sub}</span>}
+      </div>
+      {right}
+    </div>
   )
 }
