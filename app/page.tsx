@@ -11,6 +11,7 @@ import { PromotionsPage } from '@/components/promotions-page'
 import { FavoritesPage } from '@/components/favorites-page'
 import { SchedulePage } from '@/components/schedule-page'
 import { ResultsPage } from '@/components/results-page'
+import { MyBetsPage } from '@/components/my-bets-page'
 import { BottomNav } from '@/components/bottom-nav'
 import { BetSlip } from '@/components/bet-slip'
 import type { UiMatch } from '@/lib/ui-match'
@@ -37,7 +38,7 @@ export default function Home() {
   }
 
   // Sections that have full page implementations
-  const mainSections = ['in-play', 'favorites', 'schedule', 'results', 'wallet', 'promotions']
+  const mainSections = ['in-play', 'favorites', 'schedule', 'results', 'my-bets', 'wallet', 'promotions']
 
   return (
     <div className="flex h-screen bg-background">
@@ -72,6 +73,7 @@ export default function Home() {
               {activeSection === 'favorites' && <FavoritesPage onMatchClick={handleMatchClick} />}
               {activeSection === 'schedule' && <SchedulePage onMatchClick={handleMatchClick} />}
               {activeSection === 'results' && <ResultsPage onMatchClick={handleMatchClick} />}
+              {activeSection === 'my-bets' && <MyBetsPage />}
               {activeSection === 'wallet' && (
                 <WalletPage
                   openDeposit={walletOpenDeposit}

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Wallet,
   Gift,
+  Receipt,
   X,
 } from 'lucide-react'
 
@@ -40,6 +41,7 @@ export function Sidebar({ activeSection, onSectionChange, open = false, onClose 
     { id: 'favorites', label: 'Favorites', icon: Heart, badge: 0 },
     { id: 'schedule', label: 'Schedule', icon: Calendar, badge: 0 },
     { id: 'results', label: 'Results', icon: TrendingUp, badge: 0 },
+    { id: 'my-bets', label: 'My Bets', icon: Receipt, badge: 0 },
     { id: 'wallet', label: 'Wallet', icon: Wallet, badge: 0 },
     { id: 'promotions', label: 'Promotions', icon: Gift, badge: 0 },
   ]

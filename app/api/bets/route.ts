@@ -1,10 +1,25 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
-import { addBet, generateUniqueCode } from '@/lib/bets-store'
+import { addBet, generateUniqueCode, readBetsForUser } from '@/lib/bets-store'
 import { debitBalance, findUserById } from '@/lib/users-store'
 import type { BetSelection, Match, PlacedBet } from '@/lib/domain-types'
 
 export const dynamic = 'force-dynamic'
+
+/** GET /api/bets?userId=... → the player's placed tickets (newest first). */
+export async function GET(request: Request) {
+  const userId = new URL(request.url).searchParams.get('userId')
+  if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400 })
+  try {
+    const bets = await readBetsForUser(userId)
+    return NextResponse.json({ bets })
+  } catch (e) {
+    return NextResponse.json(
+      { bets: [], error: e instanceof Error ? e.message : String(e) },
+      { status: 200 },
+    )
+  }
+}
 
 interface SelectionInput {
   matchId: string

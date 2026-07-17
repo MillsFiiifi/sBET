@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, Calendar, Trophy, Wallet, Gift } from 'lucide-react'
+import { Home, Calendar, Receipt, Wallet, Gift } from 'lucide-react'
 
 interface BottomNavProps {
   activeSection: string
@@ -10,7 +10,7 @@ interface BottomNavProps {
 const TABS = [
   { id: 'in-play', label: 'Sports', icon: Home },
   { id: 'schedule', label: 'Schedule', icon: Calendar },
-  { id: 'results', label: 'Results', icon: Trophy },
+  { id: 'my-bets', label: 'My Bets', icon: Receipt },
   { id: 'promotions', label: 'Promos', icon: Gift },
   { id: 'wallet', label: 'Wallet', icon: Wallet },
 ]
