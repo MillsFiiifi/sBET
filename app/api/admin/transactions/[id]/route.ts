@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { isAdminRequest } from '@/lib/admin-guard'
 import { findTransactionById, setTransactionStatus } from '@/lib/transactions-store'
-import { recordDeposit, recordWithdrawal } from '@/lib/users-store'
+import { addCommission, recordDeposit, recordWithdrawal } from '@/lib/users-store'
+import { creditCommission } from '@/lib/sub-admins-store'
+import { COMMISSION_RATE } from '@/lib/domain-types'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +49,26 @@ export async function PATCH(
   if (tx.type === 'deposit') {
     const res = await recordDeposit(tx.userId, tx.amount)
     if (!res) return NextResponse.json({ error: 'user not found' }, { status: 404 })
+
+    // Referral commission: pay the sub-admin on the user's FIRST deposit only.
+    if (res.isFirst && res.user.referredBySubAdminId) {
+      const commissionAmount = +(tx.amount * COMMISSION_RATE).toFixed(2)
+      if (commissionAmount > 0) {
+        try {
+          await addCommission({
+            subAdminId: res.user.referredBySubAdminId,
+            userId: res.user.id,
+            depositAmount: tx.amount,
+            commission: commissionAmount,
+            rate: COMMISSION_RATE,
+            currency: res.user.currency,
+          })
+          await creditCommission(res.user.referredBySubAdminId, commissionAmount, res.user.currency)
+        } catch {
+          // Don't fail the deposit approval if the commission payout hiccups.
+        }
+      }
+    }
   } else if (tx.type === 'withdrawal') {
     const res = await recordWithdrawal(tx.userId, tx.amount)
     if ('error' in res) {
