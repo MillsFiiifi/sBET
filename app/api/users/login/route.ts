@@ -1,23 +1,36 @@
 import { NextResponse } from 'next/server'
-import { findUserByEmail, findUserByPhone } from '@/lib/users-store'
+import { findUserByEmail, findUserByPhoneLocal } from '@/lib/users-store'
 import { verifyPassword } from '@/lib/password'
 
 export const dynamic = 'force-dynamic'
 
-// Accept any of: 0244XXXXXXX, 233244XXXXXXX, +233244XXXXXXX. Returns the
-// 10-digit local format (the same shape stored on the users table).
-function normalizePhone(raw: string): string | null {
-  const s = raw.replace(/\s|-/g, '')
-  let local = s
-  if (s.startsWith('+233')) local = '0' + s.slice(4)
-  else if (s.startsWith('233')) local = '0' + s.slice(3)
-  return /^0\d{9}$/.test(local) ? local : null
+// Country dial codes we support (longest-first so 3-digit codes are matched
+// before the 2-/1-digit ones that could be a prefix).
+const DIAL_CODES = ['233', '234', '254', '256', '255', '237', '260', '225', '250', '27', '44', '1']
+
+/**
+ * Reduce any phone the user might type — "0244123456", "244123456",
+ * "+233244123456", "233 244 123 456", "+2348012345678" — to its national
+ * significant number (country code + trunk "0" removed). Country-agnostic so
+ * players from every supported market can log in with their number.
+ */
+function toLocalDigits(raw: string): string | null {
+  let d = raw.replace(/\D/g, '')
+  if (d.length < 7) return null
+  for (const dial of DIAL_CODES) {
+    const rest = d.length - dial.length
+    if (d.startsWith(dial) && rest >= 7 && rest <= 11) {
+      d = d.slice(dial.length)
+      break
+    }
+  }
+  d = d.replace(/^0+/, '')
+  return d.length >= 7 && d.length <= 11 ? d : null
 }
 
 function looksLikePhone(s: string): boolean {
-  // Cheap discriminator: phones are all-digits (or start with +/233/0). Emails
-  // always contain '@'. We don't have to be perfect — we fall back to email
-  // lookup if phone lookup returns nothing.
+  // Cheap discriminator: phones are all-digits (or start with +). Emails
+  // always contain '@'. We fall back to email lookup if phone lookup misses.
   return /^[+\d\s-]+$/.test(s)
 }
 
@@ -43,8 +56,8 @@ export async function POST(request: Request) {
 
   let user = null
   if (looksLikePhone(raw)) {
-    const phone = normalizePhone(raw)
-    if (phone) user = await findUserByPhone(phone)
+    const local = toLocalDigits(raw)
+    if (local) user = await findUserByPhoneLocal(local)
   }
   if (!user) {
     user = await findUserByEmail(raw.toLowerCase())

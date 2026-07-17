@@ -115,6 +115,27 @@ export async function findUserByPhone(phone: string): Promise<AppUser | null> {
   return data ? rowToUser(data) : null
 }
 
+/**
+ * Find a user by their national phone number (country-agnostic).
+ * `local` is the number with country code and trunk "0" removed. Phones are
+ * stored either as "0"+local (GH, NG, KE, …) or bare local (ZA, CM, CI, US),
+ * so we match both canonical forms. Used by phone login where we don't know
+ * the caller's country up front.
+ */
+export async function findUserByPhoneLocal(local: string): Promise<AppUser | null> {
+  const digits = local.replace(/\D/g, '')
+  if (digits.length < 7) return null
+  const candidates = Array.from(new Set([digits, '0' + digits]))
+  const { data, error } = await supabaseServer()
+    .from('users')
+    .select('*')
+    .or(candidates.map((c) => `phone.eq.${c}`).join(','))
+    .limit(1)
+  if (error) throw new Error(`users.findByPhoneLocal: ${error.message}`)
+  const row = (data ?? [])[0]
+  return row ? rowToUser(row) : null
+}
+
 export async function findUserById(id: string): Promise<AppUser | null> {
   const { data, error } = await supabaseServer()
     .from('users')
