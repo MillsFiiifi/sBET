@@ -22,6 +22,8 @@ export interface CustomMatch {
   oddsHome: number
   oddsDraw: number
   oddsAway: number
+  homeFlagUrl: string | null
+  awayFlagUrl: string | null
   createdAt: string
 }
 
@@ -41,6 +43,8 @@ interface Row {
   odds_home: number
   odds_draw: number
   odds_away: number
+  home_flag_url: string | null
+  away_flag_url: string | null
   created_at: string
 }
 
@@ -61,6 +65,8 @@ function rowToMatch(r: Row): CustomMatch {
     oddsHome: Number(r.odds_home),
     oddsDraw: Number(r.odds_draw ?? 0),
     oddsAway: Number(r.odds_away),
+    homeFlagUrl: r.home_flag_url,
+    awayFlagUrl: r.away_flag_url,
     createdAt: r.created_at,
   }
 }
@@ -92,6 +98,8 @@ export function toUiMatch(m: CustomMatch): UiMatch {
     locked: m.locked,
     startTime: m.startTime ?? undefined,
     createdAt: m.createdAt,
+    homeFlagUrl: m.homeFlagUrl ?? undefined,
+    awayFlagUrl: m.awayFlagUrl ?? undefined,
   }
 }
 
@@ -131,6 +139,8 @@ export interface CustomMatchInput {
   oddsHome: number
   oddsDraw?: number
   oddsAway: number
+  homeFlagUrl?: string | null
+  awayFlagUrl?: string | null
 }
 
 export async function addCustomMatch(input: CustomMatchInput): Promise<CustomMatch> {
@@ -150,6 +160,8 @@ export async function addCustomMatch(input: CustomMatchInput): Promise<CustomMat
     odds_home: input.oddsHome,
     odds_draw: input.oddsDraw ?? 0,
     odds_away: input.oddsAway,
+    home_flag_url: input.homeFlagUrl ?? null,
+    away_flag_url: input.awayFlagUrl ?? null,
   }
   const { data, error } = await supabaseServer()
     .from('custom_matches')
@@ -182,6 +194,8 @@ export async function updateCustomMatch(
   if (patch.oddsHome !== undefined) db.odds_home = patch.oddsHome
   if (patch.oddsDraw !== undefined) db.odds_draw = patch.oddsDraw
   if (patch.oddsAway !== undefined) db.odds_away = patch.oddsAway
+  if (patch.homeFlagUrl !== undefined) db.home_flag_url = patch.homeFlagUrl
+  if (patch.awayFlagUrl !== undefined) db.away_flag_url = patch.awayFlagUrl
 
   if (Object.keys(db).length === 0) return findCustomMatchById(id)
 

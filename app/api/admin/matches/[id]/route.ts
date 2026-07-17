@@ -35,6 +35,8 @@ export async function PATCH(
     oddsHome: num(body.oddsHome),
     oddsDraw: num(body.oddsDraw),
     oddsAway: num(body.oddsAway),
+    homeFlagUrl: body.homeFlagUrl === undefined ? undefined : (body.homeFlagUrl ? String(body.homeFlagUrl) : null),
+    awayFlagUrl: body.awayFlagUrl === undefined ? undefined : (body.awayFlagUrl ? String(body.awayFlagUrl) : null),
   })
   if (!match) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json({ match })

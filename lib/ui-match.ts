@@ -18,4 +18,7 @@ export interface UiMatch {
   locked?: boolean
   startTime?: string
   createdAt?: string
+  /** Public image URLs for the team crests/logos (admin upload or feed). */
+  homeFlagUrl?: string
+  awayFlagUrl?: string
 }

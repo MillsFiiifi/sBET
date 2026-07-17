@@ -14,7 +14,10 @@ const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN'])
 interface AFFixture {
   fixture: { id: number; status: { short: string; elapsed: number | null }; date: string }
   league: { name: string; country: string }
-  teams: { home: { name: string }; away: { name: string } }
+  teams: {
+    home: { name: string; logo?: string }
+    away: { name: string; logo?: string }
+  }
   goals: { home: number | null; away: number | null }
 }
 
@@ -59,6 +62,8 @@ function toUi(f: AFFixture): UiMatch {
     odds: genOdds(f.fixture.id),
     startTime: kickoff.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
     createdAt: f.fixture.date,
+    homeFlagUrl: f.teams.home.logo,
+    awayFlagUrl: f.teams.away.logo,
   }
 }
 

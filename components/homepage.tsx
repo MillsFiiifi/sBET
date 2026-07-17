@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MatchCard } from './match-card'
+import { MatchList } from './match-list'
 import { SPORT_ICONS } from '@/components/sport-icons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getFavorites } from '@/lib/favorites'
@@ -211,11 +211,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {loadedMatches.map((match) => (
-                <MatchCard key={match.id} match={match} onClick={() => onMatchClick?.(match)} />
-              ))}
-            </div>
+            <MatchList matches={loadedMatches} onMatchClick={onMatchClick} />
           </section>
         )}
 
@@ -280,11 +276,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
             <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" /> Live Matches
             </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {live.map((match) => (
-                <MatchCard key={match.id} match={match} onClick={() => onMatchClick?.(match)} />
-              ))}
-            </div>
+            <MatchList matches={live} onMatchClick={onMatchClick} />
           </section>
         )}
 
@@ -292,11 +284,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         {upcoming.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-foreground mb-4">Upcoming Matches</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {upcoming.map((match) => (
-                <MatchCard key={match.id} match={match} onClick={() => onMatchClick?.(match)} />
-              ))}
-            </div>
+            <MatchList matches={upcoming} onMatchClick={onMatchClick} />
           </section>
         )}
       </div>

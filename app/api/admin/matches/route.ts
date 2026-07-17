@@ -57,6 +57,8 @@ export async function POST(request: Request) {
     oddsHome,
     oddsDraw: Number.isFinite(oddsDraw) ? oddsDraw : 0,
     oddsAway,
+    homeFlagUrl: body.homeFlagUrl ? String(body.homeFlagUrl) : null,
+    awayFlagUrl: body.awayFlagUrl ? String(body.awayFlagUrl) : null,
   })
   return NextResponse.json({ match }, { status: 201 })
 }

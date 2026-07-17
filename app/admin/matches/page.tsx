@@ -20,6 +20,8 @@ const emptyForm = {
   minute: '',
   startTime: '',
   isLive: false,
+  homeFlagUrl: '',
+  awayFlagUrl: '',
 }
 
 export default function AdminMatchesPage() {
@@ -27,6 +29,24 @@ export default function AdminMatchesPage() {
   const [form, setForm] = useState({ ...emptyForm })
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState<null | 'home' | 'away'>(null)
+
+  const uploadFlag = async (side: 'home' | 'away', file: File) => {
+    setUploading(side)
+    setError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/admin/upload-flag', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+      setForm((f) => ({ ...f, [side === 'home' ? 'homeFlagUrl' : 'awayFlagUrl']: data.url }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUploading(null)
+    }
+  }
 
   const load = async () => {
     const res = await fetch('/api/admin/matches', { cache: 'no-store' })
@@ -141,6 +161,51 @@ export default function AdminMatchesPage() {
           {field('awayScore', 'Away score', 'number', '0')}
           {field('minute', 'Minute (if live)', 'text', "45")}
         </div>
+
+        {/* Team logos / flags */}
+        <div className="grid grid-cols-2 gap-3">
+          {(['home', 'away'] as const).map((side) => {
+            const url = side === 'home' ? form.homeFlagUrl : form.awayFlagUrl
+            return (
+              <div key={side} className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-secondary border border-border flex items-center justify-center overflow-hidden shrink-0">
+                  {url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={url} alt="" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">No logo</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground mb-1 capitalize">{side} team logo</p>
+                  <label className="inline-block text-xs font-medium text-accent cursor-pointer hover:underline">
+                    {uploading === side ? 'Uploading…' : url ? 'Change' : 'Upload logo'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) void uploadFlag(side, f)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                  {url && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, [side === 'home' ? 'homeFlagUrl' : 'awayFlagUrl']: '' }))}
+                      className="ml-3 text-xs text-destructive hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
         <div className="flex items-center justify-between flex-wrap gap-3">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
