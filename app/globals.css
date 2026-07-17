@@ -149,6 +149,17 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Slightly smaller type scale — the previous 16px base read oversized,
+     especially on mobile. rem-based spacing shrinks with it, so the whole
+     UI feels more compact / SportyBet-like. */
+  html {
+    font-size: 14px;
+  }
+  @media (min-width: 1024px) {
+    html {
+      font-size: 15px;
+    }
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;

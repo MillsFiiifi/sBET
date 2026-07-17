@@ -58,7 +58,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         {/* Sports Overview */}
         {sportsWithMatches.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold text-foreground mb-4">Popular Sports</h2>
+            <h2 className="text-xl font-bold text-foreground mb-4">Popular Sports</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {sportsWithMatches.map(([sport, count]) => {
                 const Icon = SPORT_ICONS[sport]
@@ -104,7 +104,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         {/* Live Matches */}
         {live.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
+            <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" /> Live Matches
             </h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -118,7 +118,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         {/* Upcoming Matches */}
         {upcoming.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold text-foreground mb-4">Upcoming Matches</h2>
+            <h2 className="text-xl font-bold text-foreground mb-4">Upcoming Matches</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {upcoming.map((match) => (
                 <MatchCard key={match.id} match={match} onClick={() => onMatchClick?.(match)} />

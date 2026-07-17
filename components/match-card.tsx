@@ -68,7 +68,7 @@ export function MatchCard({ match, onClick }: MatchCardProps) {
             <span className="text-sm font-medium text-foreground flex-1">
               {match.homeTeam}
             </span>
-            <div className="text-2xl font-bold text-foreground mx-4">
+            <div className="text-xl font-bold text-foreground mx-4">
               {match.homeScore}
             </div>
           </div>
@@ -83,7 +83,7 @@ export function MatchCard({ match, onClick }: MatchCardProps) {
             <span className="text-sm font-medium text-foreground flex-1">
               {match.awayTeam}
             </span>
-            <div className="text-2xl font-bold text-foreground mx-4">
+            <div className="text-xl font-bold text-foreground mx-4">
               {match.awayScore}
             </div>
           </div>

@@ -65,7 +65,7 @@ export function LiveMatchDetail({ match, onBack }: LiveMatchDetailProps) {
             <div className="bg-card border border-border rounded-lg p-4 sm:p-8">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-center flex-1">
-                  <h2 className="text-4xl font-bold text-foreground mb-2">
+                  <h2 className="text-3xl font-bold text-foreground mb-2">
                     {match.homeScore}
                   </h2>
                   <p className="text-foreground font-semibold">{match.homeTeam}</p>
@@ -82,7 +82,7 @@ export function LiveMatchDetail({ match, onBack }: LiveMatchDetailProps) {
                   <p className="text-sm text-muted-foreground">{match.time}</p>
                 </div>
                 <div className="text-center flex-1">
-                  <h2 className="text-4xl font-bold text-foreground mb-2">
+                  <h2 className="text-3xl font-bold text-foreground mb-2">
                     {match.awayScore}
                   </h2>
                   <p className="text-foreground font-semibold">{match.awayTeam}</p>

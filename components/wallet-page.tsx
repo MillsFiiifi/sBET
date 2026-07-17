@@ -117,7 +117,7 @@ export function WalletPage() {
               <div>
                 <p className="text-primary-foreground/80 text-sm font-medium mb-1">Total Balance</p>
                 <div className="flex items-center gap-3">
-                  <h2 className="text-4xl font-bold">
+                  <h2 className="text-3xl font-bold">
                     {wallet ? (showBalance ? fmt(wallet.balance) : '••••••') : '—'}
                   </h2>
                   <button onClick={() => setShowBalance(!showBalance)} className="hover:opacity-80 transition-opacity">
