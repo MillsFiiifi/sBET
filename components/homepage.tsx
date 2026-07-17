@@ -8,15 +8,17 @@ import { SPORT_ICONS } from '@/components/sport-icons'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getFavorites } from '@/lib/favorites'
 import type { UiMatch } from '@/lib/ui-match'
-import { TrendingUp, Calendar, Radio, Ticket, X, Copy, Check, Star } from 'lucide-react'
+import { TrendingUp, Calendar, Radio, Ticket, X, Copy, Check, Star, LayoutGrid, Receipt, Gift, Wallet } from 'lucide-react'
 
 interface HomepageProps {
   onMatchClick?: (match: UiMatch) => void
+  /** Switch the main app section (used by the quick-action shortcuts). */
+  onNavigate?: (section: string) => void
 }
 
 type MatchFilter = 'all' | 'live' | 'upcoming'
 
-export function Homepage({ onMatchClick }: HomepageProps) {
+export function Homepage({ onMatchClick, onNavigate }: HomepageProps) {
   const [matches, setMatches] = useState<UiMatch[] | null>(null)
   const [filter, setFilter] = useState<MatchFilter>('all')
 
@@ -120,6 +122,19 @@ export function Homepage({ onMatchClick }: HomepageProps) {
       <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 max-w-6xl mx-auto">
         {/* Hero */}
         <PromoBanner />
+
+        {/* Quick actions — horizontal scroll (SportyBet-style) */}
+        <section className="-mx-1">
+          <div className="flex gap-3 sm:gap-4 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <QuickAction icon={<LayoutGrid className="w-5 h-5" />} label="All Sports" active={filter === 'all'} onClick={() => setFilter('all')} />
+            <QuickAction icon={<Radio className="w-5 h-5" />} label="Live" active={filter === 'live'} tone="live" onClick={() => setFilter('live')} />
+            <QuickAction icon={<Calendar className="w-5 h-5" />} label="Today" active={filter === 'upcoming'} onClick={() => setFilter('upcoming')} />
+            <QuickAction icon={<Ticket className="w-5 h-5" />} label="Load Code" onClick={() => setBookingOpen(true)} />
+            <QuickAction icon={<Receipt className="w-5 h-5" />} label="My Bets" onClick={() => onNavigate?.('my-bets')} />
+            <QuickAction icon={<Gift className="w-5 h-5" />} label="Promos" onClick={() => onNavigate?.('promotions')} />
+            <QuickAction icon={<Wallet className="w-5 h-5" />} label="Wallet" onClick={() => onNavigate?.('wallet')} />
+          </div>
+        </section>
 
         {/* Action bar: segmented filter + booking chip */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -282,6 +297,35 @@ export function Homepage({ onMatchClick }: HomepageProps) {
           )}
       </div>
     </div>
+  )
+}
+
+function QuickAction({
+  icon,
+  label,
+  active,
+  tone,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  active?: boolean
+  tone?: 'live'
+  onClick?: () => void
+}) {
+  return (
+    <button onClick={onClick} className="shrink-0 flex flex-col items-center gap-1.5 w-16">
+      <span
+        className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
+          active
+            ? 'bg-accent text-accent-foreground'
+            : `bg-card border border-border ${tone === 'live' ? 'text-destructive' : 'text-accent'} hover:border-accent`
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="text-[11px] font-medium text-muted-foreground text-center leading-tight">{label}</span>
+    </button>
   )
 }
 

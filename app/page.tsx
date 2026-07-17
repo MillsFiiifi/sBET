@@ -69,7 +69,7 @@ export default function Home() {
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {selectedMatch === null ? (
             <>
-              {activeSection === 'in-play' && <Homepage onMatchClick={handleMatchClick} />}
+              {activeSection === 'in-play' && <Homepage onMatchClick={handleMatchClick} onNavigate={setActiveSection} />}
               {activeSection === 'favorites' && <FavoritesPage onMatchClick={handleMatchClick} />}
               {activeSection === 'schedule' && <SchedulePage onMatchClick={handleMatchClick} />}
               {activeSection === 'results' && <ResultsPage onMatchClick={handleMatchClick} />}
