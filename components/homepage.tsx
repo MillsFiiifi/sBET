@@ -12,8 +12,11 @@ interface HomepageProps {
   onMatchClick?: (match: UiMatch) => void
 }
 
+type MatchFilter = 'all' | 'live' | 'upcoming'
+
 export function Homepage({ onMatchClick }: HomepageProps) {
   const [matches, setMatches] = useState<UiMatch[] | null>(null)
+  const [filter, setFilter] = useState<MatchFilter>('all')
 
   // ── Booking code (SportyBet-style) ──
   const [bookingOpen, setBookingOpen] = useState(false)
@@ -215,12 +218,31 @@ export function Homepage({ onMatchClick }: HomepageProps) {
           </section>
         )}
 
-        {/* Quick Stats — real */}
-        <section>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard label="Live Matches" value={live.length} icon={<Radio className="w-8 h-8 text-destructive opacity-70" />} />
-            <StatCard label="Upcoming" value={upcoming.length} icon={<Calendar className="w-8 h-8 text-accent opacity-60" />} />
-            <StatCard label="Total Matches" value={(matches ?? []).length} icon={<Trophy className="w-8 h-8 text-accent opacity-60" />} />
+        {/* Quick filter tiles (SportyBet-style, horizontal scroll) */}
+        <section className="-mx-1">
+          <div className="flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <FilterTile
+              active={filter === 'all'}
+              onClick={() => setFilter('all')}
+              icon={<Trophy className="w-5 h-5" />}
+              label="All"
+              count={(matches ?? []).length}
+            />
+            <FilterTile
+              active={filter === 'live'}
+              onClick={() => setFilter('live')}
+              icon={<Radio className="w-5 h-5" />}
+              label="Live"
+              count={live.length}
+              live
+            />
+            <FilterTile
+              active={filter === 'upcoming'}
+              onClick={() => setFilter('upcoming')}
+              icon={<Calendar className="w-5 h-5" />}
+              label="Upcoming"
+              count={upcoming.length}
+            />
           </div>
         </section>
 
@@ -271,7 +293,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         )}
 
         {/* Live Matches */}
-        {live.length > 0 && (
+        {filter !== 'upcoming' && live.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" /> Live Matches
@@ -281,27 +303,55 @@ export function Homepage({ onMatchClick }: HomepageProps) {
         )}
 
         {/* Upcoming Matches */}
-        {upcoming.length > 0 && (
+        {filter !== 'live' && upcoming.length > 0 && (
           <section>
             <h2 className="text-xl font-bold text-foreground mb-4">Upcoming Matches</h2>
             <MatchList matches={upcoming} onMatchClick={onMatchClick} />
           </section>
         )}
+
+        {/* Filter yielded nothing (but matches exist under another filter) */}
+        {matches !== null && matches.length > 0 &&
+          ((filter === 'live' && live.length === 0) || (filter === 'upcoming' && upcoming.length === 0)) && (
+            <div className="bg-card border border-dashed border-border rounded-xl p-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                No {filter} matches right now.{' '}
+                <button onClick={() => setFilter('all')} className="text-accent font-medium hover:underline">
+                  Show all
+                </button>
+              </p>
+            </div>
+          )}
       </div>
     </div>
   )
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function FilterTile({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+  live,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  count: number
+  live?: boolean
+}) {
   return (
-    <div className="bg-card border border-border rounded-lg p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">{label}</p>
-          <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
-        </div>
-        {icon}
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      className={`shrink-0 w-[104px] rounded-xl border p-3 flex flex-col items-start gap-1 transition-colors ${
+        active ? 'border-accent bg-accent/10' : 'border-border bg-card hover:border-accent/50'
+      }`}
+    >
+      <span className={live ? 'text-destructive' : 'text-accent'}>{icon}</span>
+      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <span className="text-2xl font-extrabold tabular-nums text-foreground leading-none">{count}</span>
+    </button>
   )
 }
