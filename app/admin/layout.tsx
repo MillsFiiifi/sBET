@@ -1,0 +1,51 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const router = useRouter()
+
+  // The login page renders standalone (it has its own full-screen card).
+  if (pathname === '/admin/login') {
+    return <>{children}</>
+  }
+
+  async function handleLogout() {
+    await fetch('/api/admin/logout', { method: 'POST' })
+    router.push('/admin/login')
+    router.refresh()
+  }
+
+  return (
+    <div className="min-h-dvh bg-background flex flex-col">
+      <header className="bg-card border-b border-border sticky top-0 z-40">
+        <div className="px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+              ₹
+            </span>
+            <span className="font-display font-bold tracking-wide text-foreground">SBET</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-accent border border-accent/40 bg-accent/10 rounded-full px-2 py-0.5">
+              Admin
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm text-muted-foreground hover:text-accent transition-colors">
+              ← Back to site
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-destructive transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Logout
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="flex-1 min-w-0">{children}</main>
+    </div>
+  )
+}

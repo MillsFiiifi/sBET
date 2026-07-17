@@ -38,8 +38,9 @@ export default function Home() {
         {/* Header */}
         {selectedMatch === null && <Header onSettingsClick={() => setShowSettings(true)} />}
 
-        {/* Content Area */}
-        <main className="flex-1 overflow-hidden">
+        {/* Content Area — flex column so each page's `flex-1 overflow-y-auto`
+            root gets a bounded height and can actually scroll */}
+        <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {selectedMatch === null ? (
             <>
               {activeSection === 'in-play' && <Homepage onMatchClick={handleMatchClick} />}
