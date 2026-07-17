@@ -56,7 +56,7 @@ export function PromotionsPage() {
 
   return (
     <main className="flex-1 overflow-y-auto">
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 lg:space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 max-w-7xl mx-auto space-y-6 lg:space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
             <Gift className="w-8 h-8 text-accent" />

@@ -33,8 +33,8 @@ export function Homepage({ onMatchClick }: HomepageProps) {
     }
   }, [])
 
-  const live = (matches ?? []).filter((m) => m.status === 'LIVE')
-  const upcoming = (matches ?? []).filter((m) => m.status === 'UPCOMING')
+  const live = (matches ?? []).filter((m) => m.state === 'LIVE')
+  const upcoming = (matches ?? []).filter((m) => m.state === 'UPCOMING')
 
   // Sports overview counts derived from real matches.
   const sportCounts = new Map<string, number>()
@@ -45,7 +45,7 @@ export function Homepage({ onMatchClick }: HomepageProps) {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 space-y-6 lg:space-y-8">
         {/* Quick Stats — real */}
         <section>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

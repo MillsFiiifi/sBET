@@ -1,126 +1,107 @@
 'use client'
 
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Calendar } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import type { UiMatch } from '@/lib/ui-match'
 
-const SCHEDULE_DATA = [
-  {
-    date: '2024-06-15',
-    matches: [
-      { id: 1, home: 'Manchester United', away: 'Liverpool', league: 'Premier League', time: '15:00' },
-      { id: 2, home: 'Arsenal', away: 'Chelsea', league: 'Premier League', time: '17:30' },
-      { id: 3, home: 'Real Madrid', away: 'Barcelona', league: 'La Liga', time: '20:45' },
-    ],
-  },
-  {
-    date: '2024-06-16',
-    matches: [
-      { id: 4, home: 'Bayern Munich', away: 'Borussia Dortmund', league: 'Bundesliga', time: '14:30' },
-      { id: 5, home: 'Paris Saint-Germain', away: 'Marseille', league: 'Ligue 1', time: '20:00' },
-    ],
-  },
-  {
-    date: '2024-06-17',
-    matches: [
-      { id: 6, home: 'Boston Celtics', away: 'Los Angeles Lakers', league: 'NBA', time: '02:00' },
-      { id: 7, home: 'Golden State Warriors', away: 'Denver Nuggets', league: 'NBA', time: '04:30' },
-    ],
-  },
-]
+interface SchedulePageProps {
+  onMatchClick?: (match: UiMatch) => void
+}
 
-export function SchedulePage() {
-  const [selectedDate, setSelectedDate] = useState('2024-06-15')
+export function SchedulePage({ onMatchClick }: SchedulePageProps) {
+  const [matches, setMatches] = useState<UiMatch[] | null>(null)
+  const [sport, setSport] = useState('All Sports')
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/matches', { cache: 'no-store' })
+        const data = await res.json()
+        if (!cancelled) setMatches(data.matches ?? [])
+      } catch {
+        if (!cancelled) setMatches([])
+      }
+    }
+    void load()
+    const t = setInterval(load, 20_000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [])
+
+  const upcoming = useMemo(
+    () => (matches ?? []).filter((m) => m.state === 'UPCOMING'),
+    [matches],
+  )
+  const sports = Array.from(new Set(upcoming.map((m) => m.sport)))
+  const chips = ['All Sports', ...sports]
+  const filtered = sport === 'All Sports' ? upcoming : upcoming.filter((m) => m.sport === sport)
 
   return (
     <main className="flex-1 overflow-auto">
-      <div className="p-8 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Calendar className="w-8 h-8 text-accent" />
-            <h1 className="text-4xl font-bold text-foreground">Schedule</h1>
+      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 max-w-4xl mx-auto">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <Calendar className="w-7 h-7 text-accent" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Schedule</h1>
           </div>
-          <p className="text-muted-foreground">Upcoming matches and events</p>
+          <p className="text-sm text-muted-foreground">Upcoming matches and events</p>
         </div>
 
-        {/* Date Navigation */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex gap-3 items-center">
-            <button className="p-2 rounded-lg bg-card border border-border hover:border-accent transition-colors">
-              <ChevronLeft className="w-5 h-5 text-foreground" />
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {chips.map((c) => (
+            <button
+              key={c}
+              onClick={() => setSport(c)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold capitalize transition-colors ${
+                sport === c
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-card border border-border text-foreground hover:border-accent'
+              }`}
+            >
+              {c === 'All Sports' ? c : c.replace('-', ' ')}
             </button>
-            <div className="flex gap-2">
-              {['Today', 'Tomorrow', '+2 Days', '+3 Days'].map((label) => (
-                <button
-                  key={label}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
-                    label === 'Today'
-                      ? 'bg-accent text-accent-foreground'
-                      : 'bg-card border border-border text-foreground hover:border-accent'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button className="p-2 rounded-lg bg-card border border-border hover:border-accent transition-colors">
-              <ChevronRight className="w-5 h-5 text-foreground" />
-            </button>
-          </div>
-
-          <select className="px-4 py-2 rounded-lg bg-card border border-border text-foreground hover:border-accent transition-colors cursor-pointer">
-            <option>All Sports</option>
-            <option>Soccer</option>
-            <option>Basketball</option>
-            <option>Tennis</option>
-          </select>
-        </div>
-
-        {/* Schedule List */}
-        <div className="space-y-6">
-          {SCHEDULE_DATA.map((day) => (
-            <div key={day.date}>
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                {new Date(day.date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </h3>
-
-              <div className="space-y-3">
-                {day.matches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="bg-card border border-border rounded-lg p-4 hover:border-accent transition-colors cursor-pointer flex items-center justify-between"
-                  >
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-                        {match.league}
-                      </p>
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <p className="font-semibold text-foreground">{match.home}</p>
-                        </div>
-                        <span className="text-muted-foreground">vs</span>
-                        <div className="flex-1">
-                          <p className="font-semibold text-foreground text-right">{match.away}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="ml-6 text-right">
-                      <p className="text-xl font-bold text-accent">{match.time}</p>
-                      <button className="mt-2 px-4 py-2 bg-accent text-accent-foreground rounded text-sm font-medium hover:bg-opacity-90 transition-colors">
-                        View
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           ))}
         </div>
+
+        {matches === null ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
+            <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">Nothing scheduled</h3>
+            <p className="text-sm text-muted-foreground">Upcoming matches added by the admin appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((m) => (
+              <div
+                key={m.id}
+                onClick={() => onMatchClick?.(m)}
+                className="bg-card border border-border rounded-xl p-4 hover:border-accent transition-colors cursor-pointer flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-1 truncate">{m.league}</p>
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span className="truncate">{m.homeTeam}</span>
+                    <span className="text-muted-foreground text-xs shrink-0">vs</span>
+                    <span className="truncate">{m.awayTeam}</span>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-accent">{m.startTime || 'TBD'}</p>
+                  <div className="mt-1 flex gap-1.5 justify-end text-xs tabular-nums">
+                    <span className="px-2 py-1 bg-secondary rounded font-semibold">{m.odds.home.toFixed(2)}</span>
+                    {m.odds.draw ? <span className="px-2 py-1 bg-secondary rounded font-semibold">{m.odds.draw.toFixed(2)}</span> : null}
+                    <span className="px-2 py-1 bg-secondary rounded font-semibold">{m.odds.away.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   )

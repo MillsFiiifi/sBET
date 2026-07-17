@@ -1,116 +1,109 @@
 'use client'
 
-import { Heart, Star, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Heart, Trash2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { FAVORITES_EVENT, getFavorites, removeFavorite } from '@/lib/favorites'
+import type { UiMatch } from '@/lib/ui-match'
 
-const FAVORITE_MATCHES = [
-  {
-    id: 1,
-    homeTeam: 'Manchester United',
-    awayTeam: 'Liverpool',
-    league: 'Premier League',
-    sport: 'Soccer',
-    odds: { home: 2.10, draw: 3.40, away: 3.50 },
-    status: 'UPCOMING',
-  },
-  {
-    id: 2,
-    homeTeam: 'Boston Celtics',
-    awayTeam: 'Los Angeles Lakers',
-    league: 'NBA',
-    sport: 'Basketball',
-    odds: { home: 1.95, away: 1.85 },
-    status: 'LIVE',
-  },
-  {
-    id: 3,
-    homeTeam: 'Novak Djokovic',
-    awayTeam: 'Carlos Alcaraz',
-    league: 'Wimbledon',
-    sport: 'Tennis',
-    odds: { home: 2.30, away: 1.60 },
-    status: 'UPCOMING',
-  },
-]
+interface FavoritesPageProps {
+  onMatchClick?: (match: UiMatch) => void
+}
 
-export function FavoritesPage() {
+export function FavoritesPage({ onMatchClick }: FavoritesPageProps) {
+  const [matches, setMatches] = useState<UiMatch[] | null>(null)
+  const [favIds, setFavIds] = useState<string[]>([])
+
+  const syncFavs = useCallback(() => setFavIds(getFavorites()), [])
+
+  useEffect(() => {
+    syncFavs()
+    window.addEventListener(FAVORITES_EVENT, syncFavs)
+    return () => window.removeEventListener(FAVORITES_EVENT, syncFavs)
+  }, [syncFavs])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/matches', { cache: 'no-store' })
+        const data = await res.json()
+        if (!cancelled) setMatches(data.matches ?? [])
+      } catch {
+        if (!cancelled) setMatches([])
+      }
+    }
+    void load()
+    const t = setInterval(load, 20_000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [])
+
+  const favMatches = (matches ?? []).filter((m) => favIds.includes(m.id))
+
   return (
     <main className="flex-1 overflow-auto">
-      <div className="p-8 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Heart className="w-8 h-8 text-accent fill-accent" />
-            <h1 className="text-4xl font-bold text-foreground">Favorites</h1>
+      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 max-w-4xl mx-auto">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <Heart className="w-7 h-7 text-accent fill-accent" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Favorites</h1>
           </div>
-          <p className="text-muted-foreground">Your saved matches and teams</p>
+          <p className="text-sm text-muted-foreground">Matches you starred. Tap the ★ on any match to add it.</p>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-3 mb-6 flex-wrap">
-          {['All Sports', 'Soccer', 'Basketball', 'Tennis'].map((filter) => (
-            <button
-              key={filter}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                filter === 'All Sports'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-card border border-border text-foreground hover:border-accent'
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
-
-        {/* Favorites List */}
-        <div className="space-y-4">
-          {FAVORITE_MATCHES.map((match) => (
-            <div
-              key={match.id}
-              className="bg-card border border-border rounded-lg p-6 hover:border-accent transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase">
-                      {match.league}
-                    </span>
-                    <span className="text-xs font-semibold text-accent uppercase">
-                      {match.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 mb-3">
-                    <div>
-                      <p className="font-semibold text-foreground">{match.homeTeam}</p>
-                      <p className="text-sm text-muted-foreground">{match.sport}</p>
+        {matches === null ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : favMatches.length === 0 ? (
+          <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
+            <Heart className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">No favorites yet</h3>
+            <p className="text-sm text-muted-foreground">Star a match from Sports or Schedule and it&apos;ll appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {favMatches.map((m) => (
+              <div
+                key={m.id}
+                className="bg-card border border-border rounded-xl p-4 hover:border-accent transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => onMatchClick?.(m)}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase truncate">{m.league}</span>
+                      {m.state === 'LIVE' && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-destructive">
+                          <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" /> LIVE
+                        </span>
+                      )}
                     </div>
-                    <span className="text-muted-foreground">vs</span>
-                    <p className="font-semibold text-foreground">{match.awayTeam}</p>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2">
+                      <span className="truncate">{m.homeTeam}</span>
+                      <span className="text-muted-foreground text-xs shrink-0">vs</span>
+                      <span className="truncate">{m.awayTeam}</span>
+                    </div>
+                    <div className="flex gap-1.5 text-xs tabular-nums">
+                      <span className="px-2.5 py-1 bg-secondary rounded font-semibold text-foreground">1 · {m.odds.home.toFixed(2)}</span>
+                      {m.odds.draw ? <span className="px-2.5 py-1 bg-secondary rounded font-semibold text-foreground">X · {m.odds.draw.toFixed(2)}</span> : null}
+                      <span className="px-2.5 py-1 bg-secondary rounded font-semibold text-foreground">2 · {m.odds.away.toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    {Object.entries(match.odds).map(([label, odd]) => (
-                      <button
-                        key={label}
-                        className="px-3 py-2 bg-muted rounded text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                      >
-                        {label === 'home' ? '1' : label === 'draw' ? 'X' : '2'}: {odd}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 ml-4">
-                  <button className="p-2 rounded-lg bg-muted text-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
-                    <Star className="w-5 h-5 fill-current" />
-                  </button>
-                  <button className="p-2 rounded-lg bg-muted text-foreground hover:bg-destructive hover:text-white transition-colors">
+                  <button
+                    onClick={() => removeFavorite(m.id)}
+                    className="p-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                    aria-label="Remove from favorites"
+                  >
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   )

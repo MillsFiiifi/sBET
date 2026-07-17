@@ -1,6 +1,8 @@
 'use client'
 
-import { ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronRight, Star } from 'lucide-react'
+import { FAVORITES_EVENT, isFavorite, toggleFavorite } from '@/lib/favorites'
 
 interface MatchCardProps {
   match: {
@@ -24,6 +26,14 @@ interface MatchCardProps {
 
 export function MatchCard({ match, onClick }: MatchCardProps) {
   const isLive = match.status === 'LIVE'
+  const [fav, setFav] = useState(false)
+
+  useEffect(() => {
+    const sync = () => setFav(isFavorite(match.id))
+    sync()
+    window.addEventListener(FAVORITES_EVENT, sync)
+    return () => window.removeEventListener(FAVORITES_EVENT, sync)
+  }, [match.id])
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden hover:border-accent transition-colors cursor-pointer" onClick={onClick}>
@@ -33,12 +43,21 @@ export function MatchCard({ match, onClick }: MatchCardProps) {
           <p className="text-xs font-semibold text-accent uppercase">{match.league}</p>
           <p className="text-sm text-muted-foreground">{match.time}</p>
         </div>
-        {isLive && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-destructive bg-opacity-20 rounded">
-            <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
-            <span className="text-xs font-semibold text-destructive">LIVE</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isLive && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-destructive bg-opacity-20 rounded">
+              <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+              <span className="text-xs font-semibold text-destructive">LIVE</span>
+            </div>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleFavorite(match.id) }}
+            className={`p-1.5 rounded-lg transition-colors ${fav ? 'text-accent' : 'text-muted-foreground hover:text-accent'}`}
+            aria-label={fav ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star className={`w-4 h-4 ${fav ? 'fill-current' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Match Content */}

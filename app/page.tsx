@@ -11,6 +11,7 @@ import { PromotionsPage } from '@/components/promotions-page'
 import { FavoritesPage } from '@/components/favorites-page'
 import { SchedulePage } from '@/components/schedule-page'
 import { ResultsPage } from '@/components/results-page'
+import { BottomNav } from '@/components/bottom-nav'
 import type { UiMatch } from '@/lib/ui-match'
 
 export default function Home() {
@@ -55,9 +56,9 @@ export default function Home() {
           {selectedMatch === null ? (
             <>
               {activeSection === 'in-play' && <Homepage onMatchClick={handleMatchClick} />}
-              {activeSection === 'favorites' && <FavoritesPage />}
-              {activeSection === 'schedule' && <SchedulePage />}
-              {activeSection === 'results' && <ResultsPage />}
+              {activeSection === 'favorites' && <FavoritesPage onMatchClick={handleMatchClick} />}
+              {activeSection === 'schedule' && <SchedulePage onMatchClick={handleMatchClick} />}
+              {activeSection === 'results' && <ResultsPage onMatchClick={handleMatchClick} />}
               {activeSection === 'wallet' && <WalletPage />}
               {activeSection === 'promotions' && <PromotionsPage />}
               {!mainSections.includes(activeSection) && (
@@ -75,6 +76,11 @@ export default function Home() {
             <LiveMatchDetail match={selectedMatch} onBack={handleBackFromMatch} />
           )}
         </main>
+
+        {/* Mobile bottom navigation */}
+        {selectedMatch === null && (
+          <BottomNav activeSection={activeSection} onSectionChange={setActiveSection} />
+        )}
       </div>
 
       {/* Settings Modal */}

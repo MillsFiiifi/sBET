@@ -1,145 +1,117 @@
 'use client'
 
-import { TrendingUp, Trophy, Filter } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Trophy } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import type { UiMatch } from '@/lib/ui-match'
 
-const RESULTS_DATA = [
-  {
-    id: 1,
-    homeTeam: 'Manchester United',
-    awayTeam: 'Liverpool',
-    homeScore: 2,
-    awayScore: 1,
-    league: 'Premier League',
-    date: '2024-06-14 17:45',
-    sport: 'Soccer',
-  },
-  {
-    id: 2,
-    homeTeam: 'Real Madrid',
-    awayTeam: 'Barcelona',
-    homeScore: 3,
-    awayScore: 2,
-    league: 'La Liga',
-    date: '2024-06-14 20:30',
-    sport: 'Soccer',
-  },
-  {
-    id: 3,
-    homeTeam: 'Boston Celtics',
-    awayTeam: 'Los Angeles Lakers',
-    homeScore: 108,
-    awayScore: 102,
-    league: 'NBA',
-    date: '2024-06-13 02:00',
-    sport: 'Basketball',
-  },
-  {
-    id: 4,
-    homeTeam: 'Golden State Warriors',
-    awayTeam: 'Denver Nuggets',
-    homeScore: 116,
-    awayScore: 123,
-    league: 'NBA',
-    date: '2024-06-13 04:30',
-    sport: 'Basketball',
-  },
-  {
-    id: 5,
-    homeTeam: 'Novak Djokovic',
-    awayTeam: 'Carlos Alcaraz',
-    homeScore: 2,
-    awayScore: 3,
-    league: 'Wimbledon',
-    date: '2024-06-12 14:00',
-    sport: 'Tennis',
-  },
-]
+interface ResultsPageProps {
+  onMatchClick?: (match: UiMatch) => void
+}
 
-export function ResultsPage() {
+const SPORT_FILTERS = ['All Sports', 'soccer', 'basketball', 'tennis']
+
+export function ResultsPage({ onMatchClick }: ResultsPageProps) {
+  const [matches, setMatches] = useState<UiMatch[] | null>(null)
+  const [sport, setSport] = useState('All Sports')
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/matches', { cache: 'no-store' })
+        const data = await res.json()
+        if (!cancelled) setMatches(data.matches ?? [])
+      } catch {
+        if (!cancelled) setMatches([])
+      }
+    }
+    void load()
+    const t = setInterval(load, 20_000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [])
+
+  const finished = useMemo(
+    () => (matches ?? []).filter((m) => m.state === 'FINISHED'),
+    [matches],
+  )
+  const filtered = sport === 'All Sports' ? finished : finished.filter((m) => m.sport === sport)
+  const sports = Array.from(new Set(finished.map((m) => m.sport)))
+  const chips = ['All Sports', ...SPORT_FILTERS.slice(1).filter((s) => sports.includes(s))]
+
   return (
     <main className="flex-1 overflow-auto">
-      <div className="p-8 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Trophy className="w-8 h-8 text-accent" />
-            <h1 className="text-4xl font-bold text-foreground">Results</h1>
+      <div className="p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8 max-w-4xl mx-auto">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <Trophy className="w-7 h-7 text-accent" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Results</h1>
           </div>
-          <p className="text-muted-foreground">Recent match results and scores</p>
+          <p className="text-sm text-muted-foreground">Recent match results and scores</p>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-3 mb-8 flex-wrap items-center">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border text-foreground hover:border-accent transition-colors">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
-          {['All Sports', 'Soccer', 'Basketball', 'Tennis'].map((filter) => (
+        {/* Filter chips */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {chips.map((c) => (
             <button
-              key={filter}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                filter === 'All Sports'
+              key={c}
+              onClick={() => setSport(c)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold capitalize transition-colors ${
+                sport === c
                   ? 'bg-accent text-accent-foreground'
                   : 'bg-card border border-border text-foreground hover:border-accent'
               }`}
             >
-              {filter}
+              {c === 'All Sports' ? c : c}
             </button>
           ))}
         </div>
 
-        {/* Results List */}
-        <div className="space-y-4">
-          {RESULTS_DATA.map((result) => (
-            <div
-              key={result.id}
-              className="bg-card border border-border rounded-lg p-6 hover:border-accent transition-colors cursor-pointer"
-            >
-              {/* Result Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">
-                    {result.league}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{result.date}</p>
-                </div>
-                <div className="text-right">
-                  <span className="inline-block px-3 py-1 bg-green-500 bg-opacity-20 text-green-400 text-xs font-semibold rounded">
-                    Final
-                  </span>
-                </div>
-              </div>
-
-              {/* Score Display */}
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex flex-col">
-                    <p className="font-bold text-foreground mb-1">{result.homeTeam}</p>
-                    <p className="font-bold text-foreground">{result.awayTeam}</p>
+        {matches === null ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-card border border-dashed border-border rounded-xl p-12 text-center">
+            <Trophy className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">No results yet</h3>
+            <p className="text-sm text-muted-foreground">Finished matches with a final score show up here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((m) => {
+              const homeWin = m.homeScore > m.awayScore
+              const awayWin = m.awayScore > m.homeScore
+              return (
+                <div
+                  key={m.id}
+                  onClick={() => onMatchClick?.(m)}
+                  className="bg-card border border-border rounded-xl p-4 sm:p-5 hover:border-accent transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase truncate">{m.league}</p>
+                      {m.startTime && <p className="text-xs text-muted-foreground">{m.startTime}</p>}
+                    </div>
+                    <span className="shrink-0 px-3 py-1 bg-success/20 text-success text-xs font-semibold rounded-full">
+                      Final
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <p className={`font-bold truncate ${homeWin ? 'text-foreground' : 'text-muted-foreground'}`}>{m.homeTeam}</p>
+                      <p className={`font-bold truncate ${awayWin ? 'text-foreground' : 'text-muted-foreground'}`}>{m.awayTeam}</p>
+                    </div>
+                    <div className="flex flex-col items-center gap-1 px-4 py-2 bg-secondary rounded-lg shrink-0">
+                      <span className={`text-xl font-extrabold tabular-nums ${homeWin ? 'text-accent' : 'text-foreground'}`}>{m.homeScore}</span>
+                      <span className={`text-xl font-extrabold tabular-nums ${awayWin ? 'text-accent' : 'text-foreground'}`}>{m.awayScore}</span>
+                    </div>
                   </div>
                 </div>
-
-                <div className="px-8 py-4 bg-muted rounded-lg">
-                  <div className="flex items-center gap-6 text-center">
-                    <div>
-                      <p className="text-4xl font-bold text-accent">{result.homeScore}</p>
-                    </div>
-                    <div className="text-muted-foreground text-2xl font-light">-</div>
-                    <div>
-                      <p className="text-4xl font-bold text-accent">{result.awayScore}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 flex justify-end">
-                  <button className="px-4 py-2 bg-accent text-accent-foreground rounded text-sm font-medium hover:bg-opacity-90 transition-colors">
-                    Details
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </main>
   )

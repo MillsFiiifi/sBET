@@ -1,25 +1,12 @@
 import { NextResponse } from 'next/server'
 import { readCustomMatches, type CustomMatch } from '@/lib/custom-matches-store'
+import type { UiMatch } from '@/lib/ui-match'
 
 export const dynamic = 'force-dynamic'
 
-/** Public UI shape consumed by the homepage / match cards. */
-export interface UiMatch {
-  id: string
-  homeTeam: string
-  awayTeam: string
-  homeScore: number
-  awayScore: number
-  time: string
-  status: 'LIVE' | 'UPCOMING'
-  league: string
-  sport: string
-  odds: { home: number; draw?: number; away: number }
-  locked: boolean
-}
-
 function toUi(m: CustomMatch): UiMatch {
-  const status: 'LIVE' | 'UPCOMING' = m.isLive ? 'LIVE' : 'UPCOMING'
+  const hasScore = m.homeScore != null && m.awayScore != null
+  const state: UiMatch['state'] = m.isLive ? 'LIVE' : hasScore ? 'FINISHED' : 'UPCOMING'
   const time = m.isLive
     ? (m.minute ? `${m.minute}'` : 'LIVE')
     : (m.startTime || 'Upcoming')
@@ -29,8 +16,10 @@ function toUi(m: CustomMatch): UiMatch {
     awayTeam: m.awayTeam,
     homeScore: m.homeScore ?? 0,
     awayScore: m.awayScore ?? 0,
+    hasScore,
     time,
-    status,
+    status: m.isLive ? 'LIVE' : 'UPCOMING',
+    state,
     league: m.league,
     sport: m.sport,
     odds: {
@@ -39,6 +28,8 @@ function toUi(m: CustomMatch): UiMatch {
       away: m.oddsAway,
     },
     locked: m.locked,
+    startTime: m.startTime ?? undefined,
+    createdAt: m.createdAt,
   }
 }
 
