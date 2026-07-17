@@ -9,6 +9,7 @@ const NAV = [
   { href: '/admin/matches', label: 'Matches' },
   { href: '/admin/promotions', label: 'Promotions' },
   { href: '/admin/transactions', label: 'Wallet requests' },
+  { href: '/admin/sub-admins', label: 'Sub-admins' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

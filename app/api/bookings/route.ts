@@ -26,6 +26,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'too many selections (max 40)' }, { status: 400 })
   }
 
-  const booking = await createBooking(matchIds)
-  return NextResponse.json({ code: booking.code }, { status: 201 })
+  try {
+    const booking = await createBooking(matchIds)
+    return NextResponse.json({ code: booking.code }, { status: 201 })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const hint = /relation .*bookings.* does not exist/i.test(msg)
+      ? 'Booking storage is not set up yet (run supabase/setup-all.sql).'
+      : 'Could not create a booking, please try again.'
+    return NextResponse.json({ error: hint, detail: msg }, { status: 200 })
+  }
 }
