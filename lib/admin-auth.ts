@@ -8,12 +8,12 @@ export const ADMIN_COOKIE_MAX_AGE = 60 * 60 * 12 // 12 hours
 
 /**
  * Derive a session token from the admin password.
- * The token is sha256("primebet:admin:<password>"). Whoever knows the password can
+ * The token is sha256("powerstakebet:admin:<password>"). Whoever knows the password can
  * derive the same token; storing this in a cookie is sufficient for a single-admin
  * demo gate. Not a substitute for real auth on a multi-user system.
  */
 export async function sessionTokenFor(password: string): Promise<string> {
-  const bytes = new TextEncoder().encode(`primebet:admin:${password}`)
+  const bytes = new TextEncoder().encode(`powerstakebet:admin:${password}`)
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))

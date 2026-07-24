@@ -6,15 +6,15 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Prime Bet | Sports Betting',
-  description: 'Prime Bet — Live sports odds, real matches, smart betting.',
+  title: 'PowerStakeBet | Sports Betting',
+  description: 'PowerStakeBet — Live sports odds, real matches, smart betting.',
   generator: 'v0.app',
   icons: {
     icon: [
-      { url: '/primebet.png', type: 'image/png' },
+      { url: '/powerstakebet.png', type: 'image/png' },
     ],
-    shortcut: '/primebet.png',
-    apple: '/primebet.png',
+    shortcut: '/powerstakebet.png',
+    apple: '/powerstakebet.png',
   },
 }
 

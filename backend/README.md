@@ -1,6 +1,6 @@
-# PrimeBet.API — ASP.NET Core 8 backend
+# PowerStakeBet.API — ASP.NET Core 8 backend
 
-Backend for the PrimeBet sports-betting demo. Replaces the Next.js
+Backend for the PowerStakeBet sports-betting demo. Replaces the Next.js
 file-based `/api/*` routes with a proper Web API backed by SQL Server.
 
 ## Stack
@@ -29,9 +29,9 @@ dotnet build
 ### 1. Edit `appsettings.json`
 
 - **ConnectionStrings:Default** — change if your SQL Server instance isn't `.\SQLEXPRESS`. Examples:
-  - SQL Server Express:  `Server=.\SQLEXPRESS;Database=PrimeBet;Trusted_Connection=True;TrustServerCertificate=True`
-  - LocalDB:             `Server=(localdb)\MSSQLLocalDB;Database=PrimeBet;Trusted_Connection=True`
-  - SQL Server default:  `Server=localhost;Database=PrimeBet;Trusted_Connection=True;TrustServerCertificate=True`
+  - SQL Server Express:  `Server=.\SQLEXPRESS;Database=PowerStakeBet;Trusted_Connection=True;TrustServerCertificate=True`
+  - LocalDB:             `Server=(localdb)\MSSQLLocalDB;Database=PowerStakeBet;Trusted_Connection=True`
+  - SQL Server default:  `Server=localhost;Database=PowerStakeBet;Trusted_Connection=True;TrustServerCertificate=True`
 - **Jwt:Key** — replace the placeholder with a long random string (≥32 chars)
 - **Admin:Password** — what `/api/admin/login` checks against
 - **OddsApi:ApiKey** — paste your odds-api key (empty disables real-data fetch and the matches API returns mock)
@@ -39,7 +39,7 @@ dotnet build
 ### 2. Create the database
 
 ```powershell
-cd PrimeBet.API
+cd PowerStakeBet.API
 dotnet tool install --global dotnet-ef    # one-time, if you don't have it
 dotnet ef migrations add InitialCreate
 dotnet ef database update
@@ -94,21 +94,21 @@ Auth headers: `Authorization: Bearer <jwt>`
 Set this in `.env.local` of the Next.js project, then redeploy:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:5050   # or https://primebet-api.example.com
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5050   # or https://powerstakebet-api.example.com
 ```
 
 Update frontend `fetch('/api/users/login', …)` calls to
 `fetch(\`\${process.env.NEXT_PUBLIC_API_BASE_URL}/api/users/login\`, …)`.
 
 The backend's `Cors:AllowedOrigins` already includes
-`http://localhost:3000` and `https://primebet-delta.vercel.app`.
+`http://localhost:3000` and `https://powerstakebet-delta.vercel.app`.
 
 ## Project layout
 
 ```
 backend/
-  PrimeBet.sln
-  PrimeBet.API/
+  PowerStakeBet.sln
+  PowerStakeBet.API/
     Program.cs                  ← startup, DI, JWT, CORS, Swagger, auto-migrate
     appsettings.json            ← connection string, JWT key, admin pwd, odds-api
     Configuration/AppSettings.cs
@@ -119,7 +119,7 @@ backend/
       SubAdminsController.cs
       AdminController.cs
       CustomMatchesController.cs
-    Data/PrimeBetDbContext.cs   ← EF Core context + model config
+    Data/PowerStakeBetDbContext.cs   ← EF Core context + model config
     Models/
       Entities/                 ← User, SubAdmin, Commission, Bet, BetSelection, CustomMatch
       Dtos/                     ← Request / response DTOs

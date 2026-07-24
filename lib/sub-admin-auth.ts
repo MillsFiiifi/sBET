@@ -2,7 +2,7 @@
  * Edge-compatible sub-admin session helpers.
  *
  * The session cookie stores "<subAdminId>:<sig>" where sig is
- * sha256(`primebet:sub-admin:<id>:<passwordHash>`). To validate, we load the
+ * sha256(`powerstakebet:sub-admin:<id>:<passwordHash>`). To validate, we load the
  * sub-admin record and recompute. This means changing a sub-admin's password
  * invalidates any existing sessions for them, which is the behavior we want.
  *
@@ -19,7 +19,7 @@ export async function signSubAdminSession(
   passwordHash: string,
 ): Promise<string> {
   const bytes = new TextEncoder().encode(
-    `primebet:sub-admin:${subAdminId}:${passwordHash}`,
+    `powerstakebet:sub-admin:${subAdminId}:${passwordHash}`,
   )
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   const sig = Array.from(new Uint8Array(digest))

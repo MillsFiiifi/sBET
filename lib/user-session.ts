@@ -1,5 +1,5 @@
-export const USER_ID_KEY = 'primebet_user_id'
-export const USER_NAME_KEY = 'primebet_user_name'
+export const USER_ID_KEY = 'powerstakebet_user_id'
+export const USER_NAME_KEY = 'powerstakebet_user_name'
 
 export function saveUserSession(id: string, name?: string): void {
   if (typeof window === 'undefined') return

@@ -1,4 +1,4 @@
-# Supabase setup for PrimeBet
+# Supabase setup for PowerStakeBet
 
 Your project URL: <https://doqlicdyzblveoryqhel.supabase.co>
 

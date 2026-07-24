@@ -62,8 +62,8 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
 
   const shareWin = () => {
     void navigator.share?.({
-      title: 'Prime Bet — Won!',
-      text: `Just won ${cur} ${formatMoney(totalReturn, cur)} on Prime Bet (ticket ${ticketId})`,
+      title: 'PowerStakeBet — Won!',
+      text: `Just won ${cur} ${formatMoney(totalReturn, cur)} on PowerStakeBet (ticket ${ticketId})`,
     })
   }
 
@@ -266,8 +266,8 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
                 type="button"
                 onClick={() => {
                   void navigator.share?.({
-                    title: 'Prime Bet — Won!',
-                    text: `Just won ${cur} ${formatMoney(totalReturn, cur)} on Prime Bet (ticket ${ticketId})`,
+                    title: 'PowerStakeBet — Won!',
+                    text: `Just won ${cur} ${formatMoney(totalReturn, cur)} on PowerStakeBet (ticket ${ticketId})`,
                   })
                 }}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 text-black font-bold text-[11px] shrink-0"

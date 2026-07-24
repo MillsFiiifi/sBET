@@ -129,7 +129,7 @@ function RegisterForm() {
             <div className="text-center mb-6">
               <h1 className="text-title font-bold text-foreground mb-1.5 tracking-tight">Create account</h1>
               <p className="text-muted-foreground text-sm">
-                Join Prime Bet and start winning today
+                Join PowerStakeBet and start winning today
               </p>
             </div>
 

@@ -29,7 +29,7 @@ Use PowerShell on Windows. No test framework is configured.
 ### Two backends coexist; the frontend currently uses the Next.js one
 
 - **`app/api/*` (active)** — Next.js route handlers backed by Supabase Postgres. Everything the UI calls today lives here.
-- **`backend/PrimeBet.API` (alternative)** — a complete ASP.NET Core 8 + EF Core + SQL Server reimplementation with JWT auth and Swagger at `/swagger`. Not wired up unless `NEXT_PUBLIC_API_BASE_URL` is set and frontend fetches are rewritten. See `backend/README.md`. Treat the two as parallel implementations — changes to one do not propagate.
+- **`backend/PowerStakeBet.API` (alternative)** — a complete ASP.NET Core 8 + EF Core + SQL Server reimplementation with JWT auth and Swagger at `/swagger`. Not wired up unless `NEXT_PUBLIC_API_BASE_URL` is set and frontend fetches are rewritten. See `backend/README.md`. Treat the two as parallel implementations — changes to one do not propagate.
 
 ### Middleware is named `proxy.ts`, not `middleware.ts`
 
@@ -42,8 +42,8 @@ Edge runtime — it can only import from `lib/admin-auth.ts` and `lib/sub-admin-
 
 ### Three independent auth schemes (none use Supabase Auth)
 
-1. **Admin**: single shared password. Cookie value is `sha256("primebet:admin:" + ADMIN_PASSWORD)`. Whoever knows the password derives the same token — fine for a single-operator gate, not a multi-user system. (`lib/admin-auth.ts`)
-2. **Sub-admin**: per-record. Cookie is `"<subAdminId>:<sig>"` where sig is `sha256("primebet:sub-admin:" + id + ":" + passwordHash)`. The proxy only parses the cookie shape; full validation requires loading the record inside the route handler (`assertSubAdmin`). Changing a sub-admin's password invalidates their sessions. (`lib/sub-admin-auth.ts`)
+1. **Admin**: single shared password. Cookie value is `sha256("powerstakebet:admin:" + ADMIN_PASSWORD)`. Whoever knows the password derives the same token — fine for a single-operator gate, not a multi-user system. (`lib/admin-auth.ts`)
+2. **Sub-admin**: per-record. Cookie is `"<subAdminId>:<sig>"` where sig is `sha256("powerstakebet:sub-admin:" + id + ":" + passwordHash)`. The proxy only parses the cookie shape; full validation requires loading the record inside the route handler (`assertSubAdmin`). Changing a sub-admin's password invalidates their sessions. (`lib/sub-admin-auth.ts`)
 3. **Player**: bcrypt-hashed password on the `users` table, custom cookie-based session via `lib/user-session.ts`.
 
 ### Match feed: API-Football + custom matches + admin overrides

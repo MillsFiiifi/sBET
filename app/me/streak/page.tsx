@@ -7,7 +7,7 @@ import { MobileNav } from '@/components/mobile-nav'
 import { MeSubpageHeader } from '@/components/me-subpage-header'
 import { getUserId } from '@/lib/user-session'
 
-const STORAGE_KEY = 'primebet:streak'
+const STORAGE_KEY = 'powerstakebet:streak'
 const DAY_MS = 86_400_000
 
 interface StoredStreak {
@@ -85,7 +85,7 @@ export default function StreakPage() {
           </div>
           <h2 className="text-title font-bold mb-1.5">Sign in to start your streak</h2>
           <p className="text-sm text-muted-foreground mb-6">
-            Visit Prime Bet 7 days in a row to unlock the streak badge.
+            Visit PowerStakeBet 7 days in a row to unlock the streak badge.
           </p>
           <div className="flex gap-3">
             <Link href="/login" className="flex-1 h-12 inline-flex items-center justify-center rounded-xl border-2 border-primary text-primary font-bold hover:bg-primary/10 transition-colors">Login</Link>
