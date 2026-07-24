@@ -276,7 +276,7 @@ export default function TowerRushPage() {
             {/* Trophy popping above the card, on a soft glow */}
             <div className="absolute -top-[72px] left-1/2 -translate-x-1/2 w-44 h-44 pointer-events-none">
               <div aria-hidden className="absolute inset-0 m-auto w-28 h-28 rounded-full bg-amber-300/45 blur-2xl" />
-              <Image src="/won_trophy_image.png" alt="Trophy" fill priority className="object-contain drop-shadow-[0_12px_24px_rgba(245,180,30,0.55)]" />
+              <Image src="/won-trophy.svg" alt="Trophy" fill priority className="object-contain drop-shadow-[0_12px_24px_rgba(245,180,30,0.55)]" />
             </div>
 
             {/* Ribbon banner */}

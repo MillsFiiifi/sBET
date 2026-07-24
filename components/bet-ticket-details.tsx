@@ -93,7 +93,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
             <div className="absolute -top-[72px] left-1/2 -translate-x-1/2 w-44 h-44 pointer-events-none">
               <div aria-hidden className="absolute inset-0 m-auto w-28 h-28 rounded-full bg-amber-300/45 blur-2xl" />
               <Image
-                src="/won_trophy_image.png"
+                src="/won-trophy.svg"
                 alt="Trophy"
                 fill
                 priority
@@ -182,7 +182,7 @@ export function BetTicketDetails({ bet, open, onClose, userName }: BetTicketDeta
             content stays clearly readable behind it. */}
         {won && (
           <Image
-            src="/won_trophy_image.png"
+            src="/won-trophy.svg"
             alt=""
             width={320}
             height={320}

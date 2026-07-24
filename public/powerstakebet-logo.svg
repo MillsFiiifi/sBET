@@ -1,0 +1,50 @@
+<svg width="560" height="120" viewBox="0 0 560 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PowerStakeBet">
+  <defs>
+    <linearGradient id="psbEmerald" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="psbGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="psbWord" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#15803D"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Emblem: rounded badge with a cup + rising stakes -->
+  <g>
+    <rect x="8" y="12" width="96" height="96" rx="26" fill="url(#psbEmerald)"/>
+    <rect x="8" y="12" width="96" height="96" rx="26" fill="#ffffff" opacity="0.10"/>
+    <!-- rising stake bars behind the cup -->
+    <g fill="#ffffff" opacity="0.22">
+      <rect x="30" y="66" width="9" height="20" rx="2"/>
+      <rect x="43" y="56" width="9" height="30" rx="2"/>
+      <rect x="56" y="46" width="9" height="40" rx="2"/>
+    </g>
+    <!-- trophy cup -->
+    <g fill="#ffffff">
+      <path d="M44 30 h24 v9 c0 12 -6 18 -12 18 s-12 -6 -12 -18 z"/>
+      <path d="M44 32 c-9 0 -9 13 3 13 v-5 c-5 0 -5 -3 0 -3 z" opacity="0.95"/>
+      <path d="M68 32 c9 0 9 13 -3 13 v-5 c5 0 5 -3 0 -3 z" opacity="0.95"/>
+      <rect x="53" y="56" width="6" height="8" rx="1"/>
+      <path d="M46 78 l6 -10 h8 l6 10 z"/>
+      <rect x="44" y="76" width="24" height="5" rx="2.5"/>
+    </g>
+    <!-- star spark on the cup -->
+    <path d="M56 34 l2.2 4.6 l5 0.6 l-3.7 3.4 l1 5 l-4.5 -2.5 l-4.5 2.5 l1 -5 l-3.7 -3.4 l5 -0.6 z" fill="url(#psbGold)"/>
+  </g>
+
+  <!-- Wordmark -->
+  <g font-family="'Geist', Arial, Helvetica, system-ui, sans-serif" font-style="italic" font-weight="800" letter-spacing="-1.5">
+    <text x="126" y="74" font-size="52" fill="url(#psbWord)">PowerStake</text>
+    <text x="126" y="102" font-size="26" font-weight="700" letter-spacing="6" fill="url(#psbGold)">SPORTS&#160;BETTING</text>
+  </g>
+  <!-- BET tag -->
+  <g transform="translate(438 40)">
+    <rect x="0" y="0" width="86" height="40" rx="12" fill="url(#psbGold)"/>
+    <text x="43" y="29" text-anchor="middle" font-family="'Geist', Arial, Helvetica, system-ui, sans-serif" font-style="italic" font-weight="900" font-size="28" letter-spacing="0" fill="#0f3d23">BET</text>
+  </g>
+</svg>

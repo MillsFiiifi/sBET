@@ -1,0 +1,57 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Winner trophy">
+  <defs>
+    <linearGradient id="cupGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FEF3C7"/>
+      <stop offset="0.45" stop-color="#FCD34D"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="cupGoldSoft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="cupGreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <radialGradient id="cupGlow" cx="0.5" cy="0.42" r="0.5">
+      <stop offset="0" stop-color="#FCD34D" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FCD34D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- glow -->
+  <circle cx="120" cy="104" r="98" fill="url(#cupGlow)"/>
+
+  <!-- sparkles -->
+  <g fill="#FDE68A">
+    <path d="M40 60 l3 7 l7 3 l-7 3 l-3 7 l-3 -7 l-7 -3 l7 -3 z"/>
+    <path d="M198 78 l2.4 5.6 l5.6 2.4 l-5.6 2.4 l-2.4 5.6 l-2.4 -5.6 l-5.6 -2.4 l5.6 -2.4 z"/>
+    <circle cx="54" cy="118" r="3"/>
+    <circle cx="188" cy="132" r="3.2"/>
+  </g>
+
+  <!-- handles -->
+  <g fill="none" stroke="url(#cupGoldSoft)" stroke-width="10" stroke-linecap="round">
+    <path d="M74 58 C40 58 40 108 82 104"/>
+    <path d="M166 58 C200 58 200 108 158 104"/>
+  </g>
+
+  <!-- bowl -->
+  <path d="M72 46 H168 V70 C168 106 148 126 120 126 C92 126 72 106 72 70 Z" fill="url(#cupGold)"/>
+  <!-- bowl rim -->
+  <rect x="66" y="40" width="108" height="12" rx="6" fill="url(#cupGoldSoft)"/>
+  <!-- bowl inner shine -->
+  <path d="M88 54 C88 92 100 108 116 110 C98 104 96 84 96 54 Z" fill="#ffffff" opacity="0.35"/>
+
+  <!-- star emblem -->
+  <path d="M120 62 l6.4 13 l14.3 2 l-10.4 10.1 l2.5 14.3 l-12.8 -6.7 l-12.8 6.7 l2.5 -14.3 l-10.4 -10.1 l14.3 -2 z" fill="url(#cupGreen)"/>
+  <path d="M120 70 l4 8.2 l9 1.3 l-6.5 6.3 l1.5 9 l-8 -4.2 l-8 4.2 l1.5 -9 l-6.5 -6.3 l9 -1.3 z" fill="#ffffff" opacity="0.85"/>
+
+  <!-- stem -->
+  <rect x="112" y="126" width="16" height="20" fill="url(#cupGoldSoft)"/>
+  <!-- base tiers -->
+  <path d="M96 176 l10 -30 h28 l10 30 z" fill="url(#cupGold)"/>
+  <rect x="86" y="176" width="68" height="14" rx="5" fill="url(#cupGoldSoft)"/>
+  <rect x="78" y="190" width="84" height="16" rx="6" fill="url(#cupGreen)"/>
+  <text x="120" y="203" text-anchor="middle" font-family="'Geist', Arial, system-ui, sans-serif" font-weight="900" font-style="italic" font-size="12" letter-spacing="1" fill="#ffffff">WINNER</text>
+</svg>
