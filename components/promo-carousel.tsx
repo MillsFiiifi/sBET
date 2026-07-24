@@ -104,7 +104,7 @@ const PROMOS: Promo[] = [
     Icon: Sparkles,
     gradient: 'from-cyan-500 via-blue-600 to-violet-700',
     accent: 'text-white',
-    image: '/group-young-people-looking-excited-spinning-roulette-roulette-table-casino-black-background.jpg',
+    image: '/promo-weekend.jpg',
   },
 ]
 
