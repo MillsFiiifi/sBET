@@ -1,0 +1,52 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22C55E"/>
+      <stop offset="0.55" stop-color="#16A34A"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.5" cy="0.28" r="0.7">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- full-bleed emerald ground (platform masks the corners) -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#sheen)"/>
+
+  <!-- rising stake bars behind the cup -->
+  <g fill="#ffffff" opacity="0.18">
+    <rect x="150" y="300" width="34" height="80" rx="8"/>
+    <rect x="196" y="262" width="34" height="118" rx="8"/>
+    <rect x="242" y="224" width="34" height="156" rx="8"/>
+  </g>
+
+  <!-- trophy cup -->
+  <g fill="#ffffff">
+    <!-- rim -->
+    <rect x="150" y="150" width="212" height="26" rx="13"/>
+    <!-- bowl -->
+    <path d="M164 176 H348 V208 C348 284 310 324 256 324 C202 324 164 284 164 208 Z"/>
+    <!-- handles -->
+    <path d="M164 182 C112 182 112 270 178 262 L178 240 C146 244 146 202 172 202 Z"/>
+    <path d="M348 182 C400 182 400 270 334 262 L334 240 C366 244 366 202 340 202 Z"/>
+    <!-- stem -->
+    <rect x="238" y="324" width="36" height="40"/>
+    <!-- base -->
+    <path d="M198 430 l22 -66 h72 l22 66 z"/>
+    <rect x="184" y="428" width="144" height="30" rx="12"/>
+  </g>
+
+  <!-- inner shine on bowl -->
+  <path d="M196 190 C196 260 224 292 256 296 C214 288 210 236 210 190 Z" fill="#ffffff" opacity="0.35"/>
+
+  <!-- gold star on the bowl -->
+  <g transform="translate(256 238) scale(3.05) translate(-54 -46)">
+    <path d="M54 30 l6.2 12.6 l13.9 2 l-10 9.8 l2.4 13.9 l-12.5 -6.5 l-12.5 6.5 l2.4 -13.9 l-10 -9.8 l13.9 -2 z" fill="url(#gold)"/>
+  </g>
+</svg>

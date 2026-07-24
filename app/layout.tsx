@@ -11,7 +11,8 @@ export const metadata: Metadata = {
   generator: 'v0.app',
   icons: {
     icon: [
-      { url: '/powerstakebet.png', type: 'image/png' },
+      { url: '/powerstakebet-icon.svg', type: 'image/svg+xml' },
+      { url: '/powerstakebet.png', type: 'image/png', sizes: '512x512' },
     ],
     shortcut: '/powerstakebet.png',
     apple: '/powerstakebet.png',
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: '#16A34A',
   width: 'device-width',
   initialScale: 1,
 }
