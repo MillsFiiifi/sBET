@@ -16,7 +16,7 @@ import {
   Lock,
   Zap,
 } from 'lucide-react'
-import type { BetSelection, PlacedBet } from '@/lib/types'
+import type { BetSelection, Match, PlacedBet } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -31,7 +31,7 @@ import { useBets } from '@/hooks/use-bets'
 import { computeCashout } from '@/lib/cashout'
 import { getUserId } from '@/lib/user-session'
 import { getBettingState } from '@/lib/match-betting'
-import { hydrateLegacySelection } from '@/lib/bet-slip-utils'
+import { hydrateLegacySelection, MARKET_1X2 } from '@/lib/bet-slip-utils'
 import { getCountryFlag } from '@/lib/country-flags'
 import { BetTicketDetails } from '@/components/bet-ticket-details'
 
@@ -245,22 +245,72 @@ export function BetSlipPanel({
       setStatusMsg({ kind: 'err', text: 'Enter a booking code.' })
       return
     }
-    setLoadingCode(true)
-    const bet = await lookupCode(code)
-    setLoadingCode(false)
-    if (!bet) {
-      setStatusMsg({ kind: 'err', text: error ?? 'Code not found.' })
-      return
-    }
     if (!onLoadSelections) {
       setStatusMsg({ kind: 'err', text: 'Cannot load selections from this view.' })
       return
     }
-    onLoadSelections(bet.selections)
+    setLoadingCode(true)
+    const bet = await lookupCode(code)
+    if (!bet) {
+      setLoadingCode(false)
+      setStatusMsg({ kind: 'err', text: error ?? 'Code not found.' })
+      return
+    }
+
+    // A booking freezes a snapshot of each match. Re-hydrate every leg against
+    // the current match feed so still-open games carry live state + odds — and
+    // so legs that have since kicked off are detected and skipped, instead of
+    // silently blocking the whole slip from being placed.
+    let selections = bet.selections.map(hydrateLegacySelection)
+    try {
+      const sports = Array.from(
+        new Set(selections.map((s) => (s.match?.sport ?? 'football').toLowerCase())),
+      )
+      const byId = new Map<string, Match>()
+      const feeds = await Promise.all(
+        sports.map((sp) =>
+          fetch(`/api/matches?sport=${encodeURIComponent(sp)}`, { cache: 'no-store' })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ),
+      )
+      for (const data of feeds) {
+        for (const m of ((data?.matches ?? []) as Match[])) byId.set(m.id, m)
+      }
+      if (byId.size > 0) {
+        selections = selections.map((s) => {
+          const fresh = byId.get(s.matchId)
+          if (!fresh) return s
+          // Refresh the match, and re-price 1X2 legs from the live odds.
+          const odds =
+            s.marketKey === MARKET_1X2 && s.selection ? fresh.odds[s.selection] : s.odds
+          return { ...s, match: fresh, odds }
+        })
+      }
+    } catch {
+      /* feed unavailable — fall back to the frozen snapshot selections */
+    }
+
+    const open = selections.filter((s) => !getBettingState(s.match).closed)
+    const skipped = selections.length - open.length
+    setLoadingCode(false)
+
+    if (open.length === 0) {
+      setStatusMsg({
+        kind: 'err',
+        text: `Every match in ${bet.code} has already started or closed — nothing left to place.`,
+      })
+      return
+    }
+
+    onLoadSelections(open)
     setBookingCode('')
     setStatusMsg({
-      kind: 'ok',
-      text: `Loaded ${bet.selections.length} selection${bet.selections.length > 1 ? 's' : ''} from ${bet.code}.`,
+      kind: skipped > 0 ? 'err' : 'ok',
+      text:
+        skipped > 0
+          ? `Loaded ${open.length} open selection${open.length > 1 ? 's' : ''} from ${bet.code}; skipped ${skipped} that already started.`
+          : `Loaded ${open.length} selection${open.length > 1 ? 's' : ''} from ${bet.code}.`,
     })
     setTab('slip')
   }
