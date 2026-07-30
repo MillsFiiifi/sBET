@@ -10,9 +10,12 @@ function sanitizeReturnPath(raw: string | null): string {
   return raw
 }
 
-function redirectWith(originUrl: URL, path: string, status: string) {
+function redirectWith(originUrl: URL, path: string, status: string, reference?: string) {
   const url = new URL(path, originUrl)
   url.searchParams.set('flw', status)
+  // Hand the reference back so the wallet page can keep confirming a charge
+  // that hadn't settled yet at redirect time (common with mobile money).
+  if (reference) url.searchParams.set('ref', reference)
   return NextResponse.redirect(url, 303)
 }
 
@@ -38,5 +41,5 @@ export async function GET(request: Request) {
     await finalizeWithdrawalFromFee(pending)
   }
 
-  return redirectWith(url, returnPath, result.status)
+  return redirectWith(url, returnPath, result.status, reference)
 }

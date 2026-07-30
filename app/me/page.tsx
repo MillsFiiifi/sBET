@@ -166,19 +166,44 @@ function MePageInner() {
     const moolre = searchParams.get('moolre')
     const flw = searchParams.get('flw')
     if (!moolre && !flw) return
+    const ref = searchParams.get('ref')
+    const reason = searchParams.get('reason') ?? flw ?? moolre
     const success =
       moolre === 'success' || flw === 'success' || flw === 'already-credited'
+    // Strip the params first so a refresh doesn't replay this handler.
+    router.replace('/me')
+
     if (success) {
       setDepositToast({ kind: 'success', text: 'Payment received. Welcome back!' })
       void loadProfile()
-    } else {
-      const reason = searchParams.get('reason') ?? flw ?? moolre
-      setDepositToast({
-        kind: 'failed',
-        text: friendlyPaymentFailure(reason),
-      })
+      return
     }
-    router.replace('/me')
+
+    // Not confirmed at redirect time. Mobile-money charges often settle a few
+    // seconds AFTER the customer is bounced back, so if we still have the
+    // reference keep polling the (idempotent) verify endpoint — that's what
+    // actually credits the wallet — before declaring failure. Terminal codes
+    // like unknown-reference / failed stop the poll fast, so this only waits
+    // when the charge is genuinely still pending.
+    if (flw && ref) {
+      setDepositToast({ kind: 'success', text: 'Confirming your payment…' })
+      void (async () => {
+        const final = await pollChargeStatus(ref)
+        if (final === 'success') {
+          setDepositToast({ kind: 'success', text: 'Payment received. Welcome back!' })
+          await loadProfile()
+        } else {
+          setDepositToast({
+            kind: 'failed',
+            text: friendlyPaymentFailure(final === 'timeout' ? reason : final),
+          })
+        }
+      })()
+      return
+    }
+
+    setDepositToast({ kind: 'failed', text: friendlyPaymentFailure(reason) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loadProfile, router])
 
   // Country / currency derived from the loaded profile, with safe defaults.
