@@ -36,6 +36,7 @@ import {
 } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
 import { SUPPORT_TELEGRAM_URL } from '@/lib/support'
+import { friendlyPaymentFailure } from '@/lib/payment-status'
 import {
   DEFAULT_COUNTRY,
   DEFAULT_CURRENCY,
@@ -174,7 +175,7 @@ function MePageInner() {
       const reason = searchParams.get('reason') ?? flw ?? moolre
       setDepositToast({
         kind: 'failed',
-        text: reason ? `Payment not completed: ${reason}` : 'Payment not completed. Try again.',
+        text: friendlyPaymentFailure(reason),
       })
     }
     router.replace('/me')

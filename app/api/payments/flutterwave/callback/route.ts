@@ -22,7 +22,10 @@ function redirectWith(originUrl: URL, path: string, status: string) {
 // `?ref=` so we can confirm the charge and (for fees) finalize the withdrawal.
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const reference = url.searchParams.get('ref') ?? ''
+  // Prefer our own `?ref=`, but Flutterwave appends its own query string to the
+  // redirect_url and can drop a pre-existing param — so fall back to the
+  // `tx_ref` it echoes back (which IS our reference) before giving up.
+  const reference = url.searchParams.get('ref') || url.searchParams.get('tx_ref') || ''
   const returnPath = sanitizeReturnPath(url.searchParams.get('returnPath'))
 
   const pending = await findPaymentByReference(reference).catch(() => null)
