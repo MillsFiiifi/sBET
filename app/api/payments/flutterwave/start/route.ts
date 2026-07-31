@@ -66,6 +66,35 @@ export async function POST(request: Request) {
   const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
   const phone = normalizePhone(user.country, body.phone ?? user.phone ?? '') || undefined
 
+  // Record the pending ledger row FIRST. The callback / webhook / status-poll
+  // all credit by looking this row up by reference — if it isn't written, a
+  // completed charge can never be matched and the player is never credited
+  // ("couldn't match that payment"). So a failed write must abort the deposit
+  // rather than silently send the customer off to pay into an untrackable
+  // charge (the old behaviour swallowed this error).
+  try {
+    await recordPayment({
+      userId,
+      reference,
+      amount,
+      type: 'deposit',
+      status: 'pending',
+      provider: 'flutterwave',
+      currency: user.currency,
+      metadata: { purpose, returnPath, country: user.country, userName: user.name },
+    })
+  } catch (e) {
+    // Surface the underlying reason (usually a Postgres schema/constraint
+    // error on the payments table) so it's diagnosable without server-log
+    // access, instead of the customer paying into a charge we can't credit.
+    const detail = e instanceof Error ? e.message : String(e)
+    console.error('[flutterwave/start] ledger write failed:', e)
+    return NextResponse.json(
+      { error: `Could not start the deposit: ${detail}` },
+      { status: 500 },
+    )
+  }
+
   try {
     // Hosted Standard checkout — carries our tx_ref + a redirect_url so the
     // customer is brought back to the site and the callback can credit. GH/KE
@@ -81,17 +110,6 @@ export async function POST(request: Request) {
       phone,
       redirectUrl,
     })
-
-    await recordPayment({
-      userId,
-      reference,
-      amount,
-      type: 'deposit',
-      status: 'pending',
-      provider: 'flutterwave',
-      currency: user.currency,
-      metadata: { purpose, returnPath, country: user.country, userName: user.name },
-    }).catch((e) => console.error('[flutterwave/start] ledger write failed:', e))
 
     return NextResponse.json({ reference, redirectUrl: std.link }, { status: 201 })
   } catch (e) {
