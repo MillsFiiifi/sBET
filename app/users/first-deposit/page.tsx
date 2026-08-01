@@ -41,7 +41,7 @@ const AMOUNT_CHIPS = [300, 500, 1000, 1500, 2000, 3000, 5000]
 const MAX_SCREENSHOT_BYTES = 5_000_000
 
 // Mobile-money networks for the Instant tab. `provider` is the key the
-// Flutterwave momo/start route expects (mtn / vod / atl).
+// Flutterwave start route forwards to the hosted checkout as a hint.
 const NETWORKS: { provider: 'mtn' | 'vod' | 'atl'; short: string; label: string }[] = [
   { provider: 'mtn', short: 'MTN', label: 'MTN MoMo' },
   { provider: 'vod', short: 'TELECEL', label: 'Telecel Cash' },
@@ -63,20 +63,6 @@ interface UserProfile {
   firstDepositAt?: string | null
 }
 
-// Statuses the client should stop polling on (terminal), with pending meaning
-// "keep waiting for the customer to approve on their phone".
-const TERMINAL_FAIL = new Set([
-  'failed',
-  'cancelled',
-  'abandoned',
-  'amount-mismatch',
-  'credit-failed',
-  'verify-failed',
-  'unknown-reference',
-  'missing-reference',
-  'no-user',
-])
-
 function DepositForm() {
   const router = useRouter()
   const params = useSearchParams()
@@ -94,21 +80,18 @@ function DepositForm() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Instant (mobile-money) state.
+  // Instant (mobile-money) prefill state — the actual payment + OTP happen on
+  // Flutterwave's hosted checkout page after redirect.
   const [network, setNetwork] = useState<'mtn' | 'vod' | 'atl'>('mtn')
   const [phone, setPhone] = useState('')
-  const [pinPrompt, setPinPrompt] = useState<string | null>(null)
-  const [otpReference, setOtpReference] = useState<string | null>(null)
-  const [otp, setOtp] = useState('')
 
   // USDT screenshot upload state.
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Terminal screens.
+  // USDT terminal screen.
   const [manualSubmitted, setManualSubmitted] = useState(false)
-  const [depositSuccess, setDepositSuccess] = useState(false)
 
   useEffect(() => {
     if (!userId) return
@@ -129,7 +112,6 @@ function DepositForm() {
     }
   }, [userId])
 
-  // Revoke object URLs so previews don't leak.
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -143,7 +125,6 @@ function DepositForm() {
   const minDeposit = useMemo(() => getMinFirstDeposit(country), [country])
 
   const amountValue = typeof amount === 'number' ? amount : 0
-  const activeNetwork = NETWORKS.find((n) => n.provider === network) ?? NETWORKS[0]
 
   function selectFile(f: File | null) {
     setError(null)
@@ -179,151 +160,10 @@ function DepositForm() {
     return null
   }
 
-  // Poll the charge status until it settles. Resolves to the final status.
-  async function pollChargeStatus(reference: string): Promise<string> {
-    const DEADLINE = Date.now() + 3 * 60 * 1000 // 3 minutes
-    while (Date.now() < DEADLINE) {
-      try {
-        const res = await fetch(
-          `/api/payments/flutterwave/status?reference=${encodeURIComponent(reference)}`,
-          { cache: 'no-store' },
-        )
-        const data = await res.json()
-        const status = String(data.status ?? 'pending')
-        if (status === 'success' || status === 'already-credited') return 'success'
-        if (TERMINAL_FAIL.has(status)) return status
-      } catch {
-        /* transient — keep polling */
-      }
-      await new Promise((r) => setTimeout(r, 3000))
-    }
-    return 'timeout'
-  }
-
-  // Poll quietly while the OTP box is shown, so a phone-approval that needs no
-  // code still completes on its own. Doesn't surface errors — the user can
-  // still type the OTP or fall back to card if this doesn't land.
-  async function backgroundPoll(reference: string) {
-    const final = await pollChargeStatus(reference)
-    if (final === 'success') {
-      try {
-        const me = await fetch(`/api/users/${profile!.id}`, { cache: 'no-store' })
-        if (me.ok) setProfile((await me.json()) as UserProfile)
-      } catch {
-        /* non-fatal */
-      }
-      setPinPrompt(null)
-      setOtpReference(null)
-      setDepositSuccess(true)
-    } else {
-      // Stop the spinner but keep the OTP box so the user can still complete it.
-      setPinPrompt(null)
-    }
-  }
-
-  async function finishAfterCharge(reference: string) {
-    setPinPrompt('Approve the prompt on your phone to complete the payment…')
-    const final = await pollChargeStatus(reference)
-    setPinPrompt(null)
-    if (final === 'success') {
-      // Refresh balance for the success screen.
-      try {
-        const me = await fetch(`/api/users/${profile!.id}`, { cache: 'no-store' })
-        if (me.ok) setProfile((await me.json()) as UserProfile)
-      } catch {
-        /* non-fatal */
-      }
-      setDepositSuccess(true)
-    } else if (final === 'timeout') {
-      setError('Still waiting for approval. If you approved it, your balance will update shortly.')
-    } else {
-      setError(friendlyStatus(final))
-    }
-  }
-
-  // Instant: trigger a mobile-money charge (on-phone PIN/approval).
-  async function handleInstantMomo() {
-    if (!profile) return
-    const amountError = validateAmount()
-    if (amountError) {
-      setError(amountError)
-      return
-    }
-    if (!phone.trim()) {
-      setError('Enter the mobile-money phone number.')
-      return
-    }
-    setError(null)
-    setOtpReference(null)
-    setOtp('')
-    setLoading(true)
-    try {
-      const res = await fetch('/api/payments/flutterwave/momo/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: profile.id,
-          amount: amountValue,
-          phone: phone.trim(),
-          provider: network,
-          purpose,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || 'Could not start the payment. Try again.')
-        return
-      }
-      const reference = data.reference as string
-      // Flutterwave's hosted Ghana mobile-money page is unreliable (frequently
-      // loads blank), so we DON'T hand off to data.redirect. Instead we finish
-      // in-app: reveal the OTP box (GH mobile money authorises with an SMS code)
-      // and also poll in the background, so a phone-approval that needs no code
-      // still lands without the user doing anything else.
-      setOtpReference(reference)
-      setPinPrompt(
-        'Enter the code sent to your phone below — or approve the prompt on your phone. This can take a moment…',
-      )
-      void backgroundPoll(reference)
-    } catch {
-      setError('Network error. Check your connection and try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function submitOtp() {
-    if (!otpReference) return
-    if (!otp.trim()) {
-      setError('Enter the code you received.')
-      return
-    }
-    setError(null)
-    setLoading(true)
-    try {
-      const res = await fetch('/api/payments/flutterwave/momo/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reference: otpReference, otp: otp.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || 'That code didn\'t work. Try again.')
-        return
-      }
-      const ref = otpReference
-      setOtpReference(null)
-      setOtp('')
-      await finishAfterCharge(ref)
-    } catch {
-      setError('Network error. Check your connection and try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // "Pay with card instead" — Flutterwave hosted checkout (redirect).
-  async function handleCard() {
+  // Instant: send the customer to Flutterwave's own hosted checkout page, where
+  // they choose mobile money / card and complete the OTP on Flutterwave's site.
+  // On success Flutterwave redirects back to /me and the callback credits.
+  async function handleInstant() {
     if (!profile) return
     const amountError = validateAmount()
     if (amountError) {
@@ -341,6 +181,8 @@ function DepositForm() {
           amount: amountValue,
           purpose,
           returnPath: '/me',
+          phone: phone.trim() || undefined,
+          network,
         }),
       })
       const data = await res.json()
@@ -400,7 +242,6 @@ function DepositForm() {
   }
 
   const headingTitle = purpose === 'verification' ? 'Verify your account' : 'Add money'
-  const busy = loading || Boolean(pinPrompt)
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -432,27 +273,7 @@ function DepositForm() {
           <div aria-hidden className="absolute -bottom-16 -right-12 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
           <div className="relative bg-card rounded-2xl border border-border p-5 sm:p-8 shadow-card">
-            {depositSuccess && profile ? (
-              <div className="text-center space-y-4">
-                <div className="relative w-16 h-16 mx-auto">
-                  <div aria-hidden className="absolute inset-0 rounded-2xl bg-success/20 blur-xl" />
-                  <div className="relative w-16 h-16 rounded-2xl bg-success/15 border border-success/30 flex items-center justify-center shadow-card">
-                    <CheckCircle2 className="w-8 h-8 text-success" />
-                  </div>
-                </div>
-                <h1 className="text-title font-bold tracking-tight">Payment received!</h1>
-                <div className="bg-secondary/60 border border-border rounded-xl p-4 text-left space-y-2">
-                  <Row label="Total deposited" value={`${currency} ${formatMoney(profile.totalDeposited, currency)}`} />
-                  <Row label="New balance" value={`${currency} ${formatMoney(profile.balance, currency)}`} tone="good" bold />
-                </div>
-                <Button
-                  onClick={() => router.push('/me')}
-                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
-                >
-                  View account
-                </Button>
-              </div>
-            ) : manualSubmitted && profile ? (
+            {manualSubmitted && profile ? (
               <div className="text-center space-y-4">
                 <div className="relative w-16 h-16 mx-auto">
                   <div aria-hidden className="absolute inset-0 rounded-2xl bg-amber-500/20 blur-xl" />
@@ -588,8 +409,8 @@ function DepositForm() {
                   </p>
                 </div>
 
-                {/* Instant: mobile-money network + phone */}
-                {method === 'flutterwave' && !otpReference && (
+                {/* Instant: mobile-money network + phone (prefilled into checkout) */}
+                {method === 'flutterwave' && (
                   <>
                     <div className="space-y-2">
                       <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
@@ -635,34 +456,11 @@ function DepositForm() {
                           className="w-full h-12 pl-10 pr-3 rounded-xl border border-border bg-background text-foreground font-semibold outline-none focus:border-primary transition-colors"
                         />
                       </div>
-                      {amountValue > 0 && (
-                        <p className="text-caption text-muted-foreground">
-                          You&apos;ll get a prompt on this phone to approve {currency}{' '}
-                          {formatMoney(amountValue, currency)}.
-                        </p>
-                      )}
+                      <p className="text-caption text-muted-foreground">
+                        You&apos;ll finish the payment on Flutterwave&apos;s secure checkout page.
+                      </p>
                     </div>
                   </>
-                )}
-
-                {/* Instant: OTP step */}
-                {method === 'flutterwave' && otpReference && (
-                  <div className="space-y-1.5">
-                    <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
-                      Enter the code sent to your phone
-                    </p>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={otp}
-                      onChange={(e) => {
-                        setError(null)
-                        setOtp(e.target.value)
-                      }}
-                      placeholder="6-digit code"
-                      className="w-full h-12 px-3 rounded-xl border border-border bg-background text-foreground font-semibold tracking-widest outline-none focus:border-primary transition-colors"
-                    />
-                  </div>
                 )}
 
                 {/* USDT: screenshot upload */}
@@ -710,13 +508,6 @@ function DepositForm() {
                   </div>
                 )}
 
-                {pinPrompt && (
-                  <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
-                    <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin text-primary" />
-                    <span>{pinPrompt}</span>
-                  </div>
-                )}
-
                 {error && (
                   <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                     <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -726,63 +517,29 @@ function DepositForm() {
 
                 {/* Submit */}
                 {method === 'flutterwave' ? (
-                  otpReference ? (
-                    <div className="space-y-2">
-                      <Button
-                        onClick={submitOtp}
-                        disabled={busy || !profile}
-                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover transition-all disabled:opacity-60"
-                      >
-                        {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm code'}
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOtpReference(null)
-                          setOtp('')
-                          setPinPrompt(null)
-                          setError(null)
-                        }}
-                        className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Start over
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Button
-                        onClick={handleInstantMomo}
-                        disabled={busy || profileLoading || !profile}
-                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
-                      >
-                        {busy ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <>
-                            <Smartphone className="w-4 h-4" />
-                            {amountValue > 0
-                              ? `Pay ${currency} ${formatMoney(amountValue, currency)} with ${activeNetwork.short}`
-                              : `Pay with ${activeNetwork.short}`}
-                          </>
-                        )}
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={handleCard}
-                        disabled={busy || profileLoading || !profile}
-                        className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
-                      >
-                        Pay with card instead
-                      </button>
-                    </div>
-                  )
+                  <Button
+                    onClick={handleInstant}
+                    disabled={loading || profileLoading || !profile}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4" />
+                        {amountValue > 0
+                          ? `Deposit ${currency} ${formatMoney(amountValue, currency)}`
+                          : 'Continue to payment'}
+                      </>
+                    )}
+                  </Button>
                 ) : (
                   <Button
                     onClick={handleUsdt}
-                    disabled={busy || profileLoading || !profile || !USDT_ADDRESS}
+                    disabled={loading || profileLoading || !profile || !USDT_ADDRESS}
                     className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
                   >
-                    {busy ? (
+                    {loading ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <>
@@ -801,47 +558,6 @@ function DepositForm() {
           </div>
         </div>
       </main>
-    </div>
-  )
-}
-
-function friendlyStatus(status: string): string {
-  switch (status) {
-    case 'failed':
-      return 'The charge was declined. Check your balance and try again.'
-    case 'cancelled':
-    case 'abandoned':
-      return 'The payment was cancelled before it was approved. Try again.'
-    case 'amount-mismatch':
-      return 'The amount received didn\'t match. Contact support with your reference.'
-    case 'verify-failed':
-      return 'We couldn\'t reach the gateway to confirm your payment. Try again in a moment.'
-    default:
-      return 'The payment didn\'t complete. Try again or contact support.'
-  }
-}
-
-function Row({
-  label,
-  value,
-  tone,
-  bold,
-}: {
-  label: string
-  value: string
-  tone?: 'good' | 'neutral'
-  bold?: boolean
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span
-        className={`text-sm tabular-nums ${bold ? 'font-bold' : 'font-semibold'} ${
-          tone === 'good' ? 'text-success' : 'text-foreground'
-        }`}
-      >
-        {value}
-      </span>
     </div>
   )
 }
