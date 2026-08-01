@@ -200,6 +200,27 @@ function DepositForm() {
     return 'timeout'
   }
 
+  // Poll quietly while the OTP box is shown, so a phone-approval that needs no
+  // code still completes on its own. Doesn't surface errors — the user can
+  // still type the OTP or fall back to card if this doesn't land.
+  async function backgroundPoll(reference: string) {
+    const final = await pollChargeStatus(reference)
+    if (final === 'success') {
+      try {
+        const me = await fetch(`/api/users/${profile!.id}`, { cache: 'no-store' })
+        if (me.ok) setProfile((await me.json()) as UserProfile)
+      } catch {
+        /* non-fatal */
+      }
+      setPinPrompt(null)
+      setOtpReference(null)
+      setDepositSuccess(true)
+    } else {
+      // Stop the spinner but keep the OTP box so the user can still complete it.
+      setPinPrompt(null)
+    }
+  }
+
   async function finishAfterCharge(reference: string) {
     setPinPrompt('Approve the prompt on your phone to complete the payment…')
     const final = await pollChargeStatus(reference)
@@ -253,17 +274,17 @@ function DepositForm() {
         setError(data.error || 'Could not start the payment. Try again.')
         return
       }
-      // Some networks (e.g. Telecel voucher) hand back a hosted page to finish.
-      if (data.redirect) {
-        window.location.href = data.redirect as string
-        return
-      }
-      // OTP flow — the customer types an SMS code to finish.
-      if (data.authMode === 'otp') {
-        setOtpReference(data.reference as string)
-        return
-      }
-      await finishAfterCharge(data.reference as string)
+      const reference = data.reference as string
+      // Flutterwave's hosted Ghana mobile-money page is unreliable (frequently
+      // loads blank), so we DON'T hand off to data.redirect. Instead we finish
+      // in-app: reveal the OTP box (GH mobile money authorises with an SMS code)
+      // and also poll in the background, so a phone-approval that needs no code
+      // still lands without the user doing anything else.
+      setOtpReference(reference)
+      setPinPrompt(
+        'Enter the code sent to your phone below — or approve the prompt on your phone. This can take a moment…',
+      )
+      void backgroundPoll(reference)
     } catch {
       setError('Network error. Check your connection and try again.')
     } finally {
@@ -706,13 +727,27 @@ function DepositForm() {
                 {/* Submit */}
                 {method === 'flutterwave' ? (
                   otpReference ? (
-                    <Button
-                      onClick={submitOtp}
-                      disabled={busy || !profile}
-                      className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover transition-all disabled:opacity-60"
-                    >
-                      {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm code'}
-                    </Button>
+                    <div className="space-y-2">
+                      <Button
+                        onClick={submitOtp}
+                        disabled={busy || !profile}
+                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover transition-all disabled:opacity-60"
+                      >
+                        {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm code'}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpReference(null)
+                          setOtp('')
+                          setPinPrompt(null)
+                          setError(null)
+                        }}
+                        className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Start over
+                      </button>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       <Button
