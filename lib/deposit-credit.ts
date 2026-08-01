@@ -7,13 +7,12 @@
 //   - /api/admin/users/[id]/credit (admin manually crediting from /admin/players)
 //   - /api/admin/payments/[id]/resolve (admin clicking 'Credit & resolve' on a
 //     pending/failed payments row)
-//   - /api/payments/paystack/callback (Paystack auto-credit after verify)
+//   - the payment auto-credit pipelines (Flutterwave / Paystack / Moolre)
 //
 // Pure 'bonus' credits (which should NOT count toward verification or
 // commission) should bypass this helper and call creditBalance directly.
 //
-// The verification threshold is country-aware: 200 GHS for Ghana, ₦30,000 for
-// Nigeria, etc. (see lib/countries.ts).
+// The verification threshold is country-aware (see lib/countries.ts).
 
 import {
   addCommission,
@@ -23,7 +22,7 @@ import {
 } from '@/lib/users-store'
 import { creditCommission, findSubAdminById } from '@/lib/sub-admins-store'
 import { COMMISSION_RATE, type AppUser } from '@/lib/types'
-import { getVerificationSteps } from '@/lib/countries'
+import { getVerificationAmount } from '@/lib/countries'
 
 export interface ApplyDepositResult {
   user: AppUser
@@ -49,20 +48,12 @@ export async function applyDepositCredit(
   if (!result) return null
 
   let user = result.user
-  // Per-step verification: the amount required to advance depends on which step
-  // the user is currently on (e.g. GH: 500 for step 0→1, 200 for step 1→2).
-  const verificationSteps = getVerificationSteps(userBefore.country)
-  const currentStep = user.verificationStep ?? 0
-  const stepThreshold = verificationSteps[currentStep] ?? Infinity
+  const verificationThreshold = getVerificationAmount(userBefore.country)
 
   // Commission fires on EVERY confirmed deposit (not just the first) as long
-  // as the user was referred by an approved sub-admin. Skip reasons are
-  // logged so it's easy to diagnose "I deposited but my referrer didn't get
-  // paid" reports from production Vercel logs.
-  //
-  // Runs BEFORE the verification-step bump. If the verification update ever
-  // throws (e.g. a pending CHECK-constraint migration), the commission still
-  // lands instead of being silently swallowed alongside the failed step.
+  // as the user was referred by an approved sub-admin. Skip reasons are logged
+  // so "I deposited but my referrer wasn't paid" reports are easy to diagnose.
+  // Runs BEFORE the verification bump so a failed step can't swallow it.
   let commission: ApplyDepositResult['commission'] = null
   if (!user.referredBySubAdminId) {
     console.log('[deposit-credit] commission skipped: user not referred', {
@@ -98,10 +89,9 @@ export async function applyDepositCredit(
     }
   }
 
-  // Verification step is best-effort: a failure here (stale CHECK constraint,
-  // transient DB blip) must not roll back the commission or the wallet
-  // credit that already happened above.
-  if (currentStep < verificationSteps.length && amount >= stepThreshold) {
+  // Verification step is best-effort: a failure here must not roll back the
+  // commission or the wallet credit that already happened above.
+  if (amount >= verificationThreshold && (user.verificationStep ?? 0) < 4) {
     try {
       const advanced = await advanceVerificationStep(userId)
       if (advanced) user = advanced
@@ -118,11 +108,9 @@ export async function applyDepositCredit(
 }
 
 // Two-attempt commission write so a single transient supabase error doesn't
-// strand a commission. Never rethrows — the caller (verifyAndCreditPaystack
-// etc.) treats any throw as "credit pipeline failed" and tells the user the
-// deposit didn't work, but by this point the wallet has already been funded
-// in applyDepositCredit above. We'd rather lose the commission row (and
-// surface it loudly in logs for backfill) than confuse the depositor.
+// strand a commission. Never rethrows — by this point the wallet is already
+// funded; we'd rather lose the commission row (logged loudly for backfill)
+// than fail the depositor.
 async function fireCommission(params: {
   subAdminId: string
   userId: string
@@ -165,9 +153,7 @@ async function fireCommission(params: {
         currency,
         error: e instanceof Error ? e.message : String(e),
       })
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, 150))
-      }
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 150))
     }
   }
   console.error('[deposit-credit] commission permanently failed — backfill required', {
