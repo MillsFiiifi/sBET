@@ -33,7 +33,9 @@ import {
 // The BEP20 (BNB Smart Chain) wallet USDT deposits are sent to. Set this in the
 // environment so the address can be rotated without a code change — and so the
 // method stays safely disabled (no fake address shown) until it's configured.
-const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_BEP20_ADDRESS?.trim() || ''
+const USDT_ADDRESS =
+  process.env.NEXT_PUBLIC_USDT_BEP20_ADDRESS?.trim() ||
+  '0xe8c97b578d6c50f7dd5e5ace58fb3e6479a01038'
 
 // Quick-pick amounts, matching the deposit UX players expect.
 const AMOUNT_CHIPS = [300, 500, 1000, 1500, 2000, 3000, 5000]
