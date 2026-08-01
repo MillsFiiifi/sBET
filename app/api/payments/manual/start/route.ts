@@ -104,10 +104,29 @@ export async function POST(request: Request) {
   const ext = pickExtension(file)
   const key = `${userId.slice(0, 8)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const { error: uploadErr } = await supabase.storage.from(BUCKET).upload(key, bytes, {
-    contentType: file.type || 'application/octet-stream',
-    upsert: false,
-  })
+  const contentType = file.type || 'application/octet-stream'
+
+  async function uploadScreenshot() {
+    return supabase.storage.from(BUCKET).upload(key, bytes, {
+      contentType,
+      upsert: false,
+    })
+  }
+
+  let { error: uploadErr } = await uploadScreenshot()
+  // Self-heal: the public deposit-screenshots bucket may not exist yet on a
+  // fresh Supabase project. Create it on first use and retry once, so admins
+  // don't have to run a setup script.
+  if (uploadErr && /bucket not found/i.test(uploadErr.message)) {
+    await supabase.storage
+      .createBucket(BUCKET, {
+        public: true,
+        allowedMimeTypes: Array.from(ALLOWED_MIME),
+        fileSizeLimit: MAX_BYTES,
+      })
+      .catch(() => {})
+    ;({ error: uploadErr } = await uploadScreenshot())
+  }
   if (uploadErr) {
     return NextResponse.json(
       { error: `upload failed: ${uploadErr.message}` },
