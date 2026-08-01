@@ -44,6 +44,11 @@ export async function POST(request: Request) {
   const purposeRaw = form.get('purpose')?.toString() ?? 'deposit'
   const purpose: 'deposit' | 'verification' =
     purposeRaw === 'verification' ? 'verification' : 'deposit'
+  // Which manual rail the user paid through. 'usdt' (BEP20 crypto) is offered to
+  // every country; the older bank/mobile-money manual rail stays gated to
+  // manual-gateway countries below.
+  const channelRaw = (form.get('channel')?.toString() ?? '').trim().toLowerCase()
+  const channel = channelRaw === 'usdt' ? 'usdt' : 'bank'
   const returnPath = sanitizeReturnPath(form.get('returnPath')?.toString() ?? null)
   const file = form.get('file')
 
@@ -73,12 +78,16 @@ export async function POST(request: Request) {
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
 
-  const countryCfg = getCountry(user.country)
-  if (countryCfg.gateway !== 'manual') {
-    return NextResponse.json(
-      { error: 'manual deposits are not enabled for this country' },
-      { status: 400 },
-    )
+  // USDT (BEP20) is available everywhere; the legacy bank/mobile-money manual
+  // rail stays restricted to countries configured for a manual gateway.
+  if (channel !== 'usdt') {
+    const countryCfg = getCountry(user.country)
+    if (countryCfg.gateway !== 'manual') {
+      return NextResponse.json(
+        { error: 'manual deposits are not enabled for this country' },
+        { status: 400 },
+      )
+    }
   }
 
   const minDeposit = getMinFirstDeposit(user.country)
@@ -109,7 +118,8 @@ export async function POST(request: Request) {
   const screenshotUrl = pub.publicUrl
 
   const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
-  const reference = `${refPrefix}-MAN-${userId.slice(0, 8)}-${Date.now()}`
+  const railTag = channel === 'usdt' ? 'USDT' : 'MAN'
+  const reference = `${refPrefix}-${railTag}-${userId.slice(0, 8)}-${Date.now()}`
 
   try {
     const payment = await recordPayment({
@@ -127,6 +137,7 @@ export async function POST(request: Request) {
         userPhone: user.phone ?? null,
         country: user.country,
         source: 'manual_upload',
+        channel,
         screenshotUrl,
         screenshotKey: key,
       },

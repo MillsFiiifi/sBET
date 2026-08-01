@@ -1,39 +1,45 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
   Loader2,
   ArrowLeft,
-  Wallet,
-  CheckCircle2,
-  Info,
-  AlertTriangle,
+  Zap,
+  Coins,
   Copy,
   Check,
-  Building2,
+  CheckCircle2,
   Hourglass,
-  Lock,
-  ChevronRight,
-  Smartphone,
+  UploadCloud,
+  X,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { saveUserSession } from '@/lib/user-session'
 import { formatMoney } from '@/lib/format-money'
 import {
   DEFAULT_COUNTRY,
   DEFAULT_CURRENCY,
-  getCountry,
   getMinFirstDeposit,
   isCountryCode,
   isCurrencyCode,
   type CountryCode,
   type CurrencyCode,
 } from '@/lib/countries'
-import { MobileMoneyForm } from '@/components/payments/mobile-money-form'
+
+// The BEP20 (BNB Smart Chain) wallet USDT deposits are sent to. Set this in the
+// environment so the address can be rotated without a code change — and so the
+// method stays safely disabled (no fake address shown) until it's configured.
+const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_BEP20_ADDRESS?.trim() || ''
+
+// Quick-pick amounts, matching the deposit UX players expect.
+const AMOUNT_CHIPS = [300, 500, 1000, 1500, 2000, 3000, 5000]
+
+const MAX_SCREENSHOT_BYTES = 5_000_000
+
+type Method = 'flutterwave' | 'usdt'
 
 interface UserProfile {
   id: string
@@ -48,91 +54,38 @@ interface UserProfile {
   firstDepositAt?: string | null
 }
 
-type PayMode = 'momo' | 'card'
-
-// Nigeria "Pay with Korapay" multi-step flow:
-//   select → user picks the "Pay with Korapay" method
-//   amount → user enters how much to deposit, presses Next
-//   pay    → account number to copy shown immediately, with a 3-minute
-//            payment-window countdown running on the same screen. "I have
-//            paid" fires the Telegram operator-approval start route (same
-//            credit pipeline as before).
-type KorapayStep = 'select' | 'amount' | 'pay'
-
-// Length of the on-screen "complete your payment within" countdown, in seconds.
-const KORAPAY_CONNECT_SECONDS = 180
-
-// NG users deposit in NGN (their wallet currency — that's what gets credited
-// and what commission is computed on) but settle the transfer in GHS to a
-// Ghana mobile-money account. This is the NGN->GHS rate — adjust as FX moves.
-// (₦30,000 ≈ GHS 300, i.e. ₦100 ≈ GHS 1.) GH users pay in GHS directly, so no
-// conversion is applied for them.
-const NGN_PER_GHS = 100
-function ngnToGhs(ngn: number) {
-  if (!Number.isFinite(ngn) || ngn <= 0) return 0
-  return +(ngn / NGN_PER_GHS).toFixed(2)
-}
-
-// Manual-deposit pay-to accounts per country. The operator receives the
-// transfer here, then approves the deposit from Telegram.
-const MANUAL_ACCOUNTS: Record<string, { bankName: string; accountNumber: string; accountName: string }> = {
-  NG: { bankName: 'MOREMONEE', accountNumber: '7011638185', accountName: 'IBRAHIM ABDULLAHI' },
-  GH: { bankName: 'Telecel Cash', accountNumber: '0509182654', accountName: 'James Quayson' },
-}
-const DEFAULT_MANUAL_ACCOUNT = MANUAL_ACCOUNTS.NG
-
-// mm:ss for the connecting countdown.
-function formatCountdown(totalSeconds: number) {
-  const s = Math.max(0, totalSeconds)
-  const mm = Math.floor(s / 60)
-  const ss = s % 60
-  return `${mm}:${ss.toString().padStart(2, '0')}`
-}
-
 function DepositForm() {
   const router = useRouter()
   const params = useSearchParams()
   const userId = params.get('userId') ?? ''
-  const moolreStatus = params.get('moolre')
-  const moolreReason = params.get('reason')
-  const flwStatus = params.get('flw')
   const purposeParam = params.get('purpose')
   const purpose: 'deposit' | 'verification' =
     purposeParam === 'verification' ? 'verification' : 'deposit'
 
-  const [amount, setAmount] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  // "Approve on your phone" message shown while polling a mobile-money charge.
-  const [pinPrompt, setPinPrompt] = useState<string | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
-  const [payMode, setPayMode] = useState<PayMode>('momo')
-  // When the user comes back from Moolre with ?moolre=success we re-fetch
-  // the profile and show the success screen built from the fresh totals.
-  const [showSuccess, setShowSuccess] = useState(false)
-  // Manual-deposit flow state (Nigeria) — the user submits a bank
-  // transfer and waits for the operator to approve via Telegram.
+
+  const [method, setMethod] = useState<Method>('flutterwave')
+  const [amount, setAmount] = useState<number | ''>('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // USDT screenshot upload state.
+  const [file, setFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Terminal states.
   const [manualSubmitted, setManualSubmitted] = useState(false)
-  const [copiedField, setCopiedField] = useState<string | null>(null)
-  // Korapay multi-step state (Nigeria manual gateway only).
-  const [korapayStep, setKorapayStep] = useState<KorapayStep>('select')
-  const [korapayCountdown, setKorapayCountdown] = useState(KORAPAY_CONNECT_SECONDS)
 
   useEffect(() => {
-    if (!userId) {
-      setProfileLoading(false)
-      return
-    }
+    if (!userId) return
     let cancelled = false
-    setProfileLoading(true)
     fetch(`/api/users/${userId}`, { cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: UserProfile | null) => {
-        if (!cancelled) setProfile(data)
-      })
-      .catch(() => {
-        if (!cancelled) setProfile(null)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && !data.error) setProfile(data as UserProfile)
       })
       .finally(() => {
         if (!cancelled) setProfileLoading(false)
@@ -142,247 +95,144 @@ function DepositForm() {
     }
   }, [userId])
 
-  // Drive the on-screen payment-window countdown. Ticks once a second while
-  // on the pay step; stops at zero (the user can still confirm payment).
+  // Revoke object URLs so previews don't leak.
   useEffect(() => {
-    if (korapayStep !== 'pay') return
-    if (korapayCountdown <= 0) return
-    const t = setTimeout(() => setKorapayCountdown((s) => s - 1), 1000)
-    return () => clearTimeout(t)
-  }, [korapayStep, korapayCountdown])
-
-  // Handle the redirect back from Moolre / Paystack. On success we save the
-  // session and flip the page to the success card; on failure we surface the
-  // reason (without clearing the form).
-  useEffect(() => {
-    if (moolreStatus === 'success' || flwStatus === 'success' || flwStatus === 'already-credited') {
-      if (userId) saveUserSession(userId)
-      setShowSuccess(true)
-      return
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
     }
-    if (moolreStatus === 'failed') {
-      setError(
-        moolreReason
-          ? `Payment failed: ${moolreReason}`
-          : 'Payment failed. Try again or contact support.',
-      )
-      return
-    }
-    if (flwStatus && flwStatus !== 'success' && flwStatus !== 'already-credited') {
-      setError(`Payment did not complete (${flwStatus}). Try again or contact support.`)
-    }
-  }, [moolreStatus, moolreReason, flwStatus, userId])
+  }, [previewUrl])
 
-  // Country / currency derived from the loaded profile, with safe defaults.
-  const country: CountryCode = isCountryCode(profile?.country) ? profile!.country as CountryCode : DEFAULT_COUNTRY
-  const currency: CurrencyCode = isCurrencyCode(profile?.currency) ? profile!.currency as CurrencyCode : DEFAULT_CURRENCY
-  const countryCfg = getCountry(country)
-  const minAmount = getMinFirstDeposit(country)
-  const gateway = countryCfg.gateway
-  // Manual-deposit specifics. GH wallets are already in GHS, so they pay the
-  // entered amount directly; NG wallets pay the GHS-converted amount to a
-  // Ghana mobile-money account.
-  const manualAccount = MANUAL_ACCOUNTS[country] ?? DEFAULT_MANUAL_ACCOUNT
-  const needsGhsConversion = currency !== 'GHS'
-  const payGhs = needsGhsConversion ? ngnToGhs(Number(amount) || 0) : Number(amount) || 0
+  const country: CountryCode = isCountryCode(profile?.country) ? profile!.country : DEFAULT_COUNTRY
+  const currency: CurrencyCode = isCurrencyCode(profile?.currency)
+    ? profile!.currency
+    : DEFAULT_CURRENCY
+  const minDeposit = useMemo(() => getMinFirstDeposit(country), [country])
 
-  // Seed the amount input with the country's min once the profile loads.
-  useEffect(() => {
-    if (!amount && profile) setAmount(String(minAmount))
-  }, [profile, minAmount, amount])
+  const amountValue = typeof amount === 'number' ? amount : 0
 
-  // Shared "deposit confirmed" handler used by both the card Inline JS popup
-  // and the custom mobile-money flow. Pulls fresh totals so the success card
-  // reflects the new balance.
-  const handleDepositSuccess = async () => {
-    if (!profile) return
-    try {
-      const me = await fetch(`/api/users/${profile.id}`, { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)
-      if (me) setProfile(me)
-    } finally {
-      saveUserSession(profile.id)
-      setShowSuccess(true)
-      setLoading(false)
-      // Briefly show the "Deposit successful" card, then take them back into
-      // the site (their account, now showing the new balance).
-      setTimeout(() => router.push('/me'), 2500)
-    }
-  }
-
-  // Poll the charge status while the customer approves the mobile-money debit
-  // on their phone. Resolves to 'success', a terminal failure status, or
-  // 'timeout'.
-  const pollChargeStatus = async (reference: string): Promise<string> => {
-    const deadline = Date.now() + 150_000 // ~2.5 minutes
-    const terminalFail = new Set([
-      'failed', 'abandoned', 'cancelled', 'amount-mismatch', 'no-user',
-      'credit-failed', 'verify-failed', 'unknown-reference', 'missing-charge-id',
-    ])
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 4000))
-      try {
-        const res = await fetch(
-          `/api/payments/flutterwave/status?reference=${encodeURIComponent(reference)}`,
-          { cache: 'no-store' },
-        )
-        const data = await res.json().catch(() => ({}))
-        if (data.done) return 'success'
-        if (typeof data.status === 'string' && terminalFail.has(data.status)) return data.status
-      } catch {
-        /* keep polling */
-      }
-    }
-    return 'timeout'
-  }
-
-  // In-app mobile-money checkout (network + phone + on-phone PIN) — GH only.
-  // Works with both Paystack and Flutterwave charge APIs; card/hosted is the
-  // fallback for other countries.
-  const momoAvailable = country === 'GH' && (gateway === 'paystack' || gateway === 'flutterwave')
-  const showMoMoFlow = momoAvailable && payMode === 'momo' && Boolean(profile)
-
-  const isReturning = Boolean(profile?.firstDepositAt) && !showSuccess && !manualSubmitted
-  const headingTitle = showSuccess
-    ? 'Deposit successful'
-    : manualSubmitted
-      ? 'Payment submitted'
-      : purpose === 'verification'
-        ? `Verify ${currency} ${minAmount}`
-        : isReturning
-          ? 'Add funds to your wallet'
-          : 'Make your first deposit'
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  function selectFile(f: File | null) {
     setError(null)
-    if (!userId) {
-      setError('Missing userId in URL.')
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    if (!f) {
+      setFile(null)
+      setPreviewUrl(null)
       return
     }
-    const amt = Number(amount)
-    if (!Number.isFinite(amt) || amt <= 0) {
-      setError('Enter a positive amount.')
+    if (f.size > MAX_SCREENSHOT_BYTES) {
+      setError('Screenshot is too large (max 5 MB).')
       return
     }
-    if (amt < minAmount) {
-      setError(`Minimum deposit is ${currency} ${minAmount.toFixed(2)}.`)
-      return
-    }
-    if (!profile) {
-      setError('Profile not loaded yet — wait a moment and try again.')
-      return
-    }
+    setFile(f)
+    setPreviewUrl(URL.createObjectURL(f))
+  }
 
-    if (gateway === 'manual') {
-      // NG "Pay with Korapay" flow: show the account number immediately and
-      // start the on-screen payment-window countdown there. We don't notify
-      // the operator yet — that only happens once the user has transferred
-      // and taps "I have paid" on the pay step (handleKorapayPaid below).
-      setKorapayCountdown(KORAPAY_CONNECT_SECONDS)
-      setKorapayStep('pay')
+  async function copyAddress() {
+    try {
+      await navigator.clipboard.writeText(USDT_ADDRESS)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      /* clipboard blocked — the address is still visible to copy by hand */
+    }
+  }
+
+  function validateAmount(): string | null {
+    if (!amountValue || amountValue <= 0) return 'Enter or pick an amount.'
+    if (amountValue < minDeposit) {
+      return `Minimum deposit is ${currency} ${formatMoney(minDeposit, currency)}.`
+    }
+    return null
+  }
+
+  async function handleFlutterwave() {
+    if (!profile) return
+    const amountError = validateAmount()
+    if (amountError) {
+      setError(amountError)
       return
     }
-
+    setError(null)
     setLoading(true)
     try {
       const res = await fetch('/api/payments/flutterwave/start', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: profile.id,
-          amount: amt,
+          amount: amountValue,
           purpose,
-          returnPath: `/users/first-deposit?userId=${profile.id}`,
-          // Mobile-money countries need a phone + network for the charge.
-          phone: profile.phone ?? undefined,
-          network: countryCfg.payoutNetworks[0]?.key,
+          returnPath: '/me',
         }),
       })
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json()
       if (!res.ok) {
-        throw new Error(data.error ?? `HTTP ${res.status}`)
+        setError(data.error || 'Could not start the deposit. Try again.')
+        return
       }
-      // Redirect-based methods (3DS / bank) hand back a URL.
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl as string
         return
       }
-      if (!data.reference) {
-        throw new Error('Could not start the payment. Please try again.')
-      }
-      // Mobile money: a PIN prompt is sent to the phone. Poll until it clears.
-      setError(null)
-      setPinPrompt('Approve the payment on your phone — enter your mobile-money PIN…')
-      const final = await pollChargeStatus(data.reference)
-      setPinPrompt(null)
-      if (final === 'success') {
-        await handleDepositSuccess()
-      } else if (final === 'timeout') {
-        setError('Still waiting for approval. If you approved it, refresh your account in a moment.')
-        setLoading(false)
-      } else {
-        setError(`Payment not completed (${final}). Try again.`)
-        setLoading(false)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      setLoading(false)
-    }
-  }
-
-  // Final step of the Korapay flow: the user has transferred and tapped "I
-  // have paid". Post to the Telegram operator-approval start route — the
-  // operator confirms the transfer from a Telegram DM and applyDepositCredit
-  // fires the same wallet + commission pipeline the auto gateways use.
-  const handleKorapayPaid = async () => {
-    if (!profile) return
-    const amt = Number(amount)
-    if (!Number.isFinite(amt) || amt <= 0) {
-      setError('Enter a positive amount.')
-      return
-    }
-    setError(null)
-    setLoading(true)
-    try {
-      const res = await fetch('/api/payments/telegram/start', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId: profile.id, amount: amt, purpose }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-      if (typeof data.warning === 'string') throw new Error(data.warning)
-      saveUserSession(profile.id)
-      setManualSubmitted(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError('Could not open checkout. Try again.')
+    } catch {
+      setError('Network error. Check your connection and try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  const copyValue = async (field: string, value: string) => {
+  async function handleUsdt() {
+    if (!profile) return
+    if (!USDT_ADDRESS) {
+      setError('USDT deposits are not available right now. Please contact support.')
+      return
+    }
+    const amountError = validateAmount()
+    if (amountError) {
+      setError(amountError)
+      return
+    }
+    if (!file) {
+      setError('Attach a screenshot of your USDT payment.')
+      return
+    }
+    setError(null)
+    setLoading(true)
     try {
-      await navigator.clipboard.writeText(value)
-      setCopiedField(field)
-      setTimeout(() => setCopiedField(null), 1500)
+      const form = new FormData()
+      form.set('userId', profile.id)
+      form.set('amount', String(amountValue))
+      form.set('purpose', purpose)
+      form.set('channel', 'usdt')
+      form.set('returnPath', '/me')
+      form.set('file', file)
+      const res = await fetch('/api/payments/manual/start', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Could not submit your deposit. Try again.')
+        return
+      }
+      setManualSubmitted(true)
     } catch {
-      /* ignore */
+      setError('Network error. Check your connection and try again.')
+    } finally {
+      setLoading(false)
     }
   }
+
+  const headingTitle =
+    purpose === 'verification' ? 'Verify your account' : 'Add money'
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-card border-b border-border">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
           <Link
-            href="/"
+            href="/me"
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span>Skip</span>
+            <span>Back</span>
           </Link>
           <Link href="/" className="flex items-center" aria-label="PowerStakeBet home">
             <Image
@@ -399,48 +249,11 @@ function DepositForm() {
 
       <main className="flex-1 flex items-start sm:items-center justify-center p-4 py-8">
         <div className="relative w-full max-w-md">
-          {/* Ambient glow blobs match the auth visual language */}
           <div aria-hidden className="absolute -top-16 -left-12 w-56 h-56 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
           <div aria-hidden className="absolute -bottom-16 -right-12 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
-          {/* "Secured by Kora" floats above the card on the Korapay select /
-              pay steps, matching Korapay's hosted checkout. */}
-          {gateway === 'manual' && (korapayStep === 'select' || korapayStep === 'pay') && profile && (
-            <div className="relative mb-3">
-              <SecuredByKora mobile={countryCfg.payoutTarget === 'mobile'} />
-            </div>
-          )}
-
           <div className="relative bg-card rounded-2xl border border-border p-5 sm:p-8 shadow-card">
-            {showSuccess && profile ? (
-              <div className="text-center space-y-4">
-                <div className="relative w-16 h-16 mx-auto">
-                  <div aria-hidden className="absolute inset-0 rounded-2xl bg-success/20 blur-xl" />
-                  <div className="relative w-16 h-16 rounded-2xl bg-success/15 border border-success/30 flex items-center justify-center shadow-card">
-                    <CheckCircle2 className="w-8 h-8 text-success" />
-                  </div>
-                </div>
-                <h1 className="text-title font-bold tracking-tight">{headingTitle}</h1>
-                <div className="bg-secondary/60 border border-border rounded-xl p-4 text-left space-y-2">
-                  <Row
-                    label="Total deposited"
-                    value={`${currency} ${formatMoney(profile.totalDeposited, currency)}`}
-                  />
-                  <Row
-                    label="New balance"
-                    value={`${currency} ${formatMoney(profile.balance, currency)}`}
-                    tone="good"
-                    bold
-                  />
-                </div>
-                <Button
-                  onClick={() => router.push('/me')}
-                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
-                >
-                  View account
-                </Button>
-              </div>
-            ) : manualSubmitted && profile ? (
+            {manualSubmitted && profile ? (
               <div className="text-center space-y-4">
                 <div className="relative w-16 h-16 mx-auto">
                   <div aria-hidden className="absolute inset-0 rounded-2xl bg-amber-500/20 blur-xl" />
@@ -448,25 +261,16 @@ function DepositForm() {
                     <Hourglass className="w-8 h-8 text-amber-600" />
                   </div>
                 </div>
-                <h1 className="text-title font-bold tracking-tight">{headingTitle}</h1>
+                <h1 className="text-title font-bold tracking-tight">
+                  USDT deposit request submitted!
+                </h1>
                 <p className="text-sm text-muted-foreground">
-                  Thanks! We&apos;ve notified an operator about your{' '}
+                  Please wait for admin approval. We&apos;ll credit your{' '}
                   <span className="font-bold text-foreground tabular-nums">
-                    {currency} {formatMoney(Number(amount) || 0, currency)}
+                    {currency} {formatMoney(amountValue, currency)}
                   </span>{' '}
-                  payment. They&apos;ll confirm the transfer and credit your wallet in a few minutes.
+                  once the payment is confirmed — usually within a few minutes.
                 </p>
-                <div className="bg-secondary/60 border border-border rounded-xl p-4 text-left space-y-2">
-                  <Row
-                    label="Submitted amount"
-                    value={`${currency} ${formatMoney(Number(amount) || 0, currency)}`}
-                  />
-                  <Row
-                    label="Status"
-                    value="Awaiting operator approval"
-                    tone="neutral"
-                  />
-                </div>
                 <Button
                   onClick={() => router.push('/me')}
                   className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
@@ -474,378 +278,217 @@ function DepositForm() {
                   View account
                 </Button>
               </div>
-            ) : gateway === 'manual' && korapayStep === 'select' && profile ? (
+            ) : (
               <div className="space-y-5">
-                <div className="text-center space-y-2">
-                  <KorapayBrand mobile={countryCfg.payoutTarget === 'mobile'} />
-                  <h1 className="text-title font-bold tracking-tight">Choose how to pay</h1>
+                <div className="text-center space-y-1.5">
+                  <h1 className="text-title font-bold tracking-tight">{headingTitle}</h1>
                   <p className="text-sm text-muted-foreground">
-                    Select a payment method to fund your wallet.
+                    Choose how you&apos;d like to fund your wallet.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null)
-                    setKorapayStep('amount')
-                  }}
-                  className="w-full flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 p-4 text-left transition-colors"
-                >
-                  <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-white shrink-0">
-                    <Smartphone className="w-5 h-5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-foreground">
-                      {countryCfg.payoutTarget === 'mobile' ? 'Pay with Mobile Money' : 'Pay with Korapay'}
-                    </span>
-                    <span className="block text-[11px] text-muted-foreground">
-                      {countryCfg.payoutTarget === 'mobile'
-                        ? 'MTN · Telecel · AirtelTigo — approved in minutes'
-                        : 'Bank transfer · approved in minutes'}
-                    </span>
-                  </span>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-                </button>
-              </div>
-            ) : gateway === 'manual' && korapayStep === 'pay' && profile ? (
-              <div className="space-y-5">
-                <div className="text-center space-y-2">
-                  <KorapayBrand mobile={countryCfg.payoutTarget === 'mobile'} />
-                  <h1 className="text-title font-bold tracking-tight">
-                    Pay GHS {formatMoney(payGhs, 'GHS')}
-                  </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Transfer exactly{' '}
-                    <span className="font-bold text-foreground tabular-nums">
-                      GHS {formatMoney(payGhs, 'GHS')}
-                    </span>{' '}
-                    to the account below, then tap <span className="font-semibold text-foreground">I have paid</span>.
+                {/* Method picker */}
+                <div className="grid grid-cols-2 gap-2">
+                  <MethodTab
+                    active={method === 'flutterwave'}
+                    onClick={() => {
+                      setError(null)
+                      setMethod('flutterwave')
+                    }}
+                    icon={<Zap className="w-4 h-4" />}
+                    title="Instant"
+                    subtitle="Card / MoMo"
+                  />
+                  <MethodTab
+                    active={method === 'usdt'}
+                    onClick={() => {
+                      setError(null)
+                      setMethod('usdt')
+                    }}
+                    icon={<Coins className="w-4 h-4" />}
+                    title="USDT"
+                    subtitle="BEP20"
+                    badge="Recommended"
+                  />
+                </div>
+
+                {/* USDT: pay-to address */}
+                {method === 'usdt' && (
+                  USDT_ADDRESS ? (
+                    <div className="space-y-1.5">
+                      <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                        Send USDT via BEP20 to this address
+                      </p>
+                      <button
+                        type="button"
+                        onClick={copyAddress}
+                        className="w-full flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 p-3 text-left transition-colors"
+                      >
+                        <span className="flex-1 min-w-0 break-all font-mono text-sm text-foreground">
+                          {USDT_ADDRESS}
+                        </span>
+                        <span className="shrink-0 inline-flex items-center gap-1 text-primary font-semibold text-caption">
+                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          {copied ? 'Copied' : 'Copy'}
+                        </span>
+                      </button>
+                      <p className="text-caption text-muted-foreground">
+                        Only send USDT on the BEP20 (BNB Smart Chain) network. Sending any
+                        other coin or network may be lost.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>USDT deposits aren&apos;t available right now. Please use Instant, or contact support.</span>
+                    </div>
+                  )
+                )}
+
+                {/* Amount */}
+                <div className="space-y-2">
+                  <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                    Select amount ({currency})
                   </p>
-                </div>
-
-                {/* On-screen payment-window countdown */}
-                <div className="mx-auto flex w-fit items-center gap-2 rounded-full bg-secondary/60 border border-border px-4 py-1.5 shadow-card">
-                  <Loader2 className="w-3.5 h-3.5 text-[#1B4DFF] animate-spin" />
-                  <span className="text-xs text-muted-foreground font-medium">Complete payment within</span>
-                  <span className="text-sm font-extrabold tabular-nums text-foreground">
-                    {formatCountdown(korapayCountdown)}
-                  </span>
-                </div>
-
-                <div className="rounded-xl border border-[#1B4DFF]/30 bg-[#1B4DFF]/5 p-4 space-y-3">
-                  <div className="flex items-center gap-2 text-foreground">
-                    <Building2 className="w-4 h-4 text-[#1B4DFF]" />
-                    <span className="text-sm font-bold">Send payment to this account</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {AMOUNT_CHIPS.map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => {
+                          setError(null)
+                          setAmount(v)
+                        }}
+                        className={`h-11 rounded-xl border font-bold text-sm tabular-nums transition-colors ${
+                          amount === v
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-secondary/60 text-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        {formatMoney(v, currency)}
+                      </button>
+                    ))}
                   </div>
-                  <BankField
-                    label={countryCfg.payoutTarget === 'mobile' ? 'Mobile money number' : 'Account number'}
-                    value={manualAccount.accountNumber}
-                    mono
-                    copied={copiedField === 'account'}
-                    onCopy={() => copyValue('account', manualAccount.accountNumber)}
-                  />
-                  {manualAccount.accountName ? (
-                    <BankField
-                      label="Account name"
-                      value={manualAccount.accountName}
-                      copied={copiedField === 'name'}
-                      onCopy={() => copyValue('name', manualAccount.accountName)}
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-semibold">
+                      {currency}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={minDeposit}
+                      value={amount}
+                      onChange={(e) => {
+                        setError(null)
+                        const n = Number(e.target.value)
+                        setAmount(e.target.value === '' ? '' : Number.isFinite(n) ? n : '')
+                      }}
+                      placeholder="Or enter a custom amount"
+                      className="w-full h-12 pl-14 pr-3 rounded-xl border border-border bg-background text-foreground font-semibold tabular-nums outline-none focus:border-primary transition-colors"
                     />
-                  ) : null}
-                  {manualAccount.bankName ? (
-                    <BankField
-                      label={countryCfg.payoutTarget === 'mobile' ? 'Network' : 'Bank'}
-                      value={manualAccount.bankName}
-                      copied={copiedField === 'bank'}
-                      onCopy={() => copyValue('bank', manualAccount.bankName)}
-                    />
-                  ) : null}
+                  </div>
+                  <p className="text-caption text-muted-foreground">
+                    Minimum {currency} {formatMoney(minDeposit, currency)}.
+                  </p>
                 </div>
 
-                <div className="bg-secondary/60 border border-border rounded-xl p-3">
-                  <Row
-                    label="You'll be credited"
-                    value={`${currency} ${formatMoney(Number(amount) || 0, currency)}`}
-                    tone="good"
-                    bold
-                  />
-                </div>
+                {/* USDT: screenshot upload */}
+                {method === 'usdt' && USDT_ADDRESS && (
+                  <div className="space-y-2">
+                    <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                      Upload payment screenshot
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => selectFile(e.target.files?.[0] ?? null)}
+                    />
+                    {file && previewUrl ? (
+                      <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/60 p-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={previewUrl}
+                          alt="Payment screenshot preview"
+                          className="w-12 h-12 rounded-lg object-cover border border-border"
+                        />
+                        <span className="flex-1 min-w-0 truncate text-sm text-foreground">
+                          {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => selectFile(null)}
+                          className="shrink-0 text-muted-foreground hover:text-foreground"
+                          aria-label="Remove screenshot"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-secondary/40 hover:bg-secondary/70 py-6 text-center transition-colors"
+                      >
+                        <UploadCloud className="w-6 h-6 text-primary" />
+                        <span className="text-sm font-semibold text-foreground">
+                          Click to attach screenshot
+                        </span>
+                        <span className="text-caption text-muted-foreground">
+                          PNG, JPG up to 5MB
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {error && (
-                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>{error}</span>
                   </div>
                 )}
 
-                <Button
-                  onClick={handleKorapayPaid}
-                  disabled={loading}
-                  className="w-full h-12 bg-[#1B4DFF] text-white hover:bg-[#1741D6] font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Notifying operator…
-                    </>
-                  ) : (
-                    'I have paid'
-                  )}
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null)
-                    setKorapayStep('amount')
-                  }}
-                  className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                >
-                  ← Start over
-                </button>
-              </div>
-            ) : (
-              <>
-                {profile && (
-                  <div className="flex items-center gap-3 mb-5 p-3 rounded-xl bg-secondary/60 border border-border shadow-card">
-                    <div className="w-11 h-11 rounded-full bg-primary/15 border-2 border-primary flex items-center justify-center text-base font-bold text-primary shrink-0">
-                      {profile.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-foreground truncate">
-                        {profile.name}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground truncate font-mono">
-                        ID: {profile.id.slice(0, 8)}…
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-eyebrow text-muted-foreground">Balance</p>
-                      <p className="text-sm font-bold text-foreground tabular-nums mt-0.5">
-                        {currency} {formatMoney(profile.balance, currency)}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {!profile && !profileLoading && userId && (
-                  <div className="mb-5 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium">
-                    Could not load profile for this user.
-                  </div>
-                )}
-
-                <div className="text-center mb-6">
-                  <div className="relative w-14 h-14 mx-auto mb-3">
-                    <div aria-hidden className="absolute inset-0 rounded-2xl bg-primary/25 blur-xl" />
-                    <div className="relative w-14 h-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center shadow-card">
-                      <Wallet className="w-7 h-7 text-primary" />
-                    </div>
-                  </div>
-                  <h1 className="text-title font-bold text-foreground tracking-tight">{headingTitle}</h1>
-                  <p className="text-sm text-muted-foreground mt-1.5">
-                    {gateway === 'moolre'
-                      ? 'Pay with MTN, Telecel or AT Money on Moolre.'
-                      : gateway === 'manual'
-                        ? countryCfg.payoutTarget === 'mobile'
-                          ? 'Pay with Mobile Money — enter an amount to start your deposit.'
-                          : 'Pay with Korapay — enter an amount to start your deposit.'
-                        : showMoMoFlow
-                          ? 'Pay instantly with MTN MoMo, Telecel Cash or AirtelTigo Money.'
-                          : `Pay securely with card or bank — the checkout opens right here.`}
-                    {' '}Minimum deposit: <span className="text-foreground font-semibold">{currency} {minAmount}</span>.
-                  </p>
-                </div>
-
-                {gateway === 'manual' && country === 'GH' && (
-                  <div className="mb-5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
-                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                    <span>
-                      Instant checkout is temporarily unavailable due to a provider issue. Complete your
-                      deposit by mobile money below — it&apos;s confirmed within a few minutes.
-                    </span>
-                  </div>
-                )}
-
-                {showMoMoFlow && profile ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-eyebrow text-muted-foreground block mb-2">
-                        Amount ({currency})
-                      </label>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        min={minAmount}
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="text-2xl h-14 bg-secondary border-border font-extrabold tabular-nums"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-2">
-                      {[minAmount, minAmount * 1.5, minAmount * 2.5, minAmount * 5]
-                        .map((n) => Math.round(n).toString())
-                        .map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => setAmount(preset)}
-                            className={`py-2 rounded-lg text-sm font-bold transition-all ${
-                              amount === preset
-                                ? 'bg-primary text-primary-foreground shadow-card-pressed'
-                                : 'bg-secondary text-foreground hover:bg-secondary/70 hover:-translate-y-0.5 hover:shadow-card'
-                            }`}
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                    </div>
-
-                    {Number(amount) >= minAmount ? (
-                      <MobileMoneyForm
-                        userId={profile.id}
-                        amount={Number(amount)}
-                        currency={currency}
-                        defaultPhone={profile.phone ?? null}
-                        purpose={purpose}
-                        gateway={gateway === 'flutterwave' ? 'flutterwave' : 'paystack'}
-                        onSuccess={handleDepositSuccess}
-                        onSwitchToCard={() => setPayMode('card')}
-                      />
-                    ) : (
-                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/15 text-[11px] text-muted-foreground flex items-start gap-2">
-                        <Info className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />
-                        <span>
-                          Enter at least{' '}
-                          <strong className="text-foreground">
-                            {currency} {minAmount}
-                          </strong>{' '}
-                          to send a mobile-money prompt.
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="text-eyebrow text-muted-foreground block mb-2">
-                      Amount ({currency})
-                    </label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min={minAmount}
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="text-2xl h-14 bg-secondary border-border font-extrabold tabular-nums"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-2">
-                    {[minAmount, minAmount * 1.5, minAmount * 2.5, minAmount * 5]
-                      .map((n) => Math.round(n).toString())
-                      .map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => setAmount(preset)}
-                          className={`py-2 rounded-lg text-sm font-bold transition-all ${
-                            amount === preset
-                              ? 'bg-primary text-primary-foreground shadow-card-pressed'
-                              : 'bg-secondary text-foreground hover:bg-secondary/70 hover:-translate-y-0.5 hover:shadow-card'
-                          }`}
-                        >
-                          {preset}
-                        </button>
-                      ))}
-                  </div>
-
-                  {gateway === 'manual' && needsGhsConversion && (
-                    <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-eyebrow text-muted-foreground">You&apos;ll transfer</span>
-                        <span className="text-xl font-extrabold tabular-nums text-[#1B4DFF]">
-                          GHS {formatMoney(ngnToGhs(Number(amount) || 0), 'GHS')}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Pay in GHS to a Ghana account; your wallet is credited in {currency}.
-                        Rate: GHS&nbsp;1&nbsp;=&nbsp;{currency}&nbsp;{NGN_PER_GHS}.
-                      </p>
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive font-medium flex items-start gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  {pinPrompt && (
-                    <div className="p-3 rounded-lg bg-primary/10 border border-primary/30 text-xs text-foreground font-medium flex items-start gap-2">
-                      <Loader2 className="w-3.5 h-3.5 mt-0.5 shrink-0 animate-spin" />
-                      <span>{pinPrompt}</span>
-                    </div>
-                  )}
-
+                {/* Submit */}
+                {method === 'flutterwave' ? (
                   <Button
-                    type="submit"
-                    disabled={loading || !profile}
-                    className={`w-full h-12 font-bold text-sm shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all ${
-                      gateway === 'manual'
-                        ? 'bg-[#1B4DFF] text-white hover:bg-[#1741D6]'
-                        : 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    }`}
+                    onClick={handleFlutterwave}
+                    disabled={loading || profileLoading || !profile}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
                   >
                     {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {gateway === 'paystack' ? 'Opening checkout…' : 'Redirecting…'}
-                      </>
-                    ) : gateway === 'manual' ? (
-                      'Next'
+                      <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      `Pay ${currency} ${Number(amount || 0).toFixed(2)}`
+                      <>
+                        <Zap className="w-4 h-4" />
+                        {amountValue > 0
+                          ? `Deposit ${currency} ${formatMoney(amountValue, currency)}`
+                          : 'Continue to payment'}
+                      </>
                     )}
                   </Button>
-
-                  {gateway === 'manual' ? (
-                    <>
-                      <SecuredByKora mobile={countryCfg.payoutTarget === 'mobile'} />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setError(null)
-                          setKorapayStep('select')
-                        }}
-                        className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                      >
-                        ← Change payment method
-                      </button>
-                    </>
-                  ) : (
-                    <p className="text-center text-[11px] text-muted-foreground">
-                      Secured by {gateway === 'moolre' ? 'Moolre' : 'Flutterwave'} · You can deposit
-                      later from your account
-                    </p>
-                  )}
-
-                  {momoAvailable && payMode === 'card' && (
-                    <button
-                      type="button"
-                      onClick={() => setPayMode('momo')}
-                      className="block mx-auto text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                    >
-                      ← Pay with mobile money instead
-                    </button>
-                  )}
-                </form>
+                ) : (
+                  <Button
+                    onClick={handleUsdt}
+                    disabled={loading || profileLoading || !profile || !USDT_ADDRESS}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Submit Deposit
+                      </>
+                    )}
+                  </Button>
                 )}
-              </>
+
+                <p className="text-caption text-center text-muted-foreground">
+                  Need help? Contact support.
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -854,110 +497,58 @@ function DepositForm() {
   )
 }
 
-// Small Korapay wordmark pill used at the top of the connecting / pay cards so
-// the manual flow reads as a Korapay-branded checkout. Pure CSS — no asset.
-function KorapayBrand({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <div className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-3 py-1">
-      <span className="w-2 h-2 rounded-full bg-primary" />
-      <span className="text-xs font-bold tracking-tight text-foreground">
-        {mobile ? 'Mobile Money' : <>kora<span className="text-[#1B4DFF]">pay</span></>}
-      </span>
-    </div>
-  )
-}
-
-// Trust badge shown top of the pay screen.
-function SecuredByKora({ mobile = false }: { mobile?: boolean }) {
-  return (
-    <div className="flex items-center justify-center gap-1.5">
-      <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary">
-        <Lock className="w-2.5 h-2.5 text-white" />
-      </span>
-      <span className="text-[11px] font-medium text-muted-foreground">
-        {mobile ? (
-          <>Secure <span className="font-bold text-foreground">payment</span></>
-        ) : (
-          <>Secured by <span className="font-bold text-foreground">Kora</span></>
-        )}
-      </span>
-    </div>
-  )
-}
-
-function Row({
-  label,
-  value,
-  tone = 'neutral',
-  bold = false,
+function MethodTab({
+  active,
+  onClick,
+  icon,
+  title,
+  subtitle,
+  badge,
 }: {
-  label: string
-  value: string
-  tone?: 'good' | 'neutral'
-  bold?: boolean
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  badge?: string
 }) {
   return (
-    <div className="flex justify-between items-center gap-2">
-      <span className="text-sm text-muted-foreground">{label}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${
+        active
+          ? 'border-primary bg-primary/10'
+          : 'border-border bg-secondary/60 hover:bg-secondary'
+      }`}
+    >
+      {badge && (
+        <span className="absolute top-2 right-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+          {badge}
+        </span>
+      )}
       <span
-        className={`tabular-nums text-right ${bold ? 'text-lg font-bold' : 'text-sm font-semibold'} ${
-          tone === 'good' ? 'text-success' : 'text-foreground'
+        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${
+          active ? 'bg-primary text-primary-foreground' : 'bg-background text-primary'
         }`}
       >
-        {value}
+        {icon}
       </span>
-    </div>
-  )
-}
-
-function BankField({
-  label,
-  value,
-  mono = false,
-  copied,
-  onCopy,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-  copied: boolean
-  onCopy: () => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-card border border-border px-3 py-2">
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <p
-          className={`text-sm font-bold text-foreground truncate ${mono ? 'font-mono tabular-nums' : ''}`}
-        >
-          {value}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onCopy}
-        className="shrink-0 h-8 px-2.5 rounded-md border border-border hover:bg-secondary text-xs font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5"
-        aria-label={`Copy ${label}`}
-      >
-        {copied ? (
-          <>
-            <Check className="w-3.5 h-3.5 text-success" /> Copied
-          </>
-        ) : (
-          <>
-            <Copy className="w-3.5 h-3.5" /> Copy
-          </>
-        )}
-      </button>
-    </div>
+      <span className="text-sm font-bold text-foreground">{title}</span>
+      <span className="text-caption text-muted-foreground">{subtitle}</span>
+    </button>
   )
 }
 
 export default function FirstDepositPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
       <DepositForm />
     </Suspense>
   )
