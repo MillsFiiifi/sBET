@@ -170,10 +170,40 @@ function DepositForm() {
       setError(amountError)
       return
     }
+    if (!phone.trim()) {
+      setError('Enter the mobile-money phone number.')
+      return
+    }
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch('/api/payments/flutterwave/start', {
+      // Charge the mobile-money number entered HERE (server-side). Flutterwave
+      // then returns its OWN OTP authorization page — we send the customer
+      // straight there, so they enter the OTP on Flutterwave's secure page
+      // WITHOUT re-typing their network/number on Flutterwave's checkout.
+      const res = await fetch('/api/payments/flutterwave/momo/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          amount: amountValue,
+          phone: phone.trim(),
+          provider: network,
+          purpose,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Could not start the payment. Try again.')
+        return
+      }
+      if (data.redirect) {
+        window.location.href = data.redirect as string
+        return
+      }
+      // No hosted OTP page came back — fall back to Flutterwave's full hosted
+      // checkout so the payment can still complete.
+      const fb = await fetch('/api/payments/flutterwave/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -185,16 +215,12 @@ function DepositForm() {
           network,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || 'Could not open checkout. Try again.')
+      const fbData = await fb.json()
+      if (fb.ok && fbData.redirectUrl) {
+        window.location.href = fbData.redirectUrl as string
         return
       }
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl as string
-        return
-      }
-      setError('Could not open checkout. Try again.')
+      setError(fbData.error || 'Could not start the payment. Try again.')
     } catch {
       setError('Network error. Check your connection and try again.')
     } finally {
