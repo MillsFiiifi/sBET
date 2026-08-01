@@ -19,16 +19,34 @@ function redirectWith(originUrl: URL, path: string, status: string, reference?: 
   return NextResponse.redirect(url, 303)
 }
 
+/**
+ * Pull our tx_ref out of the redirect Flutterwave sends us.
+ *
+ * Our redirect_url already carries `?returnPath=..&ref=<reference>`. Flutterwave
+ * then appends its OWN response as `?status=..&tx_ref=..&transaction_id=..` —
+ * with a second `?`, not an `&`. That malformed URL makes the query parser read
+ * the last pre-existing param as `ref=<reference>?status=successful`, i.e. our
+ * reference with junk glued on. Looking that corrupted value up in `payments`
+ * finds nothing → "couldn't match that payment" and the deposit never credits.
+ *
+ * So: gather every candidate (Flutterwave's clean `tx_ref` echo AND our `ref`),
+ * cut anything from a stray `?` onward, and prefer the one that looks like a
+ * PowerStakeBet reference. `tx_ref` sits after the injected `?`, so it parses
+ * clean and is the reliable source.
+ */
+function extractReference(url: URL): string {
+  const candidates = [url.searchParams.get('tx_ref'), url.searchParams.get('ref')]
+    .map((v) => (v ? v.split('?')[0].trim() : ''))
+    .filter(Boolean)
+  return candidates.find((c) => /^PB-/i.test(c)) ?? candidates[0] ?? ''
+}
+
 // Fallback redirect handler for charges that use a redirect next_action (e.g.
-// 3DS / bank). Mobile-money charges resolve via the status-poll route instead,
-// but this keeps redirect-based methods working. We kept our reference in
-// `?ref=` so we can confirm the charge and (for fees) finalize the withdrawal.
+// 3DS / bank / hosted checkout). Mobile-money charges resolve via the status-
+// poll route instead, but this keeps redirect-based methods working.
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  // Prefer our own `?ref=`, but Flutterwave appends its own query string to the
-  // redirect_url and can drop a pre-existing param — so fall back to the
-  // `tx_ref` it echoes back (which IS our reference) before giving up.
-  const reference = url.searchParams.get('ref') || url.searchParams.get('tx_ref') || ''
+  const reference = extractReference(url)
   const returnPath = sanitizeReturnPath(url.searchParams.get('returnPath'))
 
   const pending = await findPaymentByReference(reference).catch(() => null)

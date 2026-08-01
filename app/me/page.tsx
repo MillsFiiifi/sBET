@@ -166,7 +166,10 @@ function MePageInner() {
     const moolre = searchParams.get('moolre')
     const flw = searchParams.get('flw')
     if (!moolre && !flw) return
-    const ref = searchParams.get('ref')
+    // Flutterwave can glue its own `?status=..&tx_ref=..` onto our redirect_url,
+    // leaving `ref` as "PB-DEP-..?status=successful". Cut anything from a stray
+    // `?` onward so the confirm poll below hits the real reference.
+    const ref = (searchParams.get('ref') ?? '').split('?')[0].trim() || null
     const reason = searchParams.get('reason') ?? flw ?? moolre
     const success =
       moolre === 'success' || flw === 'success' || flw === 'already-credited'
