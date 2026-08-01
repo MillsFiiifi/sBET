@@ -1,297 +1,404 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Trash2, Plus, Radio, Lock, LockOpen } from 'lucide-react'
-import type { CustomMatch } from '@/lib/custom-matches-store'
+import { Loader2, RefreshCcw, AlertCircle, CheckCircle2, Pencil, Lock, Unlock, RotateCcw, CalendarOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
+import { sports } from '@/lib/mock-data'
+import type { Match } from '@/lib/domain-types'
 
-const SPORTS = ['soccer', 'basketball', 'tennis', 'hockey', 'american-football', 'baseball', 'volleyball']
-
-const emptyForm = {
-  sport: 'soccer',
-  league: '',
-  country: '',
-  homeTeam: '',
-  awayTeam: '',
-  oddsHome: '',
-  oddsDraw: '',
-  oddsAway: '',
-  homeScore: '',
-  awayScore: '',
-  minute: '',
-  startTime: '',
-  isLive: false,
-  homeFlagUrl: '',
-  awayFlagUrl: '',
+interface MatchesResponse {
+  source: 'odds-api' | 'mock'
+  reason?: string
+  matches: Match[]
 }
 
 export default function AdminMatchesPage() {
-  const [matches, setMatches] = useState<CustomMatch[]>([])
-  const [form, setForm] = useState({ ...emptyForm })
+  const [activeSport, setActiveSport] = useState('football')
+  const [data, setData] = useState<MatchesResponse | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState<null | 'home' | 'away'>(null)
-
-  const uploadFlag = async (side: 'home' | 'away', file: File) => {
-    setUploading(side)
-    setError(null)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/admin/upload-flag', { method: 'POST', body: fd })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
-      setForm((f) => ({ ...f, [side === 'home' ? 'homeFlagUrl' : 'awayFlagUrl']: data.url }))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setUploading(null)
-    }
-  }
+  const [lastFetched, setLastFetched] = useState<Date | null>(null)
 
   const load = async () => {
-    const res = await fetch('/api/admin/matches', { cache: 'no-store' })
-    if (res.ok) setMatches((await res.json()).matches ?? [])
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/matches?sport=${encodeURIComponent(activeSport)}`, {
+        cache: 'no-store',
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = (await res.json()) as MatchesResponse
+      setData(json)
+      setLastFetched(new Date())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
     void load()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSport])
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const matches = data?.matches ?? []
+  const liveCount = matches.filter((m) => m.isLive).length
+
+  const applyOverride = async (id: string, patch: Record<string, unknown>) => {
     setError(null)
-    setSaving(true)
     try {
-      const res = await fetch('/api/admin/matches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+      const res = await fetch(`/api/admin/match-overrides/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to add match')
-      setForm({ ...emptyForm })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
       await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSaving(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
-  const patch = async (id: string, body: Record<string, unknown>) => {
-    await fetch(`/api/admin/matches/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    await load()
-  }
-
-  const remove = async (id: string) => {
-    await fetch(`/api/admin/matches/${id}`, { method: 'DELETE' })
-    await load()
-  }
-
-  const addDemo = async () => {
-    setSaving(true)
-    const demos = [
-      { sport: 'soccer', league: 'Premier League', country: 'England', homeTeam: 'Arsenal', awayTeam: 'Chelsea', isLive: true, minute: '35', homeScore: '1', awayScore: '0', oddsHome: '1.95', oddsDraw: '3.40', oddsAway: '3.80' },
-      { sport: 'soccer', league: 'La Liga', country: 'Spain', homeTeam: 'Real Madrid', awayTeam: 'Barcelona', isLive: false, startTime: 'Today 20:45', oddsHome: '2.10', oddsDraw: '3.30', oddsAway: '3.20' },
-    ]
-    for (const d of demos) {
-      await fetch('/api/admin/matches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(d),
+  const clearOverride = async (id: string) => {
+    if (!confirm('Clear admin override — match will revert to source values?')) return
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/match-overrides/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
       })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
-    setSaving(false)
-    await load()
   }
-
-  const field = (k: keyof typeof form, label: string, type = 'text', placeholder = '') => (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <input
-        type={type}
-        value={String(form[k])}
-        placeholder={placeholder}
-        onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-        className="px-3 py-2 bg-input border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-      />
-    </label>
-  )
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-title font-bold tracking-tight">Matches</h1>
-        <p className="text-sm text-muted-foreground">
-          Add and manage the real matches players bet on. Stored in Supabase.
-        </p>
+    <div className="p-4 sm:p-6 space-y-4 max-w-6xl">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-title font-bold tracking-tight">Matches monitor</h1>
+          <p className="text-sm text-muted-foreground">
+            Live snapshot of what the /api/matches endpoint returns per sport.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => void load()}
+          disabled={loading}
+          className="gap-2"
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <RefreshCcw className="w-4 h-4" />
+          )}
+          Refresh
+        </Button>
       </div>
 
-      {/* Add match form */}
-      <form onSubmit={submit} className="bg-card border border-border rounded-xl p-4 shadow-card space-y-4">
-        <h2 className="font-semibold text-title flex items-center gap-2">
-          <Plus className="w-4 h-4 text-primary" /> New match
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Sport</span>
-            <select
-              value={form.sport}
-              onChange={(e) => setForm({ ...form, sport: e.target.value })}
-              className="px-3 py-2 bg-input border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring capitalize"
-            >
-              {SPORTS.map((s) => (
-                <option key={s} value={s}>{s.replace('-', ' ')}</option>
-              ))}
-            </select>
-          </label>
-          {field('league', 'League', 'text', 'Premier League')}
-          {field('country', 'Country', 'text', 'England')}
-          {field('homeTeam', 'Home team', 'text', 'Man United')}
-          {field('awayTeam', 'Away team', 'text', 'Liverpool')}
-          {field('startTime', 'Start time', 'text', 'Today 20:00')}
-          {field('oddsHome', 'Odds — Home (1)', 'number', '1.85')}
-          {field('oddsDraw', 'Odds — Draw (X)', 'number', '3.40')}
-          {field('oddsAway', 'Odds — Away (2)', 'number', '4.20')}
-          {field('homeScore', 'Home score', 'number', '0')}
-          {field('awayScore', 'Away score', 'number', '0')}
-          {field('minute', 'Minute (if live)', 'text', "45")}
-        </div>
-
-        {/* Team logos / flags */}
-        <div className="grid grid-cols-2 gap-3">
-          {(['home', 'away'] as const).map((side) => {
-            const url = side === 'home' ? form.homeFlagUrl : form.awayFlagUrl
-            return (
-              <div key={side} className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-secondary border border-border flex items-center justify-center overflow-hidden shrink-0">
-                  {url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={url} alt="" className="w-full h-full object-contain" />
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">No logo</span>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground mb-1 capitalize">{side} team logo</p>
-                  <label className="inline-block text-xs font-medium text-accent cursor-pointer hover:underline">
-                    {uploading === side ? 'Uploading…' : url ? 'Change' : 'Upload logo'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0]
-                        if (f) void uploadFlag(side, f)
-                        e.target.value = ''
-                      }}
-                    />
-                  </label>
-                  {url && (
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, [side === 'home' ? 'homeFlagUrl' : 'awayFlagUrl']: '' }))}
-                      className="ml-3 text-xs text-destructive hover:underline"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.isLive}
-              onChange={(e) => setForm({ ...form, isLive: e.target.checked })}
-              className="w-4 h-4 accent-primary"
-            />
-            <span>Mark as live now</span>
-          </label>
-          {error && <span className="text-sm text-destructive">{error}</span>}
+      {/* Sport tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        {sports.map((s) => (
           <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            key={s.id}
+            onClick={() => setActiveSport(s.id)}
+            className={`px-3.5 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              activeSport === s.id
+                ? 'bg-primary text-primary-foreground shadow-card'
+                : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/70'
+            }`}
           >
-            {saving ? 'Adding…' : 'Add match'}
+            <span>{s.icon}</span>
+            <span>{s.name}</span>
           </button>
+        ))}
+      </div>
+
+      {/* Source indicator */}
+      {data && (
+        <div
+          className={`p-3 rounded-xl border text-sm flex items-start gap-2 shadow-card ${
+            data.source === 'odds-api'
+              ? 'bg-success/10 border-success/30 text-success'
+              : 'bg-secondary border-border text-muted-foreground'
+          }`}
+        >
+          {data.source === 'odds-api' ? (
+            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold">
+              Source: <span className="font-mono">{data.source}</span>
+              {data.reason ? <span className="font-normal"> · {data.reason}</span> : ''}
+            </p>
+            <p className="text-xs opacity-80">
+              {matches.length} match{matches.length === 1 ? '' : 'es'} · {liveCount} live
+              {lastFetched ? ` · fetched ${lastFetched.toLocaleTimeString()}` : ''}
+            </p>
+          </div>
         </div>
-      </form>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm shadow-card">
+          {error}
+        </div>
+      )}
 
       {/* Match list */}
-      <div className="bg-card border border-border rounded-xl shadow-card">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
-          <h2 className="font-semibold text-title">All matches ({matches.length})</h2>
-          <button
-            onClick={addDemo}
-            disabled={saving}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-border text-foreground hover:border-accent transition-colors disabled:opacity-50"
-          >
-            + Add 2 demo matches
-          </button>
+      {loading && !data ? (
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 rounded-xl" />
+          ))}
         </div>
-        {matches.length === 0 ? (
-          <div className="m-4 border border-dashed border-border rounded-xl p-6 text-center">
-            <p className="text-sm text-muted-foreground">No matches yet. Add one above.</p>
+      ) : matches.length === 0 ? (
+        <div className="bg-card border border-dashed border-border rounded-xl p-8 text-center">
+          <p className="text-sm text-muted-foreground">No matches returned for {activeSport}.</p>
+        </div>
+      ) : (
+        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
+          <div className="hidden md:grid grid-cols-[60px_1fr_120px_60px_60px_60px] gap-3 px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground border-b border-border bg-secondary/40">
+            <span>Status</span>
+            <span>Match · League</span>
+            <span>Time</span>
+            <span className="text-right">1</span>
+            <span className="text-right">X</span>
+            <span className="text-right">2</span>
           </div>
-        ) : (
           <ul className="divide-y divide-border">
             {matches.map((m) => (
-              <li key={m.id} className="px-4 py-3 flex items-center gap-3 flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                    <span className="uppercase font-semibold text-accent">{m.league}</span>
-                    {m.isLive && (
-                      <span className="inline-flex items-center gap-1 text-destructive font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" /> LIVE {m.minute ? `${m.minute}'` : ''}
-                      </span>
-                    )}
-                    {m.locked && <span className="text-muted-foreground">· locked</span>}
-                  </div>
-                  <p className="text-sm font-medium truncate">
-                    {m.homeTeam} {m.isLive ? `${m.homeScore ?? 0} - ${m.awayScore ?? 0}` : 'vs'} {m.awayTeam}
-                  </p>
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    1: {m.oddsHome.toFixed(2)} {m.oddsDraw > 0 ? `· X: ${m.oddsDraw.toFixed(2)}` : ''} · 2: {m.oddsAway.toFixed(2)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => patch(m.id, { isLive: !m.isLive })}
-                    title={m.isLive ? 'Set upcoming' : 'Set live'}
-                    className={`p-2 rounded-lg transition-colors ${m.isLive ? 'text-destructive hover:bg-destructive/10' : 'text-muted-foreground hover:bg-secondary'}`}
-                  >
-                    <Radio className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => patch(m.id, { locked: !m.locked })}
-                    title={m.locked ? 'Unlock betting' : 'Lock betting'}
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
-                  >
-                    {m.locked ? <Lock className="w-4 h-4" /> : <LockOpen className="w-4 h-4" />}
-                  </button>
-                  <button
-                    onClick={() => remove(m.id)}
-                    title="Delete"
-                    className="p-2 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </li>
+              <MatchRow
+                key={m.id}
+                match={m}
+                onLockToggle={() => applyOverride(m.id, { locked: !m.locked })}
+                onPostponeToggle={() => applyOverride(m.id, { postponed: !m.postponed })}
+                onApply={(patch) => applyOverride(m.id, patch)}
+                onClear={() => clearOverride(m.id)}
+              />
             ))}
           </ul>
-        )}
-      </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+interface MatchRowProps {
+  match: Match
+  onLockToggle: () => void
+  onPostponeToggle: () => void
+  onApply: (patch: { homeScore?: number; awayScore?: number; minute?: string; isLive?: boolean }) => void
+  onClear: () => void
+}
+
+function MatchRow({ match, onLockToggle, onPostponeToggle, onApply, onClear }: MatchRowProps) {
+  const [editing, setEditing] = useState(false)
+  const [home, setHome] = useState(String(match.homeScore ?? 0))
+  const [away, setAway] = useState(String(match.awayScore ?? 0))
+  const [minute, setMinute] = useState(match.minute ?? "1'")
+
+  const startEdit = () => {
+    setHome(String(match.homeScore ?? 0))
+    setAway(String(match.awayScore ?? 0))
+    setMinute(match.minute ?? "1'")
+    setEditing(true)
+  }
+
+  const saveLiveScore = () => {
+    onApply({
+      isLive: true,
+      homeScore: Number(home) || 0,
+      awayScore: Number(away) || 0,
+      minute,
+    })
+    setEditing(false)
+  }
+
+  const finalize = () => {
+    onApply({
+      isLive: false,
+      homeScore: Number(home) || 0,
+      awayScore: Number(away) || 0,
+      minute: 'FT',
+    })
+    setEditing(false)
+  }
+
+  return (
+    <li className="px-4 py-3 space-y-2">
+      <div className="md:grid md:grid-cols-[60px_1fr_120px_60px_60px_60px_120px] md:gap-3 md:items-center flex flex-col gap-1">
+        <div className="md:order-1 flex md:flex-col items-start gap-1.5">
+          {match.isLive ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-live">
+              <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse-live" />
+              LIVE
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase text-muted-foreground">Upcoming</span>
+          )}
+          {match.custom && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border border-primary/40 text-primary bg-primary/10">
+              Custom
+            </span>
+          )}
+          {match.locked && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border border-destructive/40 text-destructive bg-destructive/10 flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5" />
+              Locked
+            </span>
+          )}
+          {match.postponed && (
+            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border border-amber-500/40 text-amber-600 bg-amber-500/10 flex items-center gap-1">
+              <CalendarOff className="w-2.5 h-2.5" />
+              Postponed
+            </span>
+          )}
+        </div>
+        <div className="md:order-2 min-w-0">
+          <p className="font-medium text-sm truncate">
+            {match.homeTeam} <span className="text-muted-foreground">vs</span> {match.awayTeam}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {match.league}
+            {match.country ? ` · ${match.country}` : ''}
+            {(match.homeScore !== undefined || match.awayScore !== undefined) && (
+              <span className="ml-2 font-semibold text-foreground tabular-nums">
+                {match.homeScore ?? 0}-{match.awayScore ?? 0}
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="md:order-3 text-xs text-muted-foreground tabular-nums">
+          {match.isLive ? match.minute : match.startTime ?? '—'}
+        </div>
+        <div className="md:order-4 md:text-right text-xs tabular-nums">
+          <span className="md:hidden text-muted-foreground mr-1">1:</span>
+          <span className="font-semibold">{match.odds.home.toFixed(2)}</span>
+        </div>
+        <div className="md:order-5 md:text-right text-xs tabular-nums">
+          <span className="md:hidden text-muted-foreground mr-1">X:</span>
+          <span className="font-semibold">{match.odds.draw.toFixed(2)}</span>
+        </div>
+        <div className="md:order-6 md:text-right text-xs tabular-nums">
+          <span className="md:hidden text-muted-foreground mr-1">2:</span>
+          <span className="font-semibold">{match.odds.away.toFixed(2)}</span>
+        </div>
+        <div className="md:order-7 flex items-center gap-1 md:justify-end">
+          {!editing && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onLockToggle}
+                className={`h-7 px-2 text-xs ${match.locked ? 'text-destructive border-destructive/40 hover:bg-destructive/10' : ''}`}
+                title={match.locked ? 'Unlock' : 'Lock'}
+              >
+                {match.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onPostponeToggle}
+                className={`h-7 px-2 text-xs ${match.postponed ? 'text-amber-600 border-amber-500/40 hover:bg-amber-500/10' : ''}`}
+                title={match.postponed ? 'Un-postpone' : 'Mark postponed'}
+              >
+                <CalendarOff className="w-3 h-3" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={startEdit}
+                className="h-7 px-2 text-xs"
+                title="Edit score"
+              >
+                <Pencil className="w-3 h-3" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onClear}
+                className="h-7 px-2 text-xs text-muted-foreground"
+                title="Clear admin override"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+      {editing && (
+        <div className="bg-secondary/40 border border-border rounded-lg p-3 space-y-2.5">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-muted-foreground mb-1">
+                {match.homeTeam}
+              </label>
+              <Input
+                type="number"
+                min="0"
+                value={home}
+                onChange={(e) => setHome(e.target.value)}
+                className="h-9 text-center text-base font-bold tabular-nums"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-muted-foreground mb-1">
+                {match.awayTeam}
+              </label>
+              <Input
+                type="number"
+                min="0"
+                value={away}
+                onChange={(e) => setAway(e.target.value)}
+                className="h-9 text-center text-base font-bold tabular-nums"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase text-muted-foreground mb-1">
+                Minute
+              </label>
+              <Input
+                value={minute}
+                onChange={(e) => setMinute(e.target.value)}
+                className="h-9 text-center"
+                placeholder="45'"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditing(false)}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={saveLiveScore}
+              className="h-8 text-xs bg-live/20 text-live hover:bg-live/30 border border-live/30"
+            >
+              Save live score
+            </Button>
+            <Button
+              size="sm"
+              onClick={finalize}
+              className="h-8 text-xs bg-primary text-primary-foreground"
+            >
+              Final result
+            </Button>
+          </div>
+        </div>
+      )}
+    </li>
   )
 }

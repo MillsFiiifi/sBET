@@ -6,10 +6,25 @@ import type { UiMatch } from '@/lib/ui-match'
 
 const BASE = 'https://v3.football.api-sports.io'
 const TTL_MS = 60_000 // 60s cache
-const MAX_UPCOMING = 40 // cap the day's fixtures so the UI isn't flooded
+const MAX_UPCOMING = 120 // cap upcoming fixtures so the UI isn't flooded
+const UPCOMING_DAYS = 4 // today + next 3 days of fixtures
 
 const LIVE_STATUSES = new Set(['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'INT'])
 const FINISHED_STATUSES = new Set(['FT', 'AET', 'PEN'])
+
+// Marquee competitions floated to the top of the upcoming board (lower = higher
+// priority). Matched case-insensitively against the fixture's league name.
+const POPULAR_LEAGUES = [
+  'champions league', 'europa league', 'premier league', 'la liga',
+  'serie a', 'bundesliga', 'ligue 1', 'world cup', 'euro',
+  'fa cup', 'copa del rey', 'eredivisie', 'primeira liga', 'mls',
+  'saudi pro league', 'championship',
+]
+function leagueRank(name: string): number {
+  const n = name.toLowerCase()
+  const i = POPULAR_LEAGUES.findIndex((l) => n.includes(l))
+  return i === -1 ? POPULAR_LEAGUES.length : i
+}
 
 interface AFFixture {
   fixture: { id: number; status: { short: string; elapsed: number | null }; date: string }
@@ -71,6 +86,15 @@ export function isApiFootballConfigured(): boolean {
   return !!process.env.API_FOOTBALL_KEY
 }
 
+/**
+ * Sports the admin may file a custom match under. Football is the only one with
+ * a real upstream feed; the rest exist so the sport tabs render (and admins can
+ * add matches by hand) without the API rejecting them.
+ */
+export function supportedSports(): string[] {
+  return ['football', 'basketball', 'tennis', 'baseball', 'hockey', 'volleyball']
+}
+
 export async function fetchApiFootballMatches(): Promise<UiMatch[]> {
   const key = process.env.API_FOOTBALL_KEY
   if (!key) return []
@@ -78,22 +102,40 @@ export async function fetchApiFootballMatches(): Promise<UiMatch[]> {
 
   try {
     const headers = { 'x-apisports-key': key }
-    const today = new Date().toISOString().slice(0, 10)
-    const [liveRes, dayRes] = await Promise.all([
+
+    // Fetch all live fixtures plus a rolling window of upcoming days so the
+    // board is well stocked, not just today's games.
+    const now = new Date()
+    const dates = Array.from({ length: UPCOMING_DAYS }, (_, i) => {
+      const d = new Date(now)
+      d.setUTCDate(now.getUTCDate() + i)
+      return d.toISOString().slice(0, 10)
+    })
+    const [liveRes, ...dayResList] = await Promise.all([
       fetch(`${BASE}/fixtures?live=all`, { headers, cache: 'no-store' }),
-      fetch(`${BASE}/fixtures?date=${today}`, { headers, cache: 'no-store' }),
+      ...dates.map((date) => fetch(`${BASE}/fixtures?date=${date}`, { headers, cache: 'no-store' })),
     ])
     const live = (await liveRes.json())?.response ?? []
-    const day = (await dayRes.json())?.response ?? []
+    const days = (await Promise.all(dayResList.map((r) => r.json()))).flatMap(
+      (j) => j?.response ?? [],
+    )
 
     // Dedup by fixture id, live rows win (fresher status/score).
     const byId = new Map<number, AFFixture>()
-    for (const f of day as AFFixture[]) byId.set(f.fixture.id, f)
+    for (const f of days as AFFixture[]) byId.set(f.fixture.id, f)
     for (const f of live as AFFixture[]) byId.set(f.fixture.id, f)
 
     const all = Array.from(byId.values()).map(toUi)
     const liveOnes = all.filter((m) => m.state === 'LIVE')
-    const rest = all.filter((m) => m.state !== 'LIVE').slice(0, MAX_UPCOMING)
+    // Upcoming: marquee leagues first, then soonest kickoff within each tier.
+    const rest = all
+      .filter((m) => m.state === 'UPCOMING')
+      .sort((a, b) => {
+        const r = leagueRank(a.league) - leagueRank(b.league)
+        if (r !== 0) return r
+        return new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()
+      })
+      .slice(0, MAX_UPCOMING)
     const data = [...liveOnes, ...rest]
 
     cache = { at: Date.now(), data }

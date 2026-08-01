@@ -1,39 +1,61 @@
 import { NextResponse } from 'next/server'
-import { isAdminRequest } from '@/lib/admin-guard'
+import { cookies } from 'next/headers'
+import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { readSubAdmins } from '@/lib/sub-admins-store'
-import { listUsersForAdmin } from '@/lib/users-store'
-import { COMMISSION_RATE } from '@/lib/domain-types'
+import { readUsers, readCommissions } from '@/lib/users-store'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  if (!(await isAdminRequest())) {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value
+  if (!(await isValidSessionCookie(token))) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+  const [subAdmins, users, commissions] = await Promise.all([
+    readSubAdmins(),
+    readUsers(),
+    readCommissions(),
+  ])
 
-  const [subs, users] = await Promise.all([readSubAdmins(), listUsersForAdmin()])
+  // Enrich each sub-admin with referral / commission stats.
+  const enriched = subAdmins.map((sa) => {
+    const refs = users.filter((u) => u.referredBySubAdminId === sa.id)
+    const withDeposit = refs.filter((u) => u.firstDepositAt).length
+    const myCommissions = commissions.filter((c) => c.subAdminId === sa.id)
+    return {
+      id: sa.id,
+      name: sa.name,
+      email: sa.email,
+      referralCode: sa.referralCode,
+      approved: sa.approved,
+      createdAt: sa.createdAt,
+      commissionBalance: sa.commissionBalance,
+      totalCommissionEarned: sa.totalCommissionEarned,
+      commissionBalances: sa.commissionBalances,
+      totalCommissionEarnedBy: sa.totalCommissionEarnedBy,
+      referrals: refs.length,
+      withDeposit,
+      commissionsCount: myCommissions.length,
+    }
+  })
 
-  const referred = new Map<string, number>()
-  const deposited = new Map<string, number>()
-  for (const u of users) {
-    const sa = u.referredBySubAdminId
-    if (!sa) continue
-    referred.set(sa, (referred.get(sa) ?? 0) + 1)
-    if (u.firstDepositAt) deposited.set(sa, (deposited.get(sa) ?? 0) + 1)
+  // Per-currency platform totals.
+  const referredDepositsByCurrency: Record<string, number> = {}
+  const subAdminShareByCurrency: Record<string, number> = {}
+  const adminShareByCurrency: Record<string, number> = {}
+  for (const c of commissions) {
+    const cur = c.currency
+    referredDepositsByCurrency[cur] = +((referredDepositsByCurrency[cur] ?? 0) + c.depositAmount).toFixed(2)
+    subAdminShareByCurrency[cur] = +((subAdminShareByCurrency[cur] ?? 0) + c.commission).toFixed(2)
+    adminShareByCurrency[cur] = +((adminShareByCurrency[cur] ?? 0) + (c.depositAmount - c.commission)).toFixed(2)
   }
 
-  const subAdmins = subs.map((s) => ({
-    id: s.id,
-    name: s.name,
-    email: s.email,
-    referralCode: s.referralCode,
-    approved: s.approved,
-    createdAt: s.createdAt,
-    commissionBalances: s.commissionBalances,
-    totalCommissionEarnedBy: s.totalCommissionEarnedBy,
-    referredUsers: referred.get(s.id) ?? 0,
-    depositedUsers: deposited.get(s.id) ?? 0,
-  }))
-
-  return NextResponse.json({ subAdmins, rate: COMMISSION_RATE })
+  return NextResponse.json({
+    subAdmins: enriched,
+    platform: {
+      referredDepositsByCurrency,
+      subAdminShareByCurrency,
+      adminShareByCurrency,
+    },
+  })
 }

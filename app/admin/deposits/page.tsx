@@ -1,0 +1,774 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Search,
+  Loader2,
+  CircleAlert,
+  RefreshCw,
+  TrendingUp,
+  Users,
+  Receipt,
+  Check,
+  AlertTriangle,
+  Trash2,
+} from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatMoney } from '@/lib/format-money'
+
+interface DepositRow {
+  id: string
+  reference: string
+  amount: number
+  currency: string
+  provider: string
+  status: 'pending' | 'success' | 'failed' | 'cancelled'
+  type: 'deposit' | 'withdrawal'
+  source: string | null
+  note: string | null
+  failureReason: string | null
+  paidAmount: number | null
+  adminResolved: boolean
+  screenshotUrl: string | null
+  createdAt: string
+  user: {
+    id: string
+    name: string
+    email: string
+    phone: string | null
+    totalDeposited: number
+    balance: number
+  } | null
+}
+
+interface UserRollup {
+  userId: string
+  name: string
+  email: string
+  currency: string
+  depositCount: number
+  depositTotal: number
+  lastDepositAt: string
+  balance: number
+}
+
+interface DepositsResponse {
+  deposits: DepositRow[]
+  userRollup: UserRollup[]
+  totals: {
+    successDepositCount: number
+    successWithdrawalCount: number
+    successDepositByCurrency: Record<string, number>
+    successWithdrawalByCurrency: Record<string, number>
+  }
+}
+
+type View = 'users' | 'transactions'
+type StatusFilter = 'all' | 'success' | 'failed' | 'pending'
+type TypeFilter = 'all' | 'deposit' | 'withdrawal'
+
+export default function AdminDepositsPage() {
+  const [data, setData] = useState<DepositsResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [view, setView] = useState<View>('users')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [resolvingId, setResolvingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [clearingAll, setClearingAll] = useState(false)
+
+  const load = async () => {
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/deposits', { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = (await res.json()) as DepositsResponse
+      setData(json)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const filteredDeposits = useMemo(() => {
+    if (!data) return [] as DepositRow[]
+    const q = search.trim().toLowerCase()
+    return data.deposits.filter((d) => {
+      if (typeFilter !== 'all' && d.type !== typeFilter) return false
+      if (statusFilter !== 'all' && d.status !== statusFilter) return false
+      if (!q) return true
+      return (
+        d.reference.toLowerCase().includes(q) ||
+        d.provider.toLowerCase().includes(q) ||
+        (d.user?.name.toLowerCase().includes(q) ?? false) ||
+        (d.user?.email.toLowerCase().includes(q) ?? false) ||
+        (d.user?.phone?.toLowerCase().includes(q) ?? false)
+      )
+    })
+  }, [data, search, statusFilter, typeFilter])
+
+  const statusCounts = useMemo(() => {
+    if (!data) return { all: 0, success: 0, failed: 0, pending: 0 }
+    return data.deposits.reduce(
+      (acc, d) => {
+        if (typeFilter !== 'all' && d.type !== typeFilter) return acc
+        acc.all += 1
+        if (d.status === 'success') acc.success += 1
+        else if (d.status === 'failed' || d.status === 'cancelled') acc.failed += 1
+        else if (d.status === 'pending') acc.pending += 1
+        return acc
+      },
+      { all: 0, success: 0, failed: 0, pending: 0 },
+    )
+  }, [data, typeFilter])
+
+  const typeCounts = useMemo(() => {
+    if (!data) return { all: 0, deposit: 0, withdrawal: 0 }
+    return data.deposits.reduce(
+      (acc, d) => {
+        acc.all += 1
+        if (d.type === 'deposit') acc.deposit += 1
+        else acc.withdrawal += 1
+        return acc
+      },
+      { all: 0, deposit: 0, withdrawal: 0 },
+    )
+  }, [data])
+
+  const resolvePayment = async (paymentId: string, userName: string, amount: number, currency: string) => {
+    if (
+      !confirm(
+        `Re-check this payment with the gateway and credit ${userName} ${currency} ${formatMoney(amount, currency)} only if it confirms the payment succeeded?\n\nIf the gateway says the payment failed or is still pending, nothing is credited.`,
+      )
+    ) {
+      return
+    }
+    setResolvingId(paymentId)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/payments/${paymentId}/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setResolvingId(null)
+    }
+  }
+
+  const deletePaymentRow = async (d: DepositRow) => {
+    const reverses =
+      d.type === 'deposit' && d.status === 'success' && d.user
+    const who = d.user?.name ?? 'this user'
+    const money = `${d.currency} ${formatMoney(d.amount, d.currency)}`
+    const msg = reverses
+      ? `Delete this deposit AND take ${money} back off ${who}'s balance?\n\nThis removes the record from the database and reverses the money. It cannot be undone.`
+      : `Delete this ${d.type} record from the database?\n\nThis row never credited a wallet, so no balance changes. It cannot be undone.`
+    if (!confirm(msg)) return
+
+    setDeletingId(d.id)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/payments/${d.id}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const clearAllDeposits = async () => {
+    if (
+      !confirm(
+        'Clear ALL deposit records and reset every sub-admin commission?\n\n' +
+          '• Deletes every deposit row from the Payments list (all users)\n' +
+          '• Clears the sub-admin commission ledger, so partner dashboards reset\n' +
+          '• Withdrawals are kept\n' +
+          '• Balances are NOT changed — no money is reversed\n\n' +
+          'This cannot be undone.',
+      )
+    ) {
+      return
+    }
+    setClearingAll(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/payments/clear', { method: 'POST' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setClearingAll(false)
+    }
+  }
+
+  const filteredRollup = useMemo(() => {
+    if (!data) return [] as UserRollup[]
+    const q = search.trim().toLowerCase()
+    if (!q) return data.userRollup
+    return data.userRollup.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.userId.toLowerCase().includes(q),
+    )
+  }, [data, search])
+
+  return (
+    <div className="p-4 sm:p-6 space-y-5 max-w-6xl">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-title font-bold tracking-tight">Payments</h1>
+          <p className="text-sm text-muted-foreground">
+            All player deposits and withdrawals — gateway top-ups, admin
+            credits, and payouts. Newest first.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setLoading(true)
+              void load()
+            }}
+            disabled={loading}
+            className="h-9 text-xs"
+          >
+            {loading ? (
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3 h-3 mr-1" />
+            )}
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearAllDeposits}
+            disabled={clearingAll || loading}
+            className="h-9 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+            title="Delete every deposit record and reset sub-admin commissions. Balances are not changed."
+          >
+            {clearingAll ? (
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            ) : (
+              <Trash2 className="w-3 h-3 mr-1" />
+            )}
+            Clear all deposits
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-center gap-2 shadow-card">
+          <CircleAlert className="w-4 h-4" /> {error}
+        </div>
+      )}
+
+      {data && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <Kpi
+              icon={<Receipt className="w-4 h-4 text-success" />}
+              label="Successful deposits"
+              value={data.totals.successDepositCount.toString()}
+            />
+            <Kpi
+              icon={<Receipt className="w-4 h-4 text-destructive" />}
+              label="Successful withdrawals"
+              value={data.totals.successWithdrawalCount.toString()}
+            />
+            <Kpi
+              icon={<Users className="w-4 h-4 text-primary" />}
+              label="Depositors"
+              value={data.userRollup.length.toString()}
+            />
+          </div>
+          {(Object.keys(data.totals.successDepositByCurrency).length > 0 ||
+            Object.keys(data.totals.successWithdrawalByCurrency).length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {Object.keys(data.totals.successDepositByCurrency).length > 0 && (
+                <CurrencyTotals
+                  label="Deposited"
+                  iconClass="text-success"
+                  totals={data.totals.successDepositByCurrency}
+                />
+              )}
+              {Object.keys(data.totals.successWithdrawalByCurrency).length > 0 && (
+                <CurrencyTotals
+                  label="Withdrawn"
+                  iconClass="text-destructive"
+                  totals={data.totals.successWithdrawalByCurrency}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex rounded-full bg-secondary p-0.5">
+          <ViewPill
+            active={view === 'users'}
+            onClick={() => setView('users')}
+            label="Depositors"
+          />
+          <ViewPill
+            active={view === 'transactions'}
+            onClick={() => setView('transactions')}
+            label="Transactions"
+          />
+        </div>
+        <div className="ml-auto relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder={
+              view === 'users'
+                ? 'Search name, email, ID'
+                : 'Search reference, provider, user'
+            }
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9 text-sm"
+          />
+        </div>
+      </div>
+
+      {view === 'transactions' && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <StatusPill
+              active={typeFilter === 'all'}
+              onClick={() => setTypeFilter('all')}
+              label={`All (${typeCounts.all})`}
+            />
+            <StatusPill
+              active={typeFilter === 'deposit'}
+              onClick={() => setTypeFilter('deposit')}
+              label={`Deposits (${typeCounts.deposit})`}
+            />
+            <StatusPill
+              active={typeFilter === 'withdrawal'}
+              onClick={() => setTypeFilter('withdrawal')}
+              label={`Withdrawals (${typeCounts.withdrawal})`}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <StatusPill
+              active={statusFilter === 'all'}
+              onClick={() => setStatusFilter('all')}
+              label={`All (${statusCounts.all})`}
+            />
+            <StatusPill
+              active={statusFilter === 'success'}
+              onClick={() => setStatusFilter('success')}
+              label={`Verified (${statusCounts.success})`}
+            />
+            <StatusPill
+              active={statusFilter === 'failed'}
+              onClick={() => setStatusFilter('failed')}
+              label={`Failed (${statusCounts.failed})`}
+              tone="bad"
+            />
+            <StatusPill
+              active={statusFilter === 'pending'}
+              onClick={() => setStatusFilter('pending')}
+              label={`Pending (${statusCounts.pending})`}
+              tone="warn"
+            />
+          </div>
+        </div>
+      )}
+
+      <section className="bg-card border border-border rounded-xl overflow-hidden shadow-card">
+        {loading ? (
+          <div className="p-3 space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
+            ))}
+          </div>
+        ) : view === 'users' ? (
+          filteredRollup.length === 0 ? (
+            <div className="m-3 bg-card border border-dashed border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
+              No depositors match this filter.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {filteredRollup.map((u) => (
+                <li
+                  key={u.userId}
+                  className="px-4 py-3 flex items-center justify-between gap-3 hover:bg-secondary/30 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm truncate">{u.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {u.email}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
+                      Last deposit: {formatDate(u.lastDepositAt)} · Balance: {u.currency}{' '}
+                      {formatMoney(u.balance, u.currency)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold tabular-nums">
+                      {u.currency} {formatMoney(u.depositTotal, u.currency)}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {u.depositCount} deposit{u.depositCount === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : filteredDeposits.length === 0 ? (
+          <div className="m-3 bg-card border border-dashed border-border rounded-lg p-8 text-center text-sm text-muted-foreground">
+            No transactions match this filter.
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {filteredDeposits.map((d) => {
+              const isFailed = d.status === 'failed' || d.status === 'cancelled'
+              const isPending = d.status === 'pending'
+              // Resolve flow is deposit-only — there's no "credit user" path
+              // for a withdrawal row.
+              const canResolve = (isFailed || isPending) && d.user && d.type === 'deposit'
+              return (
+                <li key={d.id} className="px-4 py-3 hover:bg-secondary/30 transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-0.5 text-xs flex-wrap">
+                        <TypeBadge type={d.type} />
+                        <StatusBadge status={d.status} />
+                        <SourceBadge source={d.source} provider={d.provider} />
+                        <span className="font-mono text-[10px] text-muted-foreground truncate">
+                          {d.reference}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium truncate">
+                        {d.user ? d.user.name : 'Unknown user'}
+                        {d.user && (
+                          <span className="text-muted-foreground font-normal">
+                            {' · '}
+                            {d.user.email}
+                          </span>
+                        )}
+                        {d.user?.phone && (
+                          <span className="text-muted-foreground font-normal">
+                            {' · '}
+                            {d.user.phone}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {formatDate(d.createdAt)}
+                        {d.note ? ` · ${d.note}` : ''}
+                      </p>
+                      <FailureReason metadata={d} />
+                      {d.screenshotUrl && (
+                        <a
+                          href={d.screenshotUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-block rounded-lg border border-border overflow-hidden hover:border-primary transition-colors"
+                          title="Open full screenshot"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={d.screenshotUrl}
+                            alt="Payment proof"
+                            className="max-h-32 max-w-[180px] object-contain bg-secondary/40"
+                          />
+                        </a>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0 flex flex-col items-end gap-2">
+                      <div>
+                        <p
+                          className={`text-sm font-bold tabular-nums ${
+                            isFailed
+                              ? 'text-destructive'
+                              : isPending
+                                ? 'text-amber-600'
+                                : d.type === 'withdrawal'
+                                  ? 'text-destructive'
+                                  : 'text-success'
+                          }`}
+                        >
+                          {isFailed
+                            ? '✕'
+                            : isPending
+                              ? '…'
+                              : d.type === 'withdrawal'
+                                ? '−'
+                                : '+'}{' '}
+                          {d.currency} {formatMoney(d.amount, d.currency)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {canResolve && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              resolvePayment(d.id, d.user!.name, d.amount, d.currency)
+                            }
+                            disabled={resolvingId === d.id}
+                            className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                            title="Re-check this payment with the gateway and credit only if it confirms the payment succeeded"
+                          >
+                            {resolvingId === d.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <>
+                                <Check className="w-3 h-3 mr-1" />
+                                Credit &amp; resolve
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => deletePaymentRow(d)}
+                          disabled={deletingId === d.id}
+                          className="h-8 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+                          title={
+                            d.type === 'deposit' && d.status === 'success'
+                              ? 'Delete this deposit and reverse the money from the balance'
+                              : 'Delete this record from the database'
+                          }
+                        >
+                          {deletingId === d.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function Kpi({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 shadow-card lift-on-hover">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-eyebrow text-muted-foreground">{label}</p>
+        <span className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center">
+          {icon}
+        </span>
+      </div>
+      <p className="text-2xl font-extrabold tabular-nums tracking-tight">{value}</p>
+    </div>
+  )
+}
+
+function ViewPill({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+        active
+          ? 'bg-primary text-primary-foreground'
+          : 'text-foreground hover:bg-secondary/80'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function StatusPill({
+  active,
+  onClick,
+  label,
+  tone = 'neutral',
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  tone?: 'neutral' | 'bad' | 'warn'
+}) {
+  const activeCls =
+    tone === 'bad'
+      ? 'bg-destructive text-destructive-foreground'
+      : tone === 'warn'
+        ? 'bg-amber-500 text-white'
+        : 'bg-primary text-primary-foreground'
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+        active ? activeCls : 'bg-secondary text-foreground hover:bg-secondary/80'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function FailureReason({ metadata }: { metadata: DepositRow }) {
+  if (metadata.adminResolved) {
+    return (
+      <p className="text-[11px] text-success mt-0.5 flex items-center gap-1">
+        <Check className="w-3 h-3" /> Resolved by admin
+      </p>
+    )
+  }
+  if (!metadata.failureReason) return null
+  return (
+    <p className="text-[11px] text-destructive mt-0.5 flex items-center gap-1">
+      <AlertTriangle className="w-3 h-3 shrink-0" />
+      <span className="truncate">
+        {metadata.failureReason}
+        {metadata.paidAmount != null
+          ? ` (paid ${metadata.currency} ${formatMoney(metadata.paidAmount, metadata.currency)})`
+          : ''}
+      </span>
+    </p>
+  )
+}
+
+function TypeBadge({ type }: { type: DepositRow['type'] }) {
+  const cls =
+    type === 'deposit'
+      ? 'bg-success/15 text-success border-success/30'
+      : 'bg-destructive/15 text-destructive border-destructive/30'
+  return (
+    <span
+      className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold uppercase ${cls}`}
+    >
+      {type}
+    </span>
+  )
+}
+
+function CurrencyTotals({
+  label,
+  iconClass,
+  totals,
+}: {
+  label: string
+  iconClass: string
+  totals: Record<string, number>
+}) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+      <p className="text-eyebrow text-muted-foreground mb-2.5 flex items-center gap-1.5">
+        <TrendingUp className={`w-3.5 h-3.5 ${iconClass}`} /> Total {label.toLowerCase()} by currency
+      </p>
+      <div className="flex flex-wrap gap-4">
+        {Object.entries(totals).map(([cur, total]) => (
+          <div key={cur} className="flex items-baseline gap-1.5">
+            <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{cur}</span>
+            <span className="text-base font-extrabold tabular-nums tracking-tight">
+              {formatMoney(total, cur)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: DepositRow['status'] }) {
+  const cls =
+    status === 'success'
+      ? 'bg-success/15 text-success border-success/30'
+      : status === 'pending'
+        ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+        : 'bg-destructive/15 text-destructive border-destructive/30'
+  return (
+    <span
+      className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold uppercase ${cls}`}
+    >
+      {status}
+    </span>
+  )
+}
+
+function SourceBadge({
+  source,
+  provider,
+}: {
+  source: string | null
+  provider: string
+}) {
+  if (source === 'admin_credit') {
+    return (
+      <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase border-primary/30 text-primary bg-primary/10">
+        Admin credit
+      </span>
+    )
+  }
+  if (source === 'manual_upload' || provider === 'manual') {
+    return (
+      <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase border-amber-500/40 text-amber-700 bg-amber-500/10">
+        Manual upload
+      </span>
+    )
+  }
+  return (
+    <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase border-border text-muted-foreground">
+      {provider}
+    </span>
+  )
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return iso
+  }
+}

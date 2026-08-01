@@ -436,6 +436,22 @@ export async function addCommission(
   return rowToCommission(data)
 }
 
+/**
+ * Wipe the per-deposit commission ledger. Called by the admin "Clear all
+ * deposits" action so the partner dashboards' earnings / deposit counts reset
+ * alongside the deposit records. Sub-admins' lifetime commission *balances*
+ * live on the sub_admins table and are NOT touched here. Returns rows removed.
+ */
+export async function deleteAllCommissions(): Promise<number> {
+  const { error, count } = await supabaseServer()
+    .from('commissions')
+    .delete({ count: 'exact' })
+    // A delete needs a filter; "id is not null" matches every row.
+    .not('id', 'is', null)
+  if (error) throw new Error(`commissions.deleteAll: ${error.message}`)
+  return count ?? 0
+}
+
 export async function listCommissionsForSubAdmin(
   subAdminId: string,
 ): Promise<Commission[]> {

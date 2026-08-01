@@ -667,3 +667,25 @@ select v.* from (values
        minute, minute_set_at, start_time, is_live, odds_home, odds_draw, odds_away)
 where not exists (select 1 from public.custom_matches);
 
+
+-- ===== migrations/0016_custom_match_goals.sql =====
+-- Scripted goal timeline for custom matches. Shape:
+--   [{ "minute": 20, "team": "home" }, { "minute": 45, "team": "away" }]
+-- Once a match kicks off (start_time_utc), the live score is derived from how
+-- many scripted goals have occurred by the current match minute.
+alter table public.custom_matches
+    add column if not exists goals jsonb not null default '[]'::jsonb;
+
+-- ===== migrations/0018_app_settings.sql =====
+-- Editable platform settings (key/value) so things like the manual-deposit
+-- MoMo number can be changed from Admin → Settings without a redeploy.
+create table if not exists public.app_settings (
+    key        text primary key,
+    value      text,
+    updated_at timestamptz not null default now()
+);
+
+insert into public.app_settings (key, value) values
+    ('deposit_number', '0534922921'),
+    ('deposit_name', 'KOJO MABIGMAN')
+on conflict (key) do nothing;
