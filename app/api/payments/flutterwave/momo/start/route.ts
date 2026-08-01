@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
-import { recordPayment } from '@/lib/payments-store'
-import { chargeMobileMoney } from '@/lib/flutterwave'
-import { getMinFirstDeposit, normalizePhone } from '@/lib/countries'
+import { recordPayment, findPaymentByReference, updatePayment } from '@/lib/payments-store'
+import { chargeMobileMoneyGhana, type GhanaMomoNetwork } from '@/lib/flutterwave'
+import { getMinFirstDeposit } from '@/lib/countries'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,20 +10,25 @@ interface StartBody {
   userId?: string
   amount?: number
   phone?: string
-  provider?: 'mtn' | 'vod' | 'atl'
+  /** UI network id: mtn | vod | telecel | atl | airteltigo */
+  provider?: string
+  network?: string
   purpose?: 'deposit' | 'verification'
 }
 
-// MobileMoneyForm provider keys → our Flutterwave network keys (odds.ts codes).
-const PROVIDER_TO_NETWORK: Record<string, string> = {
-  mtn: 'mtn',
-  vod: 'telecel',
-  atl: 'airteltigo',
+// UI network id → Flutterwave Ghana MoMo network code.
+const NETWORK_MAP: Record<string, GhanaMomoNetwork> = {
+  mtn: 'MTN',
+  vod: 'VODAFONE',
+  telecel: 'VODAFONE',
+  atl: 'AIRTELTIGO',
+  airteltigo: 'AIRTELTIGO',
 }
 
-// Direct Flutterwave mobile-money charge — triggers the on-phone PIN prompt so
-// the customer pays inside our own checkout (no hosted-page redirect). The
-// client then polls /api/payments/flutterwave/status until it clears.
+// Direct Flutterwave Ghana mobile-money charge sent as plain JSON. Flutterwave
+// replies with authorization mode 'otp' + a flw_ref; the customer enters the
+// SMS code on OUR page (/momo/otp), then the UI polls /status until it clears.
+// No Flutterwave hosted page (that renders blank on this account).
 export async function POST(request: Request) {
   let body: StartBody
   try {
@@ -34,6 +39,8 @@ export async function POST(request: Request) {
 
   const userId = (body.userId ?? '').trim()
   const amount = Number(body.amount)
+  const phone = (body.phone ?? '').trim()
+  const network = NETWORK_MAP[(body.provider ?? body.network ?? '').toLowerCase()]
   const purpose: 'deposit' | 'verification' =
     body.purpose === 'verification' ? 'verification' : 'deposit'
 
@@ -41,9 +48,14 @@ export async function POST(request: Request) {
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: 'amount must be > 0' }, { status: 400 })
   }
+  if (!phone) return NextResponse.json({ error: 'mobile money number required' }, { status: 400 })
+  if (!network) return NextResponse.json({ error: 'pick a valid network' }, { status: 400 })
 
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
+  if (user.currency !== 'GHS') {
+    return NextResponse.json({ error: 'mobile money is Ghana-only' }, { status: 400 })
+  }
 
   const minDeposit = getMinFirstDeposit(user.country)
   if (amount < minDeposit) {
@@ -53,43 +65,13 @@ export async function POST(request: Request) {
     )
   }
 
-  const phone = normalizePhone(user.country, body.phone ?? user.phone ?? '')
-  if (!phone) {
-    return NextResponse.json(
-      { error: `Enter a valid ${user.country} mobile-money number.` },
-      { status: 400 },
-    )
-  }
-  const network = PROVIDER_TO_NETWORK[body.provider ?? 'mtn'] ?? 'mtn'
-
   const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
   const reference = `${refPrefix}-${userId.slice(0, 8)}-${Date.now()}`
 
-  // Where Flutterwave sends the customer after the hosted authorization page:
-  // our callback verifies + credits, then redirects to /me.
-  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim()
-  const reqUrl = new URL(request.url)
-  const originBase = explicit
-    ? (/^https?:\/\//i.test(explicit) ? explicit : `https://${explicit}`).replace(/\/$/, '')
-    : `${reqUrl.protocol}//${reqUrl.host}`
-  const redirectUrl = `${originBase}/api/payments/flutterwave/callback?ref=${encodeURIComponent(reference)}&returnPath=%2Fme`
-
+  // Pending ledger row FIRST — the status poll / callback credit by reference.
+  let pendingId: string | null = null
   try {
-    const charge = await chargeMobileMoney({
-      reference,
-      amount,
-      currency: user.currency,
-      country: user.country,
-      email: user.email,
-      phone,
-      fullname: user.name,
-      network,
-      redirectUrl,
-    })
-
-    // Record the pending row so the status poller can verify + credit it.
-    // Stash flw_ref so the OTP-validate step can reference this charge.
-    await recordPayment({
+    const rec = await recordPayment({
       userId,
       reference,
       amount,
@@ -99,23 +81,50 @@ export async function POST(request: Request) {
       currency: user.currency,
       metadata: {
         purpose,
-        country: user.country,
+        flow: 'momo',
+        network: body.provider ?? body.network ?? '',
         userName: user.name,
-        network,
-        flwRef: charge.flwRef,
+        userPhone: phone,
+        country: user.country,
       },
-    }).catch((e) => console.error('[flutterwave/momo/start] ledger write failed:', e))
+    })
+    pendingId = rec?.id ?? null
+  } catch (e) {
+    console.error('[flutterwave/momo/start] pending ledger write failed:', e)
+  }
 
+  const customerEmail = user.email?.trim() || `customer+${userId}@powerstakebet.app`
+
+  try {
+    const charge = await chargeMobileMoneyGhana({
+      txRef: reference,
+      amount,
+      email: customerEmail,
+      phone,
+      network,
+      fullname: user.name,
+    })
+
+    // OTP mode: the network texted the customer a code. Stash Flutterwave's
+    // flw_ref on the pending row so /momo/otp can validate it, and tell the
+    // frontend to show its own inline OTP field (no redirect off-site).
+    if (charge.mode === 'otp' && charge.flwRef) {
+      const id = pendingId ?? (await findPaymentByReference(reference))?.id ?? null
+      if (id) {
+        await updatePayment(id, { metadata: { flwRef: charge.flwRef } }).catch((e) =>
+          console.error('[flutterwave/momo/start] flwRef stash failed:', e),
+        )
+      }
+      return NextResponse.json(
+        { reference, status: charge.status, otpRequired: true },
+        { status: 201 },
+      )
+    }
+
+    // Voucher/redirect networks still hand off to Flutterwave's page; otherwise
+    // the frontend polls /status during the on-phone prompt.
     return NextResponse.json(
-      {
-        reference,
-        status: charge.status,
-        displayText: charge.message,
-        // 'otp' when the customer must type an SMS code to finish.
-        authMode: charge.authMode ?? undefined,
-        // Some networks (e.g. Telecel voucher) hand back a redirect to finish.
-        redirect: charge.redirect ?? undefined,
-      },
+      { reference, status: charge.status, redirect: charge.redirect ?? undefined },
       { status: 201 },
     )
   } catch (e) {

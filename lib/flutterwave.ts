@@ -244,6 +244,79 @@ export async function validateCharge(
   }
 }
 
+// ---- Ghana mobile money: direct charge (plain JSON, inline OTP) -----------
+
+export type GhanaMomoNetwork = 'MTN' | 'VODAFONE' | 'AIRTELTIGO'
+
+export interface GhanaMomoChargeResult {
+  /** Inner charge status — usually 'pending' until the customer approves. */
+  status: string
+  /** Set when the network needs the customer sent to a page (voucher). */
+  redirect: string | null
+  /** Authorization mode Flutterwave asked for: 'otp' | 'redirect' | 'pin' | … */
+  mode: string | null
+  /** Flutterwave's own reference — required to validate an OTP charge. */
+  flwRef: string | null
+  message?: string
+}
+
+/**
+ * Directly charge a Ghana mobile-money wallet as PLAIN JSON (no client-side
+ * encryption). Flutterwave replies with authorization mode 'otp' and a flw_ref
+ * so the customer types the SMS code on OUR OWN page (validateCharge) — we never
+ * hand off to Flutterwave's hosted authorization page, which renders blank on
+ * this account. This mirrors the nextwin implementation that works in prod.
+ */
+export async function chargeMobileMoneyGhana(input: {
+  txRef: string
+  amount: number // major units
+  email: string
+  phone: string
+  network: GhanaMomoNetwork
+  fullname?: string
+}): Promise<GhanaMomoChargeResult> {
+  const res = await flwFetch(`${BASE}/charges?type=mobile_money_ghana`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      tx_ref: input.txRef,
+      amount: input.amount,
+      currency: 'GHS',
+      email: input.email,
+      phone_number: input.phone,
+      network: input.network,
+      fullname: input.fullname || undefined,
+    }),
+    cache: 'no-store',
+  })
+  const raw = await res.text()
+  let body: {
+    status?: string
+    message?: string
+    data?: { status?: string; flw_ref?: string; id?: number }
+    meta?: { authorization?: { redirect?: string; mode?: string } }
+  } = {}
+  try {
+    body = raw ? JSON.parse(raw) : {}
+  } catch {
+    /* non-JSON */
+  }
+  if (!res.ok || body.status !== 'success') {
+    console.error('[flutterwave] momo-ghana charge error', {
+      status: res.status,
+      response: raw.slice(0, 500),
+    })
+    throw new Error(`Flutterwave MoMo charge failed: ${body.message ?? `HTTP ${res.status}`}`)
+  }
+  return {
+    status: body.data?.status ?? 'pending',
+    redirect: body.meta?.authorization?.redirect ?? null,
+    mode: body.meta?.authorization?.mode ?? null,
+    flwRef: body.data?.flw_ref ?? (body.data?.id != null ? String(body.data.id) : null),
+    message: body.message,
+  }
+}
+
 // Flutterwave Standard checkout payment options per country. GH/KE lead with
 // mobile money (the customer gets the on-phone PIN prompt); card is a fallback.
 const PAYMENT_OPTIONS: Record<CountryCode, string> = {
