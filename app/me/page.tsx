@@ -130,6 +130,15 @@ function MePageInner() {
       return
     }
     try {
+      // Safety net: credit any deposits that settled while the customer was
+      // away (redirect/poll/webhook missed) BEFORE reading the balance, so the
+      // fresh totals include them. Idempotent and best-effort.
+      await fetch('/api/payments/flutterwave/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      }).catch(() => null)
+
       const res = await fetch(`/api/users/${userId}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('not found')
       const data = (await res.json()) as UserProfile
