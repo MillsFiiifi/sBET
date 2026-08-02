@@ -118,6 +118,21 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Compact balance pill — shown on mobile (the desktop chip below
+                is hidden on small screens). Sits next to the logo/icons. */}
+            {userId && (
+              <Link
+                href="/me"
+                className="flex sm:hidden items-center gap-1 px-2.5 py-1 rounded-full bg-[#2ecc71]/10 border border-[#2ecc71]/40"
+                aria-label="View account balance"
+              >
+                <Wallet className="w-3.5 h-3.5 text-[#2ecc71] shrink-0" />
+                <span className="text-xs font-bold text-foreground tabular-nums whitespace-nowrap">
+                  {balance === null ? '—' : `${currency} ${formatMoney(balance, currency)}`}
+                </span>
+              </Link>
+            )}
+
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg hover:bg-secondary transition-colors"
