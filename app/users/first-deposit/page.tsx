@@ -431,11 +431,11 @@ function DepositForm() {
       <header className="bg-card border-b border-border">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
           <Link
-            href="/me"
+            href="/"
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span>Back</span>
+            <span>Skip</span>
           </Link>
           <Link href="/" className="flex items-center" aria-label="PowerStakeBet home">
             <Image
@@ -470,10 +470,10 @@ function DepositForm() {
                   <Row label="New balance" value={`${currency} ${formatMoney(profile.balance, currency)}`} tone="good" bold />
                 </div>
                 <Button
-                  onClick={() => router.push('/me')}
+                  onClick={() => router.push('/')}
                   className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                 >
-                  View account
+                  Continue to home
                 </Button>
               </div>
             ) : manualSubmitted && profile ? (
@@ -493,10 +493,10 @@ function DepositForm() {
                   once the payment is confirmed — usually within a few minutes.
                 </p>
                 <Button
-                  onClick={() => router.push('/me')}
+                  onClick={() => router.push('/')}
                   className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                 >
-                  View account
+                  Continue to home
                 </Button>
               </div>
             ) : (

@@ -81,12 +81,9 @@ function RegisterForm() {
       const userId = data.user.id as string
       const userName = (data.user.name as string) || name.trim()
       saveUserSession(userId, userName)
-      const wasReferred = !!data.user.referredByCode
-      if (wasReferred) {
-        router.push(`/users/first-deposit?userId=${userId}`)
-      } else {
-        router.push('/me')
-      }
+      // Every new player is sent to make their first deposit; from that page
+      // they can Skip to the home page if they're not ready yet.
+      router.push(`/users/first-deposit?userId=${userId}`)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
