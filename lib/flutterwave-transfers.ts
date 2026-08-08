@@ -16,8 +16,9 @@
 
 import type { CountryCode, CurrencyCode } from '@/lib/countries'
 import { findPaymentByReference, resolveWithdrawalByReference } from '@/lib/payments-store'
-import { creditBalance, addWithdrawnTotal } from '@/lib/users-store'
+import { creditBalance, addWithdrawnTotal, findUserById } from '@/lib/users-store'
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
+import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 
 const BASE = 'https://api.flutterwave.com/v3'
 
@@ -187,6 +188,16 @@ export async function finalizeTransfer(
         pending.amount,
         pending.currency as CurrencyCode,
       )
+      // MoMo-style "payment received" confirmation now that the payout settled.
+      const u = await findUserById(pending.userId).catch(() => null)
+      void notifyWithdrawalPaid({
+        phone: (pending.metadata?.phone as string | undefined) ?? u?.phone,
+        country: u?.country,
+        amount: pending.amount,
+        currency: pending.currency,
+        reference: pending.reference,
+        balance: u?.balance,
+      })
     }
   } else {
     // Refund the reserved balance so a failed payout doesn't cost the user.

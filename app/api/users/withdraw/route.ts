@@ -20,11 +20,21 @@ import {
   initiateMobileMoneyTransfer,
 } from '@/lib/flutterwave-transfers'
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
+import { sendSms } from '@/lib/sms'
+import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 
 export const dynamic = 'force-dynamic'
 
 const PROCESSING_MESSAGE =
   'Your withdrawal request has been received and is being processed. We will notify you shortly.'
+
+function buildWithdrawalRequestSms(amount: number, currency: string, network: string): string {
+  return `Your withdrawal request for ${currency} ${amount.toFixed(2)} to ${network.toUpperCase()} has been received. We will send you another message once your payment is approved.`
+}
+
+function buildWithdrawalApprovedSms(amount: number, currency: string, network: string): string {
+  return `Your withdrawal of ${currency} ${amount.toFixed(2)} to ${network.toUpperCase()} has been approved. The money is on its way to your mobile wallet.`
+}
 
 export async function POST(request: Request) {
   let body: {
@@ -249,6 +259,12 @@ export async function POST(request: Request) {
       metadata: { ...payoutMeta, flwTransferId: transfer.flwId, flwStatus: transfer.status },
     }).catch((e) => console.error('[withdraw] pending transfer ledger write failed:', e))
 
+    void sendSms({
+      phone: user.phone,
+      country: user.country,
+      message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
+    }).catch((e) => console.error('[withdraw] request sms failed:', e))
+
     return NextResponse.json(
       {
         message: PROCESSING_MESSAGE,
@@ -281,6 +297,11 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error('[withdraw] pending payment ledger write failed:', e)
     }
+    void sendSms({
+      phone: user.phone,
+      country: user.country,
+      message: buildWithdrawalRequestSms(amount, user.currency, network),
+    }).catch((e) => console.error('[withdraw] request sms failed:', e))
     return NextResponse.json({ message: PROCESSING_MESSAGE, pending: true }, { status: 202 })
   }
 
@@ -298,10 +319,11 @@ export async function POST(request: Request) {
   // Reverse the referrer's commission on the money that left the platform.
   await reverseCommissionOnWithdrawal(userId, roundedAmount, user.currency)
 
+  const successRef = `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`
   try {
     await recordPayment({
       userId,
-      reference: `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`,
+      reference: successRef,
       amount,
       type: 'withdrawal',
       status: 'success',
@@ -312,6 +334,16 @@ export async function POST(request: Request) {
   } catch (e) {
     console.error('[withdraw] payment ledger write failed:', e)
   }
+
+  // Money is out — MoMo-style "payment received" confirmation to the player.
+  void notifyWithdrawalPaid({
+    phone: (payoutMeta.phone as string | undefined) ?? user.phone,
+    country: user.country,
+    amount: roundedAmount,
+    currency: user.currency,
+    reference: successRef,
+    balance: result.user.balance ?? 0,
+  })
 
   return NextResponse.json(
     {

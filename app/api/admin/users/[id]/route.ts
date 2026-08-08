@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { setWithdrawalApproval, findUserById } from '@/lib/users-store'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
+import { listPaymentsForUser } from '@/lib/payments-store'
+import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,6 +39,25 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const user = await setWithdrawalApproval(id, body.withdrawalApproved)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
+
+  // On approval, text the player a MoMo-style "money received" confirmation for
+  // their most recent pending withdrawal (so it shows the actual amount). Falls
+  // back to a generic approval notice if there's no pending withdrawal on file.
+  if (body.withdrawalApproved && user.phone) {
+    const payments = await listPaymentsForUser(id).catch(() => [])
+    const pendingWithdrawal = payments.find(
+      (p) => p.type === 'withdrawal' && p.status === 'pending',
+    )
+    if (pendingWithdrawal) {
+      void notifyWithdrawalPaid({
+        phone: (pendingWithdrawal.metadata?.phone as string | undefined) ?? user.phone,
+        country: user.country,
+        amount: pendingWithdrawal.amount,
+        currency: pendingWithdrawal.currency,
+        reference: pendingWithdrawal.reference,
+      })
+    }
+  }
 
   return NextResponse.json({
     user: {
