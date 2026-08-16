@@ -29,6 +29,7 @@ import {
   type CountryCode,
   type CurrencyCode,
 } from '@/lib/countries'
+import { MANUAL_MOMO, isManualMomoEnabled } from '@/lib/manual-momo'
 
 // The BEP20 (BNB Smart Chain) wallet USDT deposits are sent to. Set this in the
 // environment so the address can be rotated without a code change — and so the
@@ -50,7 +51,7 @@ const NETWORKS: { provider: 'mtn' | 'vod' | 'atl'; short: string; label: string 
   { provider: 'atl', short: 'AT', label: 'AirtelTigo' },
 ]
 
-type Method = 'flutterwave' | 'usdt'
+type Method = 'flutterwave' | 'momo' | 'usdt'
 
 interface UserProfile {
   id: string
@@ -94,7 +95,7 @@ function DepositForm() {
   const [amount, setAmount] = useState<number | ''>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedField, setCopiedField] = useState<'address' | 'momo' | null>(null)
 
   // Instant (mobile-money) state.
   const [network, setNetwork] = useState<'mtn' | 'vod' | 'atl'>('mtn')
@@ -146,6 +147,14 @@ function DepositForm() {
 
   const amountValue = typeof amount === 'number' ? amount : 0
   const activeNetwork = NETWORKS.find((n) => n.provider === network) ?? NETWORKS[0]
+  // Manual MoMo is Ghana-only — the receiving account is a Ghanaian line.
+  const momoAvailable = isManualMomoEnabled(country)
+
+  // A non-GH profile loading in while the MoMo tab is selected would leave the
+  // user on a rail the server will reject — fall back to Instant.
+  useEffect(() => {
+    if (method === 'momo' && !momoAvailable) setMethod('flutterwave')
+  }, [method, momoAvailable])
 
   function selectFile(f: File | null) {
     setError(null)
@@ -163,13 +172,13 @@ function DepositForm() {
     setPreviewUrl(URL.createObjectURL(f))
   }
 
-  async function copyAddress() {
+  async function copyValue(field: 'address' | 'momo', value: string) {
     try {
-      await navigator.clipboard.writeText(USDT_ADDRESS)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
+      await navigator.clipboard.writeText(value)
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 1800)
     } catch {
-      /* clipboard blocked — the address is still visible to copy by hand */
+      /* clipboard blocked — the value is still visible to copy by hand */
     }
   }
 
@@ -384,10 +393,16 @@ function DepositForm() {
     }
   }
 
-  async function handleUsdt() {
+  // Shared submit for the pay-then-upload rails (USDT and manual MoMo). Both
+  // land as a pending payment an admin approves on /admin/deposits.
+  async function handleManual(channel: 'usdt' | 'momo') {
     if (!profile) return
-    if (!USDT_ADDRESS) {
+    if (channel === 'usdt' && !USDT_ADDRESS) {
       setError('USDT deposits are not available right now. Please contact support.')
+      return
+    }
+    if (channel === 'momo' && !momoAvailable) {
+      setError('MoMo deposits are not available right now. Please contact support.')
       return
     }
     const amountError = validateAmount()
@@ -396,7 +411,11 @@ function DepositForm() {
       return
     }
     if (!file) {
-      setError('Attach a screenshot of your USDT payment.')
+      setError(
+        channel === 'momo'
+          ? 'Attach a screenshot of your MoMo payment.'
+          : 'Attach a screenshot of your USDT payment.',
+      )
       return
     }
     setError(null)
@@ -406,7 +425,7 @@ function DepositForm() {
       form.set('userId', profile.id)
       form.set('amount', String(amountValue))
       form.set('purpose', purpose)
-      form.set('channel', 'usdt')
+      form.set('channel', channel)
       form.set('returnPath', '/me')
       form.set('file', file)
       const res = await fetch('/api/payments/manual/start', { method: 'POST', body: form })
@@ -484,7 +503,9 @@ function DepositForm() {
                     <Hourglass className="w-8 h-8 text-amber-600" />
                   </div>
                 </div>
-                <h1 className="text-title font-bold tracking-tight">USDT deposit request submitted!</h1>
+                <h1 className="text-title font-bold tracking-tight">
+                  {method === 'momo' ? 'MoMo' : 'USDT'} deposit request submitted!
+                </h1>
                 <p className="text-sm text-muted-foreground">
                   Please wait for admin approval. We&apos;ll credit your{' '}
                   <span className="font-bold text-foreground tabular-nums">
@@ -509,7 +530,7 @@ function DepositForm() {
                 </div>
 
                 {/* Method picker */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid gap-2 ${momoAvailable ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   <MethodTab
                     active={method === 'flutterwave'}
                     onClick={() => {
@@ -520,6 +541,18 @@ function DepositForm() {
                     title="Instant"
                     subtitle="Card / MoMo"
                   />
+                  {momoAvailable && (
+                    <MethodTab
+                      active={method === 'momo'}
+                      onClick={() => {
+                        setError(null)
+                        setMethod('momo')
+                      }}
+                      icon={<Smartphone className="w-4 h-4" />}
+                      title="MoMo"
+                      subtitle="Pay & upload"
+                    />
+                  )}
                   <MethodTab
                     active={method === 'usdt'}
                     onClick={() => {
@@ -533,6 +566,43 @@ function DepositForm() {
                   />
                 </div>
 
+                {/* MoMo: pay-to account */}
+                {method === 'momo' && momoAvailable && (
+                  <div className="space-y-1.5">
+                    <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                      Send {MANUAL_MOMO.network} MoMo to this number
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => copyValue('momo', MANUAL_MOMO.number)}
+                      className="w-full flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 p-3 text-left transition-colors"
+                    >
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-mono text-base font-bold tracking-wide text-foreground">
+                          {MANUAL_MOMO.number}
+                        </span>
+                        <span className="block text-caption text-muted-foreground">
+                          {MANUAL_MOMO.name} · {MANUAL_MOMO.network}
+                        </span>
+                      </span>
+                      <span className="shrink-0 inline-flex items-center gap-1 text-primary font-semibold text-caption">
+                        {copiedField === 'momo' ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                        {copiedField === 'momo' ? 'Copied' : 'Copy'}
+                      </span>
+                    </button>
+                    <p className="text-caption text-muted-foreground">
+                      Dial your MoMo menu or use the app to send the exact amount below, then
+                      attach the confirmation screenshot. Check the name reads{' '}
+                      <span className="font-semibold text-foreground">{MANUAL_MOMO.name}</span>{' '}
+                      before you approve.
+                    </p>
+                  </div>
+                )}
+
                 {/* USDT: pay-to address */}
                 {method === 'usdt' &&
                   (USDT_ADDRESS ? (
@@ -542,15 +612,19 @@ function DepositForm() {
                       </p>
                       <button
                         type="button"
-                        onClick={copyAddress}
+                        onClick={() => copyValue('address', USDT_ADDRESS)}
                         className="w-full flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 p-3 text-left transition-colors"
                       >
                         <span className="flex-1 min-w-0 break-all font-mono text-sm text-foreground">
                           {USDT_ADDRESS}
                         </span>
                         <span className="shrink-0 inline-flex items-center gap-1 text-primary font-semibold text-caption">
-                          {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                          {copied ? 'Copied' : 'Copy'}
+                          {copiedField === 'address' ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                          {copiedField === 'address' ? 'Copied' : 'Copy'}
                         </span>
                       </button>
                       <p className="text-caption text-muted-foreground">
@@ -689,8 +763,8 @@ function DepositForm() {
                   </div>
                 )}
 
-                {/* USDT: screenshot upload */}
-                {method === 'usdt' && USDT_ADDRESS && (
+                {/* Manual rails: screenshot upload */}
+                {((method === 'usdt' && USDT_ADDRESS) || (method === 'momo' && momoAvailable)) && (
                   <div className="space-y-2">
                     <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
                       Upload payment screenshot
@@ -802,8 +876,13 @@ function DepositForm() {
                   )
                 ) : (
                   <Button
-                    onClick={handleUsdt}
-                    disabled={busy || profileLoading || !profile || !USDT_ADDRESS}
+                    onClick={() => handleManual(method === 'momo' ? 'momo' : 'usdt')}
+                    disabled={
+                      busy ||
+                      profileLoading ||
+                      !profile ||
+                      (method === 'momo' ? !momoAvailable : !USDT_ADDRESS)
+                    }
                     className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
                   >
                     {busy ? (

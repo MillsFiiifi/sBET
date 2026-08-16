@@ -26,6 +26,8 @@ interface DepositRow {
   status: 'pending' | 'success' | 'failed' | 'cancelled'
   type: 'deposit' | 'withdrawal'
   source: string | null
+  /** Manual rail the receipt came from: 'usdt' | 'momo' | 'bank'. */
+  channel: string | null
   note: string | null
   failureReason: string | null
   paidAmount: number | null
@@ -390,7 +392,7 @@ export default function AdminDepositsPage() {
                       <div className="flex items-center gap-2 mb-0.5 text-xs flex-wrap">
                         <TypeBadge type={d.type} />
                         <StatusBadge status={d.status} />
-                        <SourceBadge source={d.source} provider={d.provider} />
+                        <SourceBadge source={d.source} provider={d.provider} channel={d.channel} />
                         <span className="font-mono text-[10px] text-muted-foreground truncate">
                           {d.reference}
                         </span>
@@ -644,9 +646,11 @@ function StatusBadge({ status }: { status: DepositRow['status'] }) {
 function SourceBadge({
   source,
   provider,
+  channel,
 }: {
   source: string | null
   provider: string
+  channel?: string | null
 }) {
   if (source === 'admin_credit') {
     return (
@@ -656,9 +660,10 @@ function SourceBadge({
     )
   }
   if (source === 'manual_upload' || provider === 'manual') {
+    const rail = channel === 'momo' ? 'MoMo' : channel === 'usdt' ? 'USDT' : null
     return (
       <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase border-amber-500/40 text-amber-700 bg-amber-500/10">
-        Manual upload
+        {rail ? `${rail} upload` : 'Manual upload'}
       </span>
     )
   }

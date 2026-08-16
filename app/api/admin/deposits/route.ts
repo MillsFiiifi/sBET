@@ -45,6 +45,9 @@ export async function GET(request: Request) {
     const adminResolved = p.metadata?.adminResolved === true
     const screenshotUrl =
       (typeof p.metadata?.screenshotUrl === 'string' && p.metadata.screenshotUrl) || null
+    // Which manual rail the receipt came from: 'usdt' | 'momo' | 'bank'.
+    const channel =
+      (typeof p.metadata?.channel === 'string' && p.metadata.channel) || null
     return {
       id: p.id,
       reference: p.reference,
@@ -54,6 +57,7 @@ export async function GET(request: Request) {
       status: p.status,
       type: p.type,
       source, // 'admin_credit' | 'manual_upload' | null
+      channel,
       note,
       failureReason,
       paidAmount,

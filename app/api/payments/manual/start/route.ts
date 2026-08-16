@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { getCountry, getMinFirstDeposit } from '@/lib/countries'
+import { MANUAL_MOMO, isManualMomoEnabled } from '@/lib/manual-momo'
 import { supabaseServer } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -45,10 +46,12 @@ export async function POST(request: Request) {
   const purpose: 'deposit' | 'verification' =
     purposeRaw === 'verification' ? 'verification' : 'deposit'
   // Which manual rail the user paid through. 'usdt' (BEP20 crypto) is offered to
-  // every country; the older bank/mobile-money manual rail stays gated to
+  // every country, 'momo' is the pay-our-MoMo-number rail (Ghana only — see
+  // lib/manual-momo.ts), and the older bank manual rail stays gated to
   // manual-gateway countries below.
   const channelRaw = (form.get('channel')?.toString() ?? '').trim().toLowerCase()
-  const channel = channelRaw === 'usdt' ? 'usdt' : 'bank'
+  const channel: 'usdt' | 'momo' | 'bank' =
+    channelRaw === 'usdt' ? 'usdt' : channelRaw === 'momo' ? 'momo' : 'bank'
   const returnPath = sanitizeReturnPath(form.get('returnPath')?.toString() ?? null)
   const file = form.get('file')
 
@@ -78,9 +81,17 @@ export async function POST(request: Request) {
   const user = await findUserById(userId)
   if (!user) return NextResponse.json({ error: 'user not found' }, { status: 404 })
 
-  // USDT (BEP20) is available everywhere; the legacy bank/mobile-money manual
-  // rail stays restricted to countries configured for a manual gateway.
-  if (channel !== 'usdt') {
+  // USDT (BEP20) is available everywhere; manual MoMo is limited to the
+  // countries the receiving account can accept; the legacy bank manual rail
+  // stays restricted to countries configured for a manual gateway.
+  if (channel === 'momo') {
+    if (!isManualMomoEnabled(user.country)) {
+      return NextResponse.json(
+        { error: 'manual mobile-money deposits are not enabled for this country' },
+        { status: 400 },
+      )
+    }
+  } else if (channel !== 'usdt') {
     const countryCfg = getCountry(user.country)
     if (countryCfg.gateway !== 'manual') {
       return NextResponse.json(
@@ -137,7 +148,7 @@ export async function POST(request: Request) {
   const screenshotUrl = pub.publicUrl
 
   const refPrefix = purpose === 'verification' ? 'PB-VRF' : 'PB-DEP'
-  const railTag = channel === 'usdt' ? 'USDT' : 'MAN'
+  const railTag = channel === 'usdt' ? 'USDT' : channel === 'momo' ? 'MOMO' : 'MAN'
   const reference = `${refPrefix}-${railTag}-${userId.slice(0, 8)}-${Date.now()}`
 
   try {
@@ -157,6 +168,15 @@ export async function POST(request: Request) {
         country: user.country,
         source: 'manual_upload',
         channel,
+        // Record which account the user was told to pay, so an admin checking
+        // the receipt later still knows the destination even if it's rotated.
+        ...(channel === 'momo'
+          ? {
+              payToNumber: MANUAL_MOMO.number,
+              payToName: MANUAL_MOMO.name,
+              payToNetwork: MANUAL_MOMO.network,
+            }
+          : {}),
         screenshotUrl,
         screenshotKey: key,
       },
