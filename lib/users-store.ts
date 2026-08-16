@@ -278,16 +278,56 @@ export async function setWithdrawalApproval(
 }
 
 /**
+ * Load a specific set of users by id.
+ *
+ * Pages that join payments/bets to their owner must use this rather than
+ * listing every user and building a map: PostgREST caps an unbounded select
+ * at 1000 rows, so on a table larger than that the oldest accounts silently
+ * fall out of the map and their rows render as "Unknown user".
+ *
+ * Ids are queried in chunks because `in.(…)` goes into the URL, which has a
+ * length limit of its own.
+ */
+export async function findUsersByIds(ids: string[]): Promise<AppUser[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  if (unique.length === 0) return []
+  const CHUNK = 200
+  const out: AppUser[] = []
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK)
+    const { data, error } = await supabaseServer()
+      .from('users')
+      .select('*')
+      .in('id', chunk)
+    if (error) throw new Error(`users.findByIds: ${error.message}`)
+    for (const row of data ?? []) out.push(rowToUser(row))
+  }
+  return out
+}
+
+/**
  * List users with their current withdrawal-eligibility state — used by
  * the admin Pending Withdrawals page.
  */
 export async function listUsersForAdmin(): Promise<AppUser[]> {
-  const { data, error } = await supabaseServer()
-    .from('users')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`users.listForAdmin: ${error.message}`)
-  return (data ?? []).map(rowToUser)
+  // Paginate explicitly. PostgREST answers an unbounded select with at most
+  // 1000 rows and no error, so a plain select silently drops every account
+  // past the first page once the table outgrows it — which skews the admin
+  // stats and hides real users from the admin list.
+  const PAGE = 1000
+  const out: AppUser[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabaseServer()
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE - 1)
+    if (error) throw new Error(`users.listForAdmin: ${error.message}`)
+    const rows = data ?? []
+    for (const row of rows) out.push(rowToUser(row))
+    if (rows.length < PAGE) break
+  }
+  return out
 }
 
 /**

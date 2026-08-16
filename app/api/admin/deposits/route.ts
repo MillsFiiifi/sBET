@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { listAllPayments, type PaymentType } from '@/lib/payments-store'
-import { listUsersForAdmin } from '@/lib/users-store'
+import { findUsersByIds } from '@/lib/users-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,11 +22,14 @@ export async function GET(request: Request) {
   const typeFilter: PaymentType | undefined =
     typeParam === 'deposit' || typeParam === 'withdrawal' ? typeParam : undefined
 
-  const [payments, users] = await Promise.all([
-    listAllPayments({ type: typeFilter, limit: 1000 }),
-    listUsersForAdmin(),
-  ])
+  const payments = await listAllPayments({ type: typeFilter, limit: 1000 })
 
+  // Look up exactly the users these payments belong to. Listing every user and
+  // indexing that would lose anyone past PostgREST's 1000-row ceiling, and
+  // their deposits would show as "Unknown user" with no way to credit them.
+  const users = await findUsersByIds(
+    payments.map((p) => p.userId).filter((id): id is string => Boolean(id)),
+  )
   const userById = new Map(users.map((u) => [u.id, u]))
 
   const deposits = payments.map((p) => {
