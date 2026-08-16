@@ -51,6 +51,12 @@ const NETWORKS: { provider: 'mtn' | 'vod' | 'atl'; short: string; label: string 
   { provider: 'atl', short: 'AT', label: 'AirtelTigo' },
 ]
 
+// Flutterwave ("Instant" — card / on-phone MoMo charge) is switched off in the
+// UI: players deposit by paying our MoMo number or sending USDT, and an admin
+// approves the receipt. The whole flow below is left intact — flip this back to
+// true to restore the tab, the OTP step and the card fallback as they were.
+const FLUTTERWAVE_ENABLED: boolean = false
+
 type Method = 'flutterwave' | 'momo' | 'usdt'
 
 interface UserProfile {
@@ -91,7 +97,7 @@ function DepositForm() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
 
-  const [method, setMethod] = useState<Method>('flutterwave')
+  const [method, setMethod] = useState<Method>(FLUTTERWAVE_ENABLED ? 'flutterwave' : 'momo')
   const [amount, setAmount] = useState<number | ''>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -149,11 +155,17 @@ function DepositForm() {
   const activeNetwork = NETWORKS.find((n) => n.provider === network) ?? NETWORKS[0]
   // Manual MoMo is Ghana-only — the receiving account is a Ghanaian line.
   const momoAvailable = isManualMomoEnabled(country)
+  // USDT is always offered; the other two are conditional.
+  const tabCount = 1 + (FLUTTERWAVE_ENABLED ? 1 : 0) + (momoAvailable ? 1 : 0)
 
-  // A non-GH profile loading in while the MoMo tab is selected would leave the
-  // user on a rail the server will reject — fall back to Instant.
+  // Keep the selected rail on something the user can actually pay through: a
+  // non-GH profile loading in rules out MoMo, and Instant may be switched off.
   useEffect(() => {
-    if (method === 'momo' && !momoAvailable) setMethod('flutterwave')
+    if (method === 'momo' && !momoAvailable) {
+      setMethod(FLUTTERWAVE_ENABLED ? 'flutterwave' : 'usdt')
+    } else if (method === 'flutterwave' && !FLUTTERWAVE_ENABLED) {
+      setMethod(momoAvailable ? 'momo' : 'usdt')
+    }
   }, [method, momoAvailable])
 
   function selectFile(f: File | null) {
@@ -530,17 +542,19 @@ function DepositForm() {
                 </div>
 
                 {/* Method picker */}
-                <div className={`grid gap-2 ${momoAvailable ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                  <MethodTab
-                    active={method === 'flutterwave'}
-                    onClick={() => {
-                      setError(null)
-                      setMethod('flutterwave')
-                    }}
-                    icon={<Zap className="w-4 h-4" />}
-                    title="Instant"
-                    subtitle="Card / MoMo"
-                  />
+                <div className={`grid gap-2 ${tabCount === 3 ? 'grid-cols-3' : tabCount === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {FLUTTERWAVE_ENABLED && (
+                    <MethodTab
+                      active={method === 'flutterwave'}
+                      onClick={() => {
+                        setError(null)
+                        setMethod('flutterwave')
+                      }}
+                      icon={<Zap className="w-4 h-4" />}
+                      title="Instant"
+                      subtitle="Card / MoMo"
+                    />
+                  )}
                   {momoAvailable && (
                     <MethodTab
                       active={method === 'momo'}
@@ -635,7 +649,11 @@ function DepositForm() {
                   ) : (
                     <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
                       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>USDT deposits aren&apos;t available right now. Please use Instant, or contact support.</span>
+                      <span>
+                        USDT deposits aren&apos;t available right now. Please use{' '}
+                        {momoAvailable ? 'MoMo' : FLUTTERWAVE_ENABLED ? 'Instant' : 'another method'},
+                        or contact support.
+                      </span>
                     </div>
                   ))}
 

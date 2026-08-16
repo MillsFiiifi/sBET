@@ -934,8 +934,7 @@ function MePageInner() {
                     )}
                   </Button>
                   <p className="text-[11px] text-center text-muted-foreground">
-                    Secured by Flutterwave. A prompt is sent to your phone — enter your
-                    mobile-money PIN to fund your wallet.
+                    You&apos;ll be taken to the deposit page to choose how you pay.
                   </p>
                 </>
               </div>
