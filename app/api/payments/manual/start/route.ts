@@ -164,6 +164,7 @@ export async function POST(request: Request) {
         purpose,
         returnPath,
         userName: user.name,
+        userEmail: user.email ?? null,
         userPhone: user.phone ?? null,
         country: user.country,
         source: 'manual_upload',

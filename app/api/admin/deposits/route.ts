@@ -48,6 +48,14 @@ export async function GET(request: Request) {
     // Which manual rail the receipt came from: 'usdt' | 'momo' | 'bank'.
     const channel =
       (typeof p.metadata?.channel === 'string' && p.metadata.channel) || null
+    // Who submitted it, as captured at submit time. The live `users` row above
+    // is authoritative; this is the fallback so an admin can still identify a
+    // receipt whose user lookup came back empty.
+    const submitter = {
+      name: (typeof p.metadata?.userName === 'string' && p.metadata.userName) || null,
+      email: (typeof p.metadata?.userEmail === 'string' && p.metadata.userEmail) || null,
+      phone: (typeof p.metadata?.userPhone === 'string' && p.metadata.userPhone) || null,
+    }
     return {
       id: p.id,
       reference: p.reference,
@@ -58,6 +66,7 @@ export async function GET(request: Request) {
       type: p.type,
       source, // 'admin_credit' | 'manual_upload' | null
       channel,
+      submitter,
       note,
       failureReason,
       paidAmount,

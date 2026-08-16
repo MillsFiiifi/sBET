@@ -28,6 +28,8 @@ interface DepositRow {
   source: string | null
   /** Manual rail the receipt came from: 'usdt' | 'momo' | 'bank'. */
   channel: string | null
+  /** Name/email/phone captured at submit time — fallback if the user row is gone. */
+  submitter: { name: string | null; email: string | null; phone: string | null }
   note: string | null
   failureReason: string | null
   paidAmount: number | null
@@ -398,17 +400,17 @@ export default function AdminDepositsPage() {
                         </span>
                       </div>
                       <p className="text-sm font-medium truncate">
-                        {d.user ? d.user.name : 'Unknown user'}
-                        {d.user && (
+                        {d.user?.name ?? d.submitter?.name ?? 'Unknown user'}
+                        {(d.user?.email ?? d.submitter?.email) && (
                           <span className="text-muted-foreground font-normal">
                             {' · '}
-                            {d.user.email}
+                            {d.user?.email ?? d.submitter?.email}
                           </span>
                         )}
-                        {d.user?.phone && (
+                        {(d.user?.phone ?? d.submitter?.phone) && (
                           <span className="text-muted-foreground font-normal">
                             {' · '}
-                            {d.user.phone}
+                            {d.user?.phone ?? d.submitter?.phone}
                           </span>
                         )}
                       </p>
