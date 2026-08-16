@@ -26,6 +26,14 @@ export interface SendApprovalRequestInput {
   userEmail: string
   userPhone: string | null
   country: string
+  /** How the user paid, e.g. "MTN MoMo 0535683675" — shown as a Method line. */
+  method?: string | null
+  /**
+   * Public URL of the receipt the user uploaded. When set the approval is
+   * posted as a photo with the details as its caption, so the operator can
+   * eyeball the proof and approve from the same message.
+   */
+  screenshotUrl?: string | null
 }
 
 export interface TelegramSendResult {
@@ -60,27 +68,36 @@ export async function sendApprovalRequest(
     `*Email:* ${escapeMarkdown(input.userEmail)}`,
     input.userPhone ? `*Phone:* ${escapeMarkdown(input.userPhone)}` : null,
     `*Country:* ${escapeMarkdown(input.country)}`,
+    input.method ? `*Paid via:* ${escapeMarkdown(input.method)}` : null,
     `*Amount:* ${input.currency} ${input.amount.toFixed(2)}`,
     `*Reference:* \`${escapeMarkdown(input.reference)}\``,
   ]
     .filter(Boolean)
     .join('\n')
 
-  const body = {
-    chat_id: chatId,
-    text,
-    parse_mode: 'Markdown',
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '✅ Approve & credit', callback_data: `approve:${input.paymentId}` },
-          { text: '✕ Reject', callback_data: `reject:${input.paymentId}` },
-        ],
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: '✅ Approve & credit', callback_data: `approve:${input.paymentId}` },
+        { text: '✕ Reject', callback_data: `reject:${input.paymentId}` },
       ],
-    },
+    ],
   }
 
-  const res = await fetch(`${TG_API}/bot${token}/sendMessage`, {
+  // With a receipt, post it as a photo carrying the details as its caption —
+  // one message the operator can both inspect and act on. Telegram caps
+  // captions at 1024 chars; ours is well under that.
+  const endpoint = input.screenshotUrl ? 'sendPhoto' : 'sendMessage'
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    parse_mode: 'Markdown',
+    reply_markup: replyMarkup,
+    ...(input.screenshotUrl
+      ? { photo: input.screenshotUrl, caption: text }
+      : { text }),
+  }
+
+  const res = await fetch(`${TG_API}/bot${token}/${endpoint}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -91,7 +108,7 @@ export async function sendApprovalRequest(
     result?: { message_id: number; chat: { id: number | string } }
   }
   if (!res.ok || !json.ok || !json.result) {
-    throw new Error(`telegram.sendMessage failed: ${json.description ?? res.status}`)
+    throw new Error(`telegram.${endpoint} failed: ${json.description ?? res.status}`)
   }
   return {
     messageId: json.result.message_id,
@@ -109,16 +126,27 @@ export async function finalizeApprovalMessage(params: {
   text: string
 }): Promise<void> {
   const token = requireEnv('TELEGRAM_BOT_TOKEN')
-  await fetch(`${TG_API}/bot${token}/editMessageText`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: params.chatId,
-      message_id: params.messageId,
-      text: params.text,
-      parse_mode: 'Markdown',
-    }),
-  }).catch(() => null)
+  const base = {
+    chat_id: params.chatId,
+    message_id: params.messageId,
+    parse_mode: 'Markdown',
+    // Drop the buttons so the operator can't tap a resolved payment again.
+    reply_markup: { inline_keyboard: [] },
+  }
+
+  async function edit(endpoint: string, payload: Record<string, unknown>) {
+    const res = await fetch(`${TG_API}/bot${token}/${endpoint}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...base, ...payload }),
+    }).catch(() => null)
+    return Boolean(res?.ok)
+  }
+
+  // Receipt approvals are photo messages, whose text lives in a caption —
+  // editMessageText fails on those, so fall back to editMessageCaption.
+  const edited = await edit('editMessageText', { text: params.text })
+  if (!edited) await edit('editMessageCaption', { caption: params.text })
 }
 
 /**

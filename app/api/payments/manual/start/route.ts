@@ -3,6 +3,7 @@ import { findUserById } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { getCountry, getMinFirstDeposit } from '@/lib/countries'
 import { MANUAL_MOMO, isManualMomoEnabled } from '@/lib/manual-momo'
+import { sendApprovalRequest } from '@/lib/telegram'
 import { supabaseServer } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -182,6 +183,35 @@ export async function POST(request: Request) {
         screenshotKey: key,
       },
     })
+
+    // Ping the operator chat with the receipt and Approve / Reject buttons, so
+    // nobody has to sit refreshing /admin/deposits. Best-effort: Telegram not
+    // being configured (or being down) must not fail a deposit the user has
+    // already paid — the row is on /admin/deposits either way.
+    if (payment) {
+      try {
+        await sendApprovalRequest({
+          paymentId: payment.id,
+          reference,
+          amount,
+          currency: user.currency,
+          userName: user.name,
+          userEmail: user.email ?? '—',
+          userPhone: user.phone ?? null,
+          country: user.country,
+          method:
+            channel === 'momo'
+              ? `${MANUAL_MOMO.network} MoMo ${MANUAL_MOMO.number}`
+              : channel === 'usdt'
+                ? 'USDT (BEP20)'
+                : 'Manual bank transfer',
+          screenshotUrl,
+        })
+      } catch (e) {
+        console.warn('[payments/manual/start] telegram notify failed:', e)
+      }
+    }
+
     return NextResponse.json(
       {
         ok: true,
