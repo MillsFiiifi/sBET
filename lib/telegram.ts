@@ -116,6 +116,78 @@ export async function sendApprovalRequest(
   }
 }
 
+export interface SendWithdrawalRequestInput {
+  paymentId: string
+  reference: string
+  amount: number
+  currency: string
+  userName: string
+  userEmail: string
+  /** Wallet the money must be sent to — the number the operator will pay. */
+  payoutPhone: string
+  network: string
+  country: string
+  /** Why the automatic transfer didn't run, when that's why this is manual. */
+  blockedReason?: string | null
+}
+
+/**
+ * Post a "go and pay this player" prompt into the operator chat.
+ *
+ * Deliberately worded as an instruction, not a confirmation: the buttons
+ * settle the ledger and text the player that the money has arrived, so
+ * "Paid" must only be tapped after the transfer has actually been sent.
+ */
+export async function sendWithdrawalRequest(
+  input: SendWithdrawalRequestInput,
+): Promise<TelegramSendResult> {
+  const token = requireEnv('TELEGRAM_BOT_TOKEN')
+  const chatId = requireEnv('TELEGRAM_ADMIN_CHAT_ID')
+
+  const text = [
+    '*💸 Withdrawal to pay out*',
+    '',
+    `*Player:* ${escapeMarkdown(input.userName)}`,
+    `*Email:* ${escapeMarkdown(input.userEmail)}`,
+    `*Send to:* \`${escapeMarkdown(input.payoutPhone)}\` (${escapeMarkdown(input.network.toUpperCase())})`,
+    `*Amount:* ${input.currency} ${input.amount.toFixed(2)}`,
+    `*Country:* ${escapeMarkdown(input.country)}`,
+    `*Reference:* \`${escapeMarkdown(input.reference)}\``,
+    input.blockedReason ? `\n_Auto-transfer unavailable: ${escapeMarkdown(input.blockedReason)}_` : null,
+    '',
+    '_Send the money first, then tap Paid — the player is told it has arrived._',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const res = await fetch(`${TG_API}/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Paid — notify player', callback_data: `wpaid:${input.paymentId}` },
+            { text: '✕ Reject & refund', callback_data: `wreject:${input.paymentId}` },
+          ],
+        ],
+      },
+    }),
+  })
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean
+    description?: string
+    result?: { message_id: number; chat: { id: number | string } }
+  }
+  if (!res.ok || !json.ok || !json.result) {
+    throw new Error(`telegram.sendMessage failed: ${json.description ?? res.status}`)
+  }
+  return { messageId: json.result.message_id, chatId: String(json.result.chat.id) }
+}
+
 /**
  * Edit the original approval message to show the final state (approved /
  * rejected) and strip the inline keyboard so the operator can't tap again.

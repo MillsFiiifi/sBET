@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { findPaymentById, markPaymentResolved } from '@/lib/payments-store'
 import { supabaseServer } from '@/lib/supabase'
 import { applyDepositCredit } from '@/lib/deposit-credit'
+import { markWithdrawalPaid, rejectWithdrawal } from '@/lib/withdrawal-settle'
 import {
   answerCallbackQuery,
   finalizeApprovalMessage,
@@ -54,6 +55,13 @@ export async function POST(request: Request) {
 
   const [action, paymentId] = cb.data.split(':')
   console.log('[telegram/webhook] action', { action, paymentId, callbackQueryId: cb.id })
+
+  // Withdrawal payouts settle through their own module — the operator has
+  // already sent the money by hand, so this only catches the ledger up and
+  // tells the player.
+  if (paymentId && (action === 'wpaid' || action === 'wreject')) {
+    return handleWithdrawalAction(action, paymentId, cb)
+  }
 
   if (!paymentId || (action !== 'approve' && action !== 'reject')) {
     console.warn('[telegram/webhook] unknown action', { cbData: cb.data })
@@ -132,6 +140,79 @@ export async function POST(request: Request) {
     messageId: cb.message.message_id,
     text: `✅ Approved by *${operator}* — user credited.\n\nReference: \`${payment.reference}\`\nAmount: ${payment.currency} ${payment.amount.toFixed(2)}`,
   })
+  return NextResponse.json({ ok: true })
+}
+
+type CallbackQuery = NonNullable<TelegramUpdate['callback_query']>
+
+/**
+ * "Paid — notify player" / "Reject & refund" on a manual withdrawal.
+ *
+ * The money moved outside the system before the button was tapped, so there is
+ * no transfer to fire here: settle the ledger, refund on a reject, and let
+ * markWithdrawalPaid send the player their confirmation.
+ */
+async function handleWithdrawalAction(
+  action: 'wpaid' | 'wreject',
+  paymentId: string,
+  cb: CallbackQuery,
+): Promise<NextResponse> {
+  const operator = cb.from?.username || cb.from?.first_name || `tg:${cb.from?.id ?? '?'}`
+  const chatId = String(cb.message!.chat.id)
+  const messageId = cb.message!.message_id
+
+  const note =
+    action === 'wpaid'
+      ? `paid by ${operator} via telegram`
+      : `rejected by ${operator} via telegram`
+
+  let result
+  try {
+    result =
+      action === 'wpaid'
+        ? await markWithdrawalPaid(paymentId, note)
+        : await rejectWithdrawal(paymentId, note)
+  } catch (e) {
+    console.error('[telegram/webhook] withdrawal settle failed:', e)
+    await answerCallbackQuery({ callbackQueryId: cb.id, text: 'Failed — check Vercel logs' })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (!result.ok) {
+    const text =
+      result.reason === 'already-settled' || result.reason === 'raced'
+        ? 'Already settled'
+        : result.reason === 'not-found'
+          ? 'Withdrawal not found'
+          : 'Not a withdrawal row'
+    await answerCallbackQuery({ callbackQueryId: cb.id, text })
+    await finalizeApprovalMessage({
+      chatId,
+      messageId,
+      text: `Withdrawal — *${text.toLowerCase()}*. No action taken.`,
+    })
+    return NextResponse.json({ ok: true })
+  }
+
+  const money = `${result.currency} ${result.amount.toFixed(2)}`
+  if (action === 'wpaid') {
+    await answerCallbackQuery({ callbackQueryId: cb.id, text: 'Marked paid. Player notified.' })
+    await finalizeApprovalMessage({
+      chatId,
+      messageId,
+      text: `✅ Paid by *${operator}* — ${money} sent, player notified.`,
+    })
+  } else {
+    await answerCallbackQuery({
+      callbackQueryId: cb.id,
+      text: result.refunded ? 'Rejected. Balance refunded.' : 'Rejected.',
+    })
+    await finalizeApprovalMessage({
+      chatId,
+      messageId,
+      text: `❌ Rejected by *${operator}* — ${money}${result.refunded ? ', balance refunded' : ''}.`,
+    })
+  }
   return NextResponse.json({ ok: true })
 }
 

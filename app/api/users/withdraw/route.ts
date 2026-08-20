@@ -22,6 +22,7 @@ import {
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
 import { sendSmsToUserThenAdmin } from '@/lib/sms'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
+import { sendWithdrawalRequest } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,21 @@ function isOperatorSideTransferError(message: string | null): boolean {
   return /ip\s*whitelist|whitelisting|not\s+enabled|not\s+activated|permission|insufficient\s+(funds|balance)|merchant.*balance/i.test(
     message,
   )
+}
+
+/**
+ * Tell the operator chat there's a payout to send by hand. Best-effort — an
+ * unconfigured or unreachable Telegram must never fail the player's request,
+ * and the row is on /admin/deposits either way.
+ */
+async function promptOperatorPayout(
+  input: Parameters<typeof sendWithdrawalRequest>[0],
+): Promise<void> {
+  try {
+    await sendWithdrawalRequest(input)
+  } catch (e) {
+    console.warn('[withdraw] operator payout prompt failed:', e)
+  }
 }
 
 function buildWithdrawalApprovedSms(amount: number, currency: string, network: string): string {
@@ -243,7 +259,7 @@ export async function POST(request: Request) {
       // an operator to settle instead of bouncing them. The balance stays
       // debited, exactly as it would on the bank-country path below.
       console.error('[withdraw] transfer blocked by account config:', transfer.message)
-      await recordPayment({
+      const queued = await recordPayment({
         userId,
         reference,
         amount: roundedAmount,
@@ -251,8 +267,29 @@ export async function POST(request: Request) {
         status: 'pending',
         provider: 'manual',
         currency: user.currency,
-        metadata: { ...payoutMeta, autoTransferBlocked: transfer.message },
-      }).catch((e) => console.error('[withdraw] manual-fallback ledger write failed:', e))
+        // balanceReserved: this path debited the wallet before attempting the
+        // transfer, so a later reject has to refund. The bank-country queue
+        // below doesn't debit, and must not.
+        metadata: { ...payoutMeta, autoTransferBlocked: transfer.message, balanceReserved: true },
+      }).catch((e) => {
+        console.error('[withdraw] manual-fallback ledger write failed:', e)
+        return null
+      })
+
+      if (queued) {
+        void promptOperatorPayout({
+          paymentId: queued.id,
+          reference,
+          amount: roundedAmount,
+          currency: user.currency,
+          userName: user.name,
+          userEmail: user.email ?? '—',
+          payoutPhone: phone,
+          network,
+          country: user.country,
+          blockedReason: transfer.message,
+        })
+      }
 
       void sendSmsToUserThenAdmin({
         phone: user.phone,
@@ -336,10 +373,13 @@ export async function POST(request: Request) {
   // Even after verification, the admin still has to flip the withdrawal_approved
   // switch. Externally we present this as "we're processing your request".
   if (!user.withdrawalApproved) {
+    const bankRef = `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`
     try {
-      await recordPayment({
+      // No debit on this path, so no balanceReserved flag — a reject here must
+      // not refund money that was never taken.
+      const queued = await recordPayment({
         userId,
-        reference: `PB-WDR-${userId.slice(0, 8)}-${Date.now()}`,
+        reference: bankRef,
         amount,
         type: 'withdrawal',
         status: 'pending',
@@ -347,6 +387,20 @@ export async function POST(request: Request) {
         currency: user.currency,
         metadata: payoutMeta,
       })
+      if (queued) {
+        void promptOperatorPayout({
+          paymentId: queued.id,
+          reference: bankRef,
+          amount,
+          currency: user.currency,
+          userName: user.name,
+          userEmail: user.email ?? '—',
+          payoutPhone: (payoutMeta.phone as string | undefined) ?? user.phone ?? '—',
+          network,
+          country: user.country,
+          blockedReason: null,
+        })
+      }
     } catch (e) {
       console.error('[withdraw] pending payment ledger write failed:', e)
     }

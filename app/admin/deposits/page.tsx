@@ -171,6 +171,37 @@ export default function AdminDepositsPage() {
     }
   }
 
+  /**
+   * Record that a manual payout has been sent. This is what triggers the
+   * player's "payment received" text, so the confirm spells out that the money
+   * must already be gone — there is no undo once they've been told.
+   */
+  const markPaidOut = async (paymentId: string, amount: number, currency: string) => {
+    if (
+      !confirm(
+        `Have you already sent ${currency} ${formatMoney(amount, currency)} to this player?\n\nTapping OK texts them that the money has arrived. Only do this after the transfer has gone out.`,
+      )
+    ) {
+      return
+    }
+    setResolvingId(paymentId)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/payments/${paymentId}/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setResolvingId(null)
+    }
+  }
+
   const filteredRollup = useMemo(() => {
     if (!data) return [] as UserRollup[]
     const q = search.trim().toLowerCase()
@@ -387,6 +418,9 @@ export default function AdminDepositsPage() {
               // Resolve flow is deposit-only — there's no "credit user" path
               // for a withdrawal row.
               const canResolve = (isFailed || isPending) && d.user && d.type === 'deposit'
+              // Manual payouts: the operator sends the money by hand, then marks
+              // it paid here — which is what texts the player their confirmation.
+              const canMarkPaid = isPending && d.type === 'withdrawal'
               return (
                 <li key={d.id} className="px-4 py-3 hover:bg-secondary/30 transition-colors">
                   <div className="flex items-center justify-between gap-3">
@@ -475,6 +509,24 @@ export default function AdminDepositsPage() {
                             <>
                               <Check className="w-3 h-3 mr-1" />
                               Credit &amp; resolve
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {canMarkPaid && (
+                        <Button
+                          size="sm"
+                          onClick={() => markPaidOut(d.id, d.amount, d.currency)}
+                          disabled={resolvingId === d.id}
+                          className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                          title="Only after you have sent the money — this texts the player that it has arrived"
+                        >
+                          {resolvingId === d.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <>
+                              <Check className="w-3 h-3 mr-1" />
+                              Mark paid
                             </>
                           )}
                         </Button>

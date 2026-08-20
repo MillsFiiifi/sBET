@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { ADMIN_COOKIE, isValidSessionCookie } from '@/lib/admin-auth'
 import { findPaymentById, markPaymentResolved } from '@/lib/payments-store'
 import { applyDepositCredit } from '@/lib/deposit-credit'
+import { markWithdrawalPaid } from '@/lib/withdrawal-settle'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,8 +38,21 @@ export async function POST(request: Request, { params }: Params) {
 
   const payment = await findPaymentById(id)
   if (!payment) return NextResponse.json({ error: 'payment not found' }, { status: 404 })
-  if (payment.type !== 'deposit') {
-    return NextResponse.json({ error: 'only deposit rows can be resolved' }, { status: 400 })
+
+  // Withdrawals settle the other way round: the operator has already sent the
+  // money by hand, so this records that and texts the player. Same module the
+  // Telegram buttons use, so the two paths can't disagree.
+  if (payment.type === 'withdrawal') {
+    const result = await markWithdrawalPaid(id, note || 'marked paid by admin')
+    if (!result.ok) {
+      const status = result.reason === 'not-found' ? 404 : 409
+      return NextResponse.json({ error: `withdrawal ${result.reason}` }, { status })
+    }
+    return NextResponse.json({
+      paidOut: result.amount,
+      currency: result.currency,
+      playerNotified: true,
+    })
   }
   if (payment.status === 'success') {
     return NextResponse.json({ error: 'payment already credited' }, { status: 409 })
