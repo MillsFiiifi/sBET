@@ -32,6 +32,22 @@ function buildWithdrawalRequestSms(amount: number, currency: string, network: st
   return `Your withdrawal request for ${currency} ${amount.toFixed(2)} to ${network.toUpperCase()} has been received. We will send you another message once your payment is approved.`
 }
 
+/**
+ * Did Flutterwave refuse for a reason on *our* side rather than the player's?
+ *
+ * "Please enable IP Whitelisting to access this service" is the common one:
+ * the Transfers API is gated behind an IP allow-list, and Vercel functions
+ * egress from dynamic addresses, so there is nothing stable to register.
+ * These are all operator problems — the withdrawal itself is perfectly valid,
+ * so it should queue for a manual payout rather than fail in the player's face.
+ */
+function isOperatorSideTransferError(message: string | null): boolean {
+  if (!message) return false
+  return /ip\s*whitelist|whitelisting|not\s+enabled|not\s+activated|permission|insufficient\s+(funds|balance)|merchant.*balance/i.test(
+    message,
+  )
+}
+
 function buildWithdrawalApprovedSms(amount: number, currency: string, network: string): string {
   return `Your withdrawal of ${currency} ${amount.toFixed(2)} to ${network.toUpperCase()} has been approved. The money is on its way to your mobile wallet.`
 }
@@ -219,6 +235,43 @@ export async function POST(request: Request) {
       // Payout description shown on the transfer = the user's own username.
       narration: user.name,
     })
+
+    if (!transfer.ok && isOperatorSideTransferError(transfer.message)) {
+      // Flutterwave refused for a reason on our side of the fence — IP
+      // whitelisting, transfers not switched on, no float. Nothing is wrong
+      // with the player's request, so park it as a pending manual payout for
+      // an operator to settle instead of bouncing them. The balance stays
+      // debited, exactly as it would on the bank-country path below.
+      console.error('[withdraw] transfer blocked by account config:', transfer.message)
+      await recordPayment({
+        userId,
+        reference,
+        amount: roundedAmount,
+        type: 'withdrawal',
+        status: 'pending',
+        provider: 'manual',
+        currency: user.currency,
+        metadata: { ...payoutMeta, autoTransferBlocked: transfer.message },
+      }).catch((e) => console.error('[withdraw] manual-fallback ledger write failed:', e))
+
+      void sendSmsToUserThenAdmin({
+        phone: user.phone,
+        country: user.country,
+        message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
+      }).catch((e) => console.error('[withdraw] request sms failed:', e))
+
+      return NextResponse.json(
+        {
+          message: PROCESSING_MESSAGE,
+          pending: true,
+          user: {
+            id: debit.user.id,
+            balance: debit.user.balance ?? 0,
+          },
+        },
+        { status: 202 },
+      )
+    }
 
     if (!transfer.ok) {
       // Gateway declined at queue time — give the money straight back and log
