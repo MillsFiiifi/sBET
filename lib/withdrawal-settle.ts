@@ -20,6 +20,7 @@ import {
 import { addWithdrawnTotal, creditBalance, findUserById } from '@/lib/users-store'
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
+import { emailWithdrawalPaid } from '@/lib/withdrawal-email'
 
 export type SettleOutcome =
   | { ok: true; amount: number; currency: string; refunded: boolean }
@@ -58,14 +59,29 @@ export async function markWithdrawalPaid(
     ).catch((e) => console.error('[withdrawal-settle] commission reversal failed:', e))
 
     const user = await findUserById(payment.userId).catch(() => null)
+    const destination = (payment.metadata?.phone as string | undefined) ?? user?.phone ?? null
+    const network = (payment.metadata?.network as string | undefined) ?? null
+
     // Player first, then the operator copy — sendSmsToUserThenAdmin handles it.
     void notifyWithdrawalPaid({
-      phone: (payment.metadata?.phone as string | undefined) ?? user?.phone,
+      phone: destination,
       country: user?.country,
       amount: payment.amount,
       currency: payment.currency,
       reference: payment.reference,
       balance: user?.balance,
+    })
+
+    // Email carries the same news with the reference attached, so the player
+    // has something searchable if the payout is ever queried.
+    void emailWithdrawalPaid({
+      email: user?.email,
+      name: user?.name,
+      amount: payment.amount,
+      currency: payment.currency,
+      reference: payment.reference,
+      destination,
+      network,
     })
   }
 

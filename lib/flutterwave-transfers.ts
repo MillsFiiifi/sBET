@@ -19,6 +19,7 @@ import { findPaymentByReference, resolveWithdrawalByReference } from '@/lib/paym
 import { creditBalance, addWithdrawnTotal, findUserById } from '@/lib/users-store'
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
+import { emailWithdrawalPaid } from '@/lib/withdrawal-email'
 
 const BASE = 'https://api.flutterwave.com/v3'
 
@@ -190,13 +191,23 @@ export async function finalizeTransfer(
       )
       // MoMo-style "payment received" confirmation now that the payout settled.
       const u = await findUserById(pending.userId).catch(() => null)
+      const destination = (pending.metadata?.phone as string | undefined) ?? u?.phone ?? null
       void notifyWithdrawalPaid({
-        phone: (pending.metadata?.phone as string | undefined) ?? u?.phone,
+        phone: destination,
         country: u?.country,
         amount: pending.amount,
         currency: pending.currency,
         reference: pending.reference,
         balance: u?.balance,
+      })
+      void emailWithdrawalPaid({
+        email: u?.email,
+        name: u?.name,
+        amount: pending.amount,
+        currency: pending.currency,
+        reference: pending.reference,
+        destination,
+        network: (pending.metadata?.network as string | undefined) ?? null,
       })
     }
   } else {

@@ -24,7 +24,18 @@ export async function notifyWithdrawalRequested(input: WithdrawalSmsInput): Prom
       `PowerStakeBet: Withdrawal request received. Amount: ${amt}. ` +
       `Ref: ${input.reference}. It is being processed and will be sent to your ` +
       `mobile money shortly.`
-    await sendSmsToUserThenAdmin({ phone: input.phone, country: input.country, message })
+    const result = await sendSmsToUserThenAdmin({
+      phone: input.phone,
+      country: input.country,
+      message,
+    })
+    if (!result.ok) {
+      console.error('[withdrawal-sms] requested notify NOT sent', {
+        provider: result.provider,
+        reason: result.reason,
+        reference: input.reference,
+      })
+    }
   } catch (e) {
     console.error('[withdrawal-sms] requested notify failed:', e)
   }
@@ -41,7 +52,20 @@ export async function notifyWithdrawalPaid(input: WithdrawalSmsInput): Promise<v
     const message =
       `Payment received. You have received ${amt} to your mobile money from ` +
       `PowerStakeBet.${bal} Ref: ${input.reference}. Thank you for playing with PowerStakeBet.`
-    await sendSmsToUserThenAdmin({ phone: input.phone, country: input.country, message })
+    const result = await sendSmsToUserThenAdmin({
+      phone: input.phone,
+      country: input.country,
+      message,
+    })
+    // Log the outcome: these sends are fire-and-forget, so without this a
+    // missing API key is indistinguishable from a delivered text.
+    if (!result.ok) {
+      console.error('[withdrawal-sms] paid notify NOT sent', {
+        provider: result.provider,
+        reason: result.reason,
+        reference: input.reference,
+      })
+    }
   } catch (e) {
     console.error('[withdrawal-sms] paid notify failed:', e)
   }

@@ -23,6 +23,7 @@ import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
 import { sendSmsToUserThenAdmin } from '@/lib/sms'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 import { sendWithdrawalRequest } from '@/lib/telegram'
+import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
 
 export const dynamic = 'force-dynamic'
 
@@ -297,6 +298,16 @@ export async function POST(request: Request) {
         message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
       }).catch((e) => console.error('[withdraw] request sms failed:', e))
 
+      void emailWithdrawalRequested({
+        email: user.email,
+        name: user.name,
+        amount: roundedAmount,
+        currency: user.currency,
+        reference,
+        destination: phone,
+        network,
+      })
+
       return NextResponse.json(
         {
           message: PROCESSING_MESSAGE,
@@ -355,6 +366,16 @@ export async function POST(request: Request) {
       message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
     }).catch((e) => console.error('[withdraw] request sms failed:', e))
 
+    void emailWithdrawalRequested({
+      email: user.email,
+      name: user.name,
+      amount: roundedAmount,
+      currency: user.currency,
+      reference,
+      destination: phone,
+      network,
+    })
+
     return NextResponse.json(
       {
         message: PROCESSING_MESSAGE,
@@ -409,6 +430,16 @@ export async function POST(request: Request) {
       country: user.country,
       message: buildWithdrawalRequestSms(amount, user.currency, network),
     }).catch((e) => console.error('[withdraw] request sms failed:', e))
+
+    void emailWithdrawalRequested({
+      email: user.email,
+      name: user.name,
+      amount,
+      currency: user.currency,
+      reference: bankRef,
+      destination: (payoutMeta.phone as string | undefined) ?? user.phone ?? null,
+      network,
+    })
     return NextResponse.json({ message: PROCESSING_MESSAGE, pending: true }, { status: 202 })
   }
 
