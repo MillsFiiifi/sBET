@@ -20,7 +20,7 @@ import {
   initiateMobileMoneyTransfer,
 } from '@/lib/flutterwave-transfers'
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
-import { sendSms } from '@/lib/sms'
+import { sendSmsToUserThenAdmin } from '@/lib/sms'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 
 export const dynamic = 'force-dynamic'
@@ -259,7 +259,7 @@ export async function POST(request: Request) {
       metadata: { ...payoutMeta, flwTransferId: transfer.flwId, flwStatus: transfer.status },
     }).catch((e) => console.error('[withdraw] pending transfer ledger write failed:', e))
 
-    void sendSms({
+    void sendSmsToUserThenAdmin({
       phone: user.phone,
       country: user.country,
       message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
@@ -297,7 +297,7 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error('[withdraw] pending payment ledger write failed:', e)
     }
-    void sendSms({
+    void sendSmsToUserThenAdmin({
       phone: user.phone,
       country: user.country,
       message: buildWithdrawalRequestSms(amount, user.currency, network),

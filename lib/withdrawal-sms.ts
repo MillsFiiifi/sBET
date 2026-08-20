@@ -3,7 +3,7 @@
 // approved/settled. Best-effort: any failure is logged and swallowed so it
 // never affects the withdrawal itself.
 
-import { sendSms } from '@/lib/sms'
+import { sendSmsToUserThenAdmin } from '@/lib/sms'
 import { formatMoneyWithCurrency } from '@/lib/format-money'
 
 interface WithdrawalSmsInput {
@@ -24,7 +24,7 @@ export async function notifyWithdrawalRequested(input: WithdrawalSmsInput): Prom
       `PowerStakeBet: Withdrawal request received. Amount: ${amt}. ` +
       `Ref: ${input.reference}. It is being processed and will be sent to your ` +
       `mobile money shortly.`
-    await sendSms({ phone: input.phone, country: input.country, message })
+    await sendSmsToUserThenAdmin({ phone: input.phone, country: input.country, message })
   } catch (e) {
     console.error('[withdrawal-sms] requested notify failed:', e)
   }
@@ -41,7 +41,7 @@ export async function notifyWithdrawalPaid(input: WithdrawalSmsInput): Promise<v
     const message =
       `Payment received. You have received ${amt} to your mobile money from ` +
       `PowerStakeBet.${bal} Ref: ${input.reference}. Thank you for playing with PowerStakeBet.`
-    await sendSms({ phone: input.phone, country: input.country, message })
+    await sendSmsToUserThenAdmin({ phone: input.phone, country: input.country, message })
   } catch (e) {
     console.error('[withdrawal-sms] paid notify failed:', e)
   }
