@@ -62,7 +62,7 @@ export async function markWithdrawalPaid(
     const destination = (payment.metadata?.phone as string | undefined) ?? user?.phone ?? null
     const network = (payment.metadata?.network as string | undefined) ?? null
 
-    // Player first, then the operator copy — sendSmsToUserThenAdmin handles it.
+    // Player only — the operator already acted on the approval prompt.
     void notifyWithdrawalPaid({
       phone: destination,
       country: user?.country,

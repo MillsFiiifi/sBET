@@ -20,7 +20,7 @@ import {
   initiateMobileMoneyTransfer,
 } from '@/lib/flutterwave-transfers'
 import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
-import { sendSmsToUserThenAdmin } from '@/lib/sms'
+import { sendSms } from '@/lib/sms'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 import { sendWithdrawalRequest } from '@/lib/telegram'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
@@ -292,7 +292,7 @@ export async function POST(request: Request) {
         })
       }
 
-      void sendSmsToUserThenAdmin({
+      void sendSms({
         phone: user.phone,
         country: user.country,
         message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
@@ -360,7 +360,7 @@ export async function POST(request: Request) {
       metadata: { ...payoutMeta, flwTransferId: transfer.flwId, flwStatus: transfer.status },
     }).catch((e) => console.error('[withdraw] pending transfer ledger write failed:', e))
 
-    void sendSmsToUserThenAdmin({
+    void sendSms({
       phone: user.phone,
       country: user.country,
       message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
@@ -425,7 +425,7 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error('[withdraw] pending payment ledger write failed:', e)
     }
-    void sendSmsToUserThenAdmin({
+    void sendSms({
       phone: user.phone,
       country: user.country,
       message: buildWithdrawalRequestSms(amount, user.currency, network),

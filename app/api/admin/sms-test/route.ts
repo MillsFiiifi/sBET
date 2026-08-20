@@ -46,9 +46,6 @@ export async function POST(request: Request) {
   const env = {
     ARKESEL_API_KEY: Boolean(process.env.ARKESEL_API_KEY?.trim()),
     ARKESEL_SENDER_ID: process.env.ARKESEL_SENDER_ID?.trim() || '(default: PluseAlerts)',
-    ADMIN_SMS_PHONE: Boolean(
-      (process.env.ADMIN_SMS_PHONE ?? process.env.ADMIN_SMS_PHONES ?? '').trim(),
-    ),
     SMS_PROVIDER: process.env.SMS_PROVIDER?.trim() || '(unset → twilio)',
     TWILIO_ACCOUNT_SID: Boolean(process.env.TWILIO_ACCOUNT_SID?.trim()),
   }

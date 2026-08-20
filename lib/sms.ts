@@ -25,31 +25,6 @@ function formatSmsPhone(country: string | null | undefined, raw: string): string
   return `+${prefix}${cleaned}`
 }
 
-function adminSmsPhones(): string[] {
-  const raw = (process.env.ADMIN_SMS_PHONE ?? process.env.ADMIN_SMS_PHONES ?? '').trim()
-  if (!raw) return []
-  return raw.split(/[,;\s]+/).map((p) => p.trim()).filter(Boolean)
-}
-
-/** Send to the player first, then the same body to every ADMIN_SMS_PHONE. */
-export async function sendSmsToUserThenAdmin(input: {
-  phone: string | null | undefined
-  country?: string | null
-  message: string
-}): Promise<SendSmsResult> {
-  const userResult = await sendSms(input)
-  const admins = adminSmsPhones()
-  for (const adminPhone of admins) {
-    if (formatSmsPhone(undefined, adminPhone) === formatSmsPhone(input.country, input.phone ?? '')) {
-      continue
-    }
-    await sendSms({ phone: adminPhone, country: 'GH', message: input.message }).catch((e) =>
-      console.error('[sms] admin copy failed:', e),
-    )
-  }
-  return userResult
-}
-
 export async function sendSms(input: {
   phone: string | null | undefined
   country?: string | null

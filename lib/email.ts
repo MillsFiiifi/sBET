@@ -8,7 +8,6 @@
 //   RESEND_API_KEY  — from resend.com/api-keys. Unset disables email entirely
 //                     (every send becomes a no-op, nothing throws).
 //   EMAIL_FROM      — verified sender, e.g. "PowerStakeBet <noreply@yourdomain>"
-//   ADMIN_EMAIL     — optional; BCC'd on player mail so operators keep a copy
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 
@@ -18,8 +17,6 @@ export interface SendEmailInput {
   html: string
   /** Plain-text alternative. Worth setting — it keeps mail out of spam. */
   text?: string
-  /** Copy the operator. Defaults to true for player-facing mail. */
-  copyAdmin?: boolean
 }
 
 export interface SendEmailResult {
@@ -45,10 +42,6 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const to = input.to?.trim()
   if (!to || !to.includes('@')) return { ok: false, skipped: 'no-recipient' }
 
-  const adminEmail = process.env.ADMIN_EMAIL?.trim()
-  const bcc =
-    input.copyAdmin !== false && adminEmail && adminEmail !== to ? [adminEmail] : undefined
-
   try {
     const res = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
@@ -59,7 +52,6 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       body: JSON.stringify({
         from,
         to: [to],
-        ...(bcc ? { bcc } : {}),
         subject: input.subject,
         html: input.html,
         ...(input.text ? { text: input.text } : {}),

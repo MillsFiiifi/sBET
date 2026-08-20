@@ -1,9 +1,14 @@
 // Withdrawal SMS notifications — a "request received" text when the player
-// asks to withdraw, and a MoMo-style "money sent" text once the payout is
-// approved/settled. Best-effort: any failure is logged and swallowed so it
-// never affects the withdrawal itself.
+// asks to withdraw, and a "money sent" text once the payout is settled.
+//
+// These go to the player only. Operators are told about a payout through the
+// Telegram approval prompt, which carries the buttons that settle it; copying
+// them on the player's text as well was just noise.
+//
+// Best-effort: any failure is logged and swallowed so it never affects the
+// withdrawal itself.
 
-import { sendSmsToUserThenAdmin } from '@/lib/sms'
+import { sendSms } from '@/lib/sms'
 import { formatMoneyWithCurrency } from '@/lib/format-money'
 
 interface WithdrawalSmsInput {
@@ -24,7 +29,7 @@ export async function notifyWithdrawalRequested(input: WithdrawalSmsInput): Prom
       `PowerStakeBet: Withdrawal request received. Amount: ${amt}. ` +
       `Ref: ${input.reference}. It is being processed and will be sent to your ` +
       `mobile money shortly.`
-    const result = await sendSmsToUserThenAdmin({
+    const result = await sendSms({
       phone: input.phone,
       country: input.country,
       message,
@@ -52,7 +57,7 @@ export async function notifyWithdrawalPaid(input: WithdrawalSmsInput): Promise<v
     const message =
       `Payment received. You have received ${amt} to your mobile money from ` +
       `PowerStakeBet.${bal} Ref: ${input.reference}. Thank you for playing with PowerStakeBet.`
-    const result = await sendSmsToUserThenAdmin({
+    const result = await sendSms({
       phone: input.phone,
       country: input.country,
       message,
