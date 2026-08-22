@@ -316,7 +316,8 @@ function DepositForm() {
     }
   }
 
-  async function finishAfterCharge(reference: string) {
+  /** Waits out the on-phone approval. Returns the final status. */
+  async function finishAfterCharge(reference: string): Promise<string> {
     setPinPrompt('Approve the prompt on your phone to complete the payment…')
     setWaiting(true)
     let final: string
@@ -340,6 +341,7 @@ function DepositForm() {
     } else {
       setError(friendlyStatus(final))
     }
+    return final
   }
 
   // Instant: trigger a mobile-money charge (on-phone PIN/approval).
@@ -433,11 +435,16 @@ function DepositForm() {
         setOtp('')
         return
       }
-      // 'pending' or 'already-credited' — code accepted; confirm via polling.
+      // Code accepted. The charge now needs the on-phone approval, so hide the
+      // code box and wait on the prompt.
       const ref = otpReference
       setOtpReference(null)
       setOtp('')
-      await finishAfterCharge(ref)
+      const final = await finishAfterCharge(ref)
+      // The approval never landed — put the code box back rather than stranding
+      // them on an error with no way forward. The charge is still open, so it
+      // can still complete; the error above says what happened.
+      if (final !== 'success') setOtpReference(ref)
     } catch {
       setError('Network error. Check your connection and try again.')
     } finally {
