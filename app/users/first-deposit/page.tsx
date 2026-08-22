@@ -143,11 +143,11 @@ function DepositForm() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
 
-  // MoMo stays the landing tab even when Instant is available — Instant is an
-  // option players choose, not the one they're dropped into. The effect below
-  // moves them off it if manual MoMo turns out not to be enabled for their
-  // country.
-  const [method, setMethod] = useState<Method>('momo')
+  // Instant is the landing tab whenever a gateway is behind it — paying in the
+  // app is the route we want players on, with pay-and-upload as the fallback
+  // rather than the default. The effect below moves them off it only if the
+  // tab is switched off entirely.
+  const [method, setMethod] = useState<Method>(FLUTTERWAVE_ENABLED ? 'flutterwave' : 'momo')
   const [amount, setAmount] = useState<number | ''>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
