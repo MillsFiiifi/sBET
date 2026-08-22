@@ -906,7 +906,14 @@ function DepositForm() {
 
                 {pinPrompt && (
                   <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
-                    <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin text-primary" />
+                    {/* Spin only while something is actually in flight. "Enter
+                        the code" is a prompt for the player to act on, and a
+                        spinner beside it reads as "the app is busy, wait". */}
+                    {waiting ? (
+                      <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin text-primary" />
+                    ) : (
+                      <Smartphone className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                    )}
                     <span>{pinPrompt}</span>
                   </div>
                 )}
