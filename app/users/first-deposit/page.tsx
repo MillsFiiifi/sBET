@@ -44,18 +44,47 @@ const AMOUNT_CHIPS = [300, 500, 1000, 1500, 2000, 3000, 5000]
 const MAX_SCREENSHOT_BYTES = 5_000_000
 
 // Mobile-money networks for the Instant tab. `provider` is the key the
-// Flutterwave momo/start route expects (mtn / vod / atl).
+// gateway's start route expects (mtn / vod / atl). Both gateways accept these
+// same three keys and map them to their own network codes server-side.
 const NETWORKS: { provider: 'mtn' | 'vod' | 'atl'; short: string; label: string }[] = [
   { provider: 'mtn', short: 'MTN', label: 'MTN MoMo' },
   { provider: 'vod', short: 'TELECEL', label: 'Telecel Cash' },
   { provider: 'atl', short: 'AT', label: 'AirtelTigo' },
 ]
 
-// Flutterwave ("Instant" — card / on-phone MoMo charge) is switched off in the
-// UI: players deposit by paying our MoMo number or sending USDT, and an admin
-// approves the receipt. The whole flow below is left intact — flip this back to
-// true to restore the tab, the OTP step and the card fallback as they were.
-const FLUTTERWAVE_ENABLED: boolean = false
+// Which gateway backs the "Instant" tab (on-phone MoMo charge).
+//
+//   null          tab hidden — players pay our MoMo number or send USDT and an
+//                 admin approves the receipt. This is the current live setup.
+//   'flutterwave' the original flow, including the "pay with card" fallback.
+//   'akwapay'     AkwaPay mobile money. Needs AKWAPAY_SECRET_KEY set on the
+//                 deployment, or /start answers 503. Test with sk_test_ first:
+//                 a live key sends a real prompt to a real phone.
+//
+// The OTP and polling steps are identical either way — the two gateways expose
+// the same request and response shapes on purpose, so this is the only line
+// that needs to change.
+type InstantGateway = 'flutterwave' | 'akwapay'
+const INSTANT_GATEWAY: InstantGateway | null = null
+
+const GATEWAY_ROUTES: Record<InstantGateway, { start: string; otp: string; status: string }> = {
+  flutterwave: {
+    start: '/api/payments/flutterwave/momo/start',
+    otp: '/api/payments/flutterwave/momo/otp',
+    status: '/api/payments/flutterwave/status',
+  },
+  akwapay: {
+    start: '/api/payments/akwapay/start',
+    otp: '/api/payments/akwapay/otp',
+    status: '/api/payments/akwapay/status',
+  },
+}
+
+const ROUTES = GATEWAY_ROUTES[INSTANT_GATEWAY ?? 'flutterwave']
+const FLUTTERWAVE_ENABLED: boolean = INSTANT_GATEWAY !== null
+// The hosted card checkout is a Flutterwave product — AkwaPay is mobile money
+// only, so the "pay with card instead" fallback hides when it is in charge.
+const CARD_FALLBACK_ENABLED: boolean = INSTANT_GATEWAY === 'flutterwave'
 
 type Method = 'flutterwave' | 'momo' | 'usdt'
 
@@ -208,7 +237,7 @@ function DepositForm() {
     while (Date.now() < DEADLINE) {
       try {
         const res = await fetch(
-          `/api/payments/flutterwave/status?reference=${encodeURIComponent(reference)}`,
+          `${ROUTES.status}?reference=${encodeURIComponent(reference)}`,
           { cache: 'no-store' },
         )
         const data = await res.json()
@@ -281,7 +310,7 @@ function DepositForm() {
     setOtp('')
     setLoading(true)
     try {
-      const res = await fetch('/api/payments/flutterwave/momo/start', {
+      const res = await fetch(ROUTES.start, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -333,7 +362,7 @@ function DepositForm() {
     setError(null)
     setLoading(true)
     try {
-      const res = await fetch('/api/payments/flutterwave/momo/otp', {
+      const res = await fetch(ROUTES.otp, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reference: otpReference, otp: otp.trim() }),
@@ -882,14 +911,16 @@ function DepositForm() {
                           </>
                         )}
                       </Button>
-                      <button
-                        type="button"
-                        onClick={handleCard}
-                        disabled={busy || profileLoading || !profile}
-                        className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
-                      >
-                        Pay with card instead
-                      </button>
+                      {CARD_FALLBACK_ENABLED && (
+                        <button
+                          type="button"
+                          onClick={handleCard}
+                          disabled={busy || profileLoading || !profile}
+                          className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60"
+                        >
+                          Pay with card instead
+                        </button>
+                      )}
                     </div>
                   )
                 ) : (

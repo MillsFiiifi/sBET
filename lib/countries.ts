@@ -6,7 +6,7 @@
 
 export type CountryCode = 'GH' | 'NG' | 'KE' | 'ZA'
 export type CurrencyCode = 'GHS' | 'NGN' | 'KES' | 'ZAR'
-export type Gateway = 'moolre' | 'paystack' | 'manual' | 'flutterwave'
+export type Gateway = 'moolre' | 'paystack' | 'manual' | 'flutterwave' | 'akwapay'
 
 export interface PayoutNetwork {
   key: string
