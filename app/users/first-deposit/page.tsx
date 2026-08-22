@@ -41,6 +41,16 @@ const USDT_ADDRESS =
 // Quick-pick amounts, matching the deposit UX players expect.
 const AMOUNT_CHIPS = [300, 500, 1000, 1500, 2000, 3000, 5000]
 
+// Shared field styling, in one place so the inputs stay in step.
+//
+// text-base is load-bearing on mobile, not cosmetic: iOS Safari zooms the whole
+// page when it focuses an input rendering below 16px, and the player then has
+// to pinch back out to see the rest of the form.
+const SECTION_LABEL =
+  'text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70'
+const FIELD =
+  'w-full h-12 rounded-xl border border-border bg-background text-foreground text-base font-semibold outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25'
+
 const MAX_SCREENSHOT_BYTES = 5_000_000
 
 // Mobile-money networks for the Instant tab. `provider` is the key the
@@ -570,12 +580,12 @@ function DepositForm() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-start sm:items-center justify-center p-4 py-8">
+      <main className="flex-1 flex items-start sm:items-center justify-center px-3 sm:px-4 py-6 sm:py-8 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         <div className="relative w-full max-w-md">
           <div aria-hidden className="absolute -top-16 -left-12 w-56 h-56 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
           <div aria-hidden className="absolute -bottom-16 -right-12 w-56 h-56 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
-          <div className="relative bg-card rounded-2xl border border-border p-5 sm:p-8 shadow-card">
+          <div className="relative bg-card rounded-2xl border border-border p-4 sm:p-8 shadow-card">
             {depositSuccess && profile ? (
               <div className="text-center space-y-4">
                 <div className="relative w-16 h-16 mx-auto">
@@ -591,7 +601,7 @@ function DepositForm() {
                 </div>
                 <Button
                   onClick={() => router.push('/')}
-                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_8px_24px_-10px_var(--primary)] font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                 >
                   Continue to home
                 </Button>
@@ -616,7 +626,7 @@ function DepositForm() {
                 </p>
                 <Button
                   onClick={() => router.push('/')}
-                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
+                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_8px_24px_-10px_var(--primary)] font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all"
                 >
                   Continue to home
                 </Button>
@@ -672,7 +682,7 @@ function DepositForm() {
                 {/* MoMo: pay-to account */}
                 {method === 'momo' && momoAvailable && (
                   <div className="space-y-1.5">
-                    <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                    <p className={SECTION_LABEL}>
                       Send {MANUAL_MOMO.network} MoMo to this number
                     </p>
                     <button
@@ -710,7 +720,7 @@ function DepositForm() {
                 {method === 'usdt' &&
                   (USDT_ADDRESS ? (
                     <div className="space-y-1.5">
-                      <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                      <p className={SECTION_LABEL}>
                         Send USDT via BEP20 to this address
                       </p>
                       <button
@@ -748,7 +758,7 @@ function DepositForm() {
 
                 {/* Amount */}
                 <div className="space-y-2">
-                  <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                  <p className={SECTION_LABEL}>
                     Select amount ({currency})
                   </p>
                   <div className="grid grid-cols-3 gap-2">
@@ -760,10 +770,10 @@ function DepositForm() {
                           setError(null)
                           setAmount(v)
                         }}
-                        className={`h-11 rounded-xl border font-bold text-sm tabular-nums transition-colors ${
+                        className={`h-12 rounded-xl border font-bold text-sm tabular-nums transition-all active:scale-[0.97] ${
                           amount === v
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border bg-secondary/60 text-foreground hover:bg-secondary'
+                            ? 'border-primary bg-primary text-primary-foreground ring-2 ring-primary/30'
+                            : 'border-border bg-secondary/60 text-foreground hover:bg-secondary hover:border-primary/40'
                         }`}
                       >
                         {formatMoney(v, currency)}
@@ -785,7 +795,7 @@ function DepositForm() {
                         setAmount(e.target.value === '' ? '' : Number.isFinite(n) ? n : '')
                       }}
                       placeholder="Or enter a custom amount"
-                      className="w-full h-12 pl-14 pr-3 rounded-xl border border-border bg-background text-foreground font-semibold tabular-nums outline-none focus:border-primary transition-colors"
+                      className={`${FIELD} pl-14 pr-3 tabular-nums`}
                     />
                   </div>
                   <p className="text-caption text-muted-foreground">
@@ -797,7 +807,7 @@ function DepositForm() {
                 {method === 'flutterwave' && !otpReference && (
                   <>
                     <div className="space-y-2">
-                      <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                      <p className={SECTION_LABEL}>
                         Mobile-money network
                       </p>
                       <div className="grid grid-cols-3 gap-2">
@@ -809,21 +819,29 @@ function DepositForm() {
                               setError(null)
                               setNetwork(n.provider)
                             }}
-                            className={`flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border transition-colors ${
+                            className={`flex flex-col items-center justify-center gap-0.5 h-14 rounded-xl border px-1 transition-all active:scale-[0.97] ${
                               network === n.provider
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border bg-secondary/60 hover:bg-secondary'
+                                ? 'border-primary bg-primary/15 ring-2 ring-primary/30'
+                                : 'border-border bg-secondary/60 hover:bg-secondary hover:border-primary/40'
                             }`}
                           >
-                            <span className="text-caption font-bold text-muted-foreground">{n.short}</span>
-                            <span className="text-xs font-semibold text-foreground">{n.label}</span>
+                            <span
+                              className={`text-[10px] font-bold tracking-wide ${
+                                network === n.provider ? 'text-primary' : 'text-muted-foreground'
+                              }`}
+                            >
+                              {n.short}
+                            </span>
+                            <span className="text-[11px] sm:text-xs font-semibold text-foreground leading-tight text-center">
+                              {n.label}
+                            </span>
                           </button>
                         ))}
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                      <p className={SECTION_LABEL}>
                         Mobile-money phone number
                       </p>
                       <div className="relative">
@@ -837,7 +855,7 @@ function DepositForm() {
                             setPhone(e.target.value)
                           }}
                           placeholder="e.g. 0533431086"
-                          className="w-full h-12 pl-10 pr-3 rounded-xl border border-border bg-background text-foreground font-semibold outline-none focus:border-primary transition-colors"
+                          className={`${FIELD} pl-10 pr-3`}
                         />
                       </div>
                       {amountValue > 0 && (
@@ -853,7 +871,7 @@ function DepositForm() {
                 {/* Instant: OTP step */}
                 {method === 'flutterwave' && otpReference && (
                   <div className="space-y-1.5">
-                    <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                    <p className={SECTION_LABEL}>
                       Enter the code sent to your phone
                     </p>
                     <input
@@ -865,7 +883,7 @@ function DepositForm() {
                         setOtp(e.target.value)
                       }}
                       placeholder="6-digit code"
-                      className="w-full h-12 px-3 rounded-xl border border-border bg-background text-foreground font-semibold tracking-widest outline-none focus:border-primary transition-colors"
+                      className={`${FIELD} px-3 text-center tracking-[0.4em]`}
                     />
                   </div>
                 )}
@@ -873,7 +891,7 @@ function DepositForm() {
                 {/* Manual rails: screenshot upload */}
                 {((method === 'usdt' && USDT_ADDRESS) || (method === 'momo' && momoAvailable)) && (
                   <div className="space-y-2">
-                    <p className="text-caption font-semibold text-muted-foreground uppercase tracking-wide">
+                    <p className={SECTION_LABEL}>
                       Upload payment screenshot
                     </p>
                     <input
@@ -943,7 +961,7 @@ function DepositForm() {
                       <Button
                         onClick={submitOtp}
                         disabled={busy || !profile}
-                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover transition-all disabled:opacity-60"
+                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_8px_24px_-10px_var(--primary)] font-bold shadow-card hover:shadow-card-hover transition-all disabled:opacity-60"
                       >
                         {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm code'}
                       </Button>
@@ -965,7 +983,7 @@ function DepositForm() {
                       <Button
                         onClick={handleInstantMomo}
                         disabled={busy || profileLoading || !profile}
-                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
+                        className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_8px_24px_-10px_var(--primary)] font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
                       >
                         {busy ? (
                           <Loader2 className="w-5 h-5 animate-spin" />
@@ -999,7 +1017,7 @@ function DepositForm() {
                       !profile ||
                       (method === 'momo' ? !momoAvailable : !USDT_ADDRESS)
                     }
-                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_8px_24px_-10px_var(--primary)] font-bold shadow-card hover:shadow-card-hover hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-60 disabled:hover:translate-y-0"
                   >
                     {busy ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -1087,24 +1105,37 @@ function MethodTab({
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors ${
-        active ? 'border-primary bg-primary/10' : 'border-border bg-secondary/60 hover:bg-secondary'
+      className={`relative flex flex-col items-start gap-1 rounded-xl border p-2.5 sm:p-3 text-left transition-all active:scale-[0.98] ${
+        active
+          ? 'border-primary bg-primary/15 ring-1 ring-primary/40'
+          : 'border-border bg-secondary/60 hover:bg-secondary hover:border-primary/40'
       }`}
     >
       {badge && (
-        <span className="absolute top-2 right-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
-          {badge}
-        </span>
+        <>
+          {/* Three tabs at 360px leave no room for a word here, so the badge
+              collapses to a dot and keeps its meaning for screen readers. */}
+          <span
+            aria-hidden
+            className="sm:hidden absolute top-2 right-2 w-2 h-2 rounded-full bg-primary"
+          />
+          <span className="hidden sm:block absolute top-2 right-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
+            {badge}
+          </span>
+          <span className="sr-only">{badge}</span>
+        </>
       )}
       <span
-        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${
+        className={`inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg transition-colors ${
           active ? 'bg-primary text-primary-foreground' : 'bg-background text-primary'
         }`}
       >
         {icon}
       </span>
-      <span className="text-sm font-bold text-foreground">{title}</span>
-      <span className="text-caption text-muted-foreground">{subtitle}</span>
+      <span className="text-xs sm:text-sm font-bold text-foreground leading-tight">{title}</span>
+      <span className="text-[10px] sm:text-caption text-muted-foreground leading-tight">
+        {subtitle}
+      </span>
     </button>
   )
 }
