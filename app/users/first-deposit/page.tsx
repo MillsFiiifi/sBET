@@ -157,6 +157,11 @@ function DepositForm() {
   const [network, setNetwork] = useState<'mtn' | 'vod' | 'atl'>('mtn')
   const [phone, setPhone] = useState('')
   const [pinPrompt, setPinPrompt] = useState<string | null>(null)
+  // Whether a blocking confirmation is in flight. Deliberately separate from
+  // pinPrompt: that is the line of text on screen, and while the OTP box is
+  // open it holds an *instruction* ("enter the code"), not a busy state. Wiring
+  // the buttons to pinPrompt disabled Confirm the instant the box appeared.
+  const [waiting, setWaiting] = useState(false)
   const [otpReference, setOtpReference] = useState<string | null>(null)
   const [otp, setOtp] = useState('')
 
@@ -164,6 +169,8 @@ function DepositForm() {
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // reference → the poll loop currently running for it, so callers share one.
+  const pollsRef = useRef<Map<string, Promise<string>>>(new Map())
 
   // Terminal screens.
   const [manualSubmitted, setManualSubmitted] = useState(false)
@@ -253,7 +260,20 @@ function DepositForm() {
   }
 
   // Poll the charge status until it settles. Resolves to the final status.
-  async function pollChargeStatus(reference: string): Promise<string> {
+  //
+  // One loop per reference, shared by every caller. The OTP box starts a quiet
+  // background poll and pressing Confirm wants one too — without this they run
+  // two independent timers against the same charge and race to report it.
+  function pollChargeStatus(reference: string): Promise<string> {
+    const inFlight = pollsRef.current.get(reference)
+    if (inFlight) return inFlight
+    const run = runPoll(reference)
+    pollsRef.current.set(reference, run)
+    void run.finally(() => pollsRef.current.delete(reference))
+    return run
+  }
+
+  async function runPoll(reference: string): Promise<string> {
     const DEADLINE = Date.now() + 3 * 60 * 1000 // 3 minutes
     while (Date.now() < DEADLINE) {
       try {
@@ -289,15 +309,23 @@ function DepositForm() {
       setOtpReference(null)
       setDepositSuccess(true)
     } else {
-      // Stop the spinner but keep the OTP box so the user can still complete it.
+      // Clear the message but leave the OTP box open — the quiet poll giving up
+      // says nothing about the code, which the player can still enter. It never
+      // touches `waiting`, so Confirm stays pressable throughout.
       setPinPrompt(null)
     }
   }
 
   async function finishAfterCharge(reference: string) {
     setPinPrompt('Approve the prompt on your phone to complete the payment…')
-    const final = await pollChargeStatus(reference)
-    setPinPrompt(null)
+    setWaiting(true)
+    let final: string
+    try {
+      final = await pollChargeStatus(reference)
+    } finally {
+      setWaiting(false)
+      setPinPrompt(null)
+    }
     if (final === 'success') {
       // Refresh balance for the success screen.
       try {
@@ -505,7 +533,7 @@ function DepositForm() {
   }
 
   const headingTitle = purpose === 'verification' ? 'Verify your account' : 'Add money'
-  const busy = loading || Boolean(pinPrompt)
+  const busy = loading || waiting
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
