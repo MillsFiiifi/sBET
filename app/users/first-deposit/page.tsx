@@ -65,27 +65,44 @@ const NETWORKS: { provider: 'mtn' | 'vod' | 'atl'; short: string; label: string 
 // the same request and response shapes on purpose, so this is the only line
 // that needs to change.
 type InstantGateway = 'flutterwave' | 'akwapay'
-const INSTANT_GATEWAY: InstantGateway | null = null
+const INSTANT_GATEWAY: InstantGateway | null = 'akwapay'
 
-const GATEWAY_ROUTES: Record<InstantGateway, { start: string; otp: string; status: string }> = {
+// `card` is whether the gateway can also take a hosted card payment. The
+// checkout redirect is a Flutterwave product; AkwaPay is mobile money only, so
+// the "pay with card instead" fallback hides and the tab stops advertising a
+// card it cannot take.
+interface GatewayConfig {
+  start: string
+  otp: string
+  status: string
+  card: boolean
+}
+
+const GATEWAY_ROUTES: Record<InstantGateway, GatewayConfig> = {
   flutterwave: {
     start: '/api/payments/flutterwave/momo/start',
     otp: '/api/payments/flutterwave/momo/otp',
     status: '/api/payments/flutterwave/status',
+    card: true,
   },
   akwapay: {
     start: '/api/payments/akwapay/start',
     otp: '/api/payments/akwapay/otp',
     status: '/api/payments/akwapay/status',
+    card: false,
   },
 }
 
-const ROUTES = GATEWAY_ROUTES[INSTANT_GATEWAY ?? 'flutterwave']
-const FLUTTERWAVE_ENABLED: boolean = INSTANT_GATEWAY !== null
-// The hosted card checkout is a Flutterwave product — AkwaPay is mobile money
-// only, so the "pay with card instead" fallback hides when it is in charge.
-const CARD_FALLBACK_ENABLED: boolean = INSTANT_GATEWAY === 'flutterwave'
+const GATEWAY: GatewayConfig | null = INSTANT_GATEWAY ? GATEWAY_ROUTES[INSTANT_GATEWAY] : null
+// Falls back to the Flutterwave paths when the tab is off so the handlers below
+// still typecheck; nothing calls them while GATEWAY is null.
+const ROUTES = GATEWAY ?? GATEWAY_ROUTES.flutterwave
+const FLUTTERWAVE_ENABLED: boolean = GATEWAY !== null
+const CARD_FALLBACK_ENABLED: boolean = GATEWAY?.card ?? false
+const INSTANT_SUBTITLE = CARD_FALLBACK_ENABLED ? 'Card / MoMo' : 'MoMo prompt'
 
+// 'flutterwave' is the id of the Instant tab, whichever gateway INSTANT_GATEWAY
+// currently points at — the name predates AkwaPay.
 type Method = 'flutterwave' | 'momo' | 'usdt'
 
 interface UserProfile {
@@ -126,7 +143,11 @@ function DepositForm() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(Boolean(userId))
 
-  const [method, setMethod] = useState<Method>(FLUTTERWAVE_ENABLED ? 'flutterwave' : 'momo')
+  // MoMo stays the landing tab even when Instant is available — Instant is an
+  // option players choose, not the one they're dropped into. The effect below
+  // moves them off it if manual MoMo turns out not to be enabled for their
+  // country.
+  const [method, setMethod] = useState<Method>('momo')
   const [amount, setAmount] = useState<number | ''>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -581,7 +602,7 @@ function DepositForm() {
                       }}
                       icon={<Zap className="w-4 h-4" />}
                       title="Instant"
-                      subtitle="Card / MoMo"
+                      subtitle={INSTANT_SUBTITLE}
                     />
                   )}
                   {momoAvailable && (
