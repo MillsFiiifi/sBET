@@ -1,7 +1,19 @@
 import { NextResponse } from 'next/server'
 import { verifyAndCreditAkwapay } from '@/lib/akwapay-credit'
+import { classifyIntentStatus } from '@/lib/akwapay'
 
 export const dynamic = 'force-dynamic'
+
+// Outcomes that will never change on their own. Everything else — including
+// AkwaPay's `unknown` — is still in flight and must keep being polled.
+const DEAD = new Set([
+  'missing-reference',
+  'unknown-reference',
+  'unknown-intent',
+  'no-intent',
+  'no-user',
+  'amount-mismatch',
+])
 
 /**
  * Polled by the client while the customer approves the debit on their phone.
@@ -21,5 +33,11 @@ export async function GET(request: Request) {
   const result = await verifyAndCreditAkwapay(reference)
   const done = result.status === 'success' || result.status === 'already-credited'
 
-  return NextResponse.json({ ...result, done }, { status: 200 })
+  // Tell the client whether to stop rather than making it recognise gateway
+  // vocabulary. 'declined' and 'expired' are AkwaPay's words, not ours, and a
+  // client-side list of them goes stale the moment they add one.
+  const failed =
+    !done && (DEAD.has(result.status) || classifyIntentStatus(result.status) === 'failed')
+
+  return NextResponse.json({ ...result, done, failed }, { status: 200 })
 }

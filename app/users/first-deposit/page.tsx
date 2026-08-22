@@ -283,8 +283,12 @@ function DepositForm() {
         )
         const data = await res.json()
         const status = String(data.status ?? 'pending')
-        if (status === 'success' || status === 'already-credited') return 'success'
-        if (TERMINAL_FAIL.has(status)) return status
+        if (data.done === true || status === 'success' || status === 'already-credited') {
+          return 'success'
+        }
+        // `failed` is the gateway's own verdict, so a charge it has already
+        // given up on stops here instead of spinning out the full deadline.
+        if (data.failed === true || TERMINAL_FAIL.has(status)) return status
       } catch {
         /* transient — keep polling */
       }
@@ -1023,7 +1027,10 @@ function DepositForm() {
 function friendlyStatus(status: string): string {
   switch (status) {
     case 'failed':
+    case 'declined':
       return 'The charge was declined. Check your balance and try again.'
+    case 'expired':
+      return 'The payment request expired before it was approved. Try again.'
     case 'cancelled':
     case 'abandoned':
       return 'The payment was cancelled before it was approved. Try again.'
