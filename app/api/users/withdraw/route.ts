@@ -24,6 +24,8 @@ import { sendSms } from '@/lib/sms'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 import { sendWithdrawalRequest } from '@/lib/telegram'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
+import { notify } from '@/lib/notifications-store'
+import { formatMoneyWithCurrency } from '@/lib/format-money'
 
 export const dynamic = 'force-dynamic'
 
@@ -308,6 +310,14 @@ export async function POST(request: Request) {
         network,
       })
 
+      void notify({
+        userId,
+        kind: 'withdrawal',
+        title: 'Withdrawal requested',
+        body: `Your withdrawal of ${formatMoneyWithCurrency(roundedAmount, user.currency)} is being processed. You will be told as soon as it is sent.`,
+        metadata: { amount: roundedAmount, currency: user.currency },
+      })
+
       return NextResponse.json(
         {
           message: PROCESSING_MESSAGE,
@@ -376,6 +386,14 @@ export async function POST(request: Request) {
       network,
     })
 
+    void notify({
+      userId,
+      kind: 'withdrawal',
+      title: 'Withdrawal requested',
+      body: `Your withdrawal of ${formatMoneyWithCurrency(roundedAmount, user.currency)} is being processed. You will be told as soon as it is sent.`,
+      metadata: { amount: roundedAmount, currency: user.currency },
+    })
+
     return NextResponse.json(
       {
         message: PROCESSING_MESSAGE,
@@ -439,6 +457,14 @@ export async function POST(request: Request) {
       reference: bankRef,
       destination: (payoutMeta.phone as string | undefined) ?? user.phone ?? null,
       network,
+    })
+
+    void notify({
+      userId,
+      kind: 'withdrawal',
+      title: 'Withdrawal requested',
+      body: `Your withdrawal of ${formatMoneyWithCurrency(amount, user.currency)} is being processed. You will be told as soon as it is sent.`,
+      metadata: { amount: amount, currency: user.currency },
     })
     return NextResponse.json({ message: PROCESSING_MESSAGE, pending: true }, { status: 202 })
   }

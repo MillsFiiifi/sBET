@@ -7,6 +7,8 @@ import { getCountry, normalizePhone } from '@/lib/countries'
 import { sendWithdrawalRequest } from '@/lib/telegram'
 import { notifyWithdrawalRequested } from '@/lib/withdrawal-sms'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
+import { notify } from '@/lib/notifications-store'
+import { formatMoneyWithCurrency } from '@/lib/format-money'
 
 export const dynamic = 'force-dynamic'
 
@@ -140,6 +142,14 @@ export async function POST(request: Request) {
     amount,
     currency: wallet.currency,
     reference,
+  })
+
+  void notify({
+    userId: wallet.id,
+    kind: 'withdrawal',
+    title: 'Withdrawal requested',
+    body: `Your withdrawal of ${formatMoneyWithCurrency(amount, wallet.currency)} is being processed. You will be told as soon as it is sent.`,
+    metadata: { reference, amount, currency: wallet.currency },
   })
 
   void emailWithdrawalRequested({

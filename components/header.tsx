@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { Moon, Sun, Menu, X, Wallet } from 'lucide-react'
+import { Moon, Sun, Menu, X, Wallet, Bell } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { getUserId } from '@/lib/user-session'
@@ -15,6 +15,7 @@ export function Header() {
   const [userId, setUserId] = useState<string | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
   const [currency, setCurrency] = useState<string>('GHS')
+  const [unread, setUnread] = useState(0)
 
   useEffect(() => {
     setUserId(getUserId())
@@ -40,8 +41,26 @@ export function Header() {
         /* ignore */
       }
     }
+    // Badge count only — the bodies are the notifications page's job.
+    const loadUnread = async () => {
+      try {
+        const res = await fetch(`/api/users/${userId}/notifications?countOnly=1`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setUnread(typeof data.unread === 'number' ? data.unread : 0)
+      } catch {
+        /* ignore */
+      }
+    }
+
     void load()
-    const onFocus = () => void load()
+    void loadUnread()
+    const onFocus = () => {
+      void load()
+      void loadUnread()
+    }
     window.addEventListener('focus', onFocus)
     return () => {
       cancelled = true
@@ -130,6 +149,21 @@ export function Header() {
                 <span className="text-xs font-bold text-foreground tabular-nums whitespace-nowrap">
                   {balance === null ? '—' : `${currency} ${formatMoney(balance, currency)}`}
                 </span>
+              </Link>
+            )}
+
+            {userId && (
+              <Link
+                href="/me/notifications"
+                className="relative p-2 rounded-lg hover:bg-secondary transition-colors"
+                aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
+              >
+                <Bell className="w-5 h-5" />
+                {unread > 0 && (
+                  <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold leading-4 text-center">
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
               </Link>
             )}
 

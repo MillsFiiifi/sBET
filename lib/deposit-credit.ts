@@ -23,6 +23,8 @@ import {
 import { creditCommission, findSubAdminById } from '@/lib/sub-admins-store'
 import { COMMISSION_RATE, type AppUser } from '@/lib/types'
 import { getVerificationAmount } from '@/lib/countries'
+import { notify } from '@/lib/notifications-store'
+import { formatMoneyWithCurrency } from '@/lib/format-money'
 
 export interface ApplyDepositResult {
   user: AppUser
@@ -103,6 +105,16 @@ export async function applyDepositCredit(
       })
     }
   }
+
+  // Tell the player their money landed. In-app so it works with no SMS or
+  // email provider configured, which is the state this deployment is in.
+  void notify({
+    userId: user.id,
+    kind: 'deposit',
+    title: 'Deposit received',
+    body: `${formatMoneyWithCurrency(amount, user.currency)} has been added to your balance. New balance: ${formatMoneyWithCurrency(user.balance ?? 0, user.currency)}.`,
+    metadata: { amount, currency: user.currency, firstDeposit: result.isFirst },
+  })
 
   return { user, isFirstDeposit: result.isFirst, commission }
 }
