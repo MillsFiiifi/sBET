@@ -49,14 +49,20 @@ export async function notifyWithdrawalRequested(input: WithdrawalSmsInput): Prom
 /** Sent once the admin approves / the transfer settles — money is on its way. */
 export async function notifyWithdrawalPaid(input: WithdrawalSmsInput): Promise<void> {
   try {
+    // Laid out like the mobile-money receipts players already know — amount,
+    // sender, balance, reference — so it reads as a payment advice rather than
+    // marketing. PowerStakeBet is named as the sender because PowerStakeBet is
+    // who sent the money; the network sends its own receipt separately, and
+    // that one is theirs to send, not ours to imitate.
     const amt = formatMoneyWithCurrency(input.amount, input.currency)
     const bal =
       input.balance != null
         ? ` Available Balance: ${formatMoneyWithCurrency(input.balance, input.currency)}.`
         : ''
     const message =
-      `Payment received. You have received ${amt} to your mobile money from ` +
-      `PowerStakeBet.${bal} Ref: ${input.reference}. Thank you for playing with PowerStakeBet.`
+      `Payment received for ${amt} from POWERSTAKEBET.${bal} ` +
+      `Reference: ${input.reference}. Transaction fee: ${formatMoneyWithCurrency(0, input.currency)}. ` +
+      `Thank you for playing with PowerStakeBet.`
     const result = await sendSms({
       phone: input.phone,
       country: input.country,
