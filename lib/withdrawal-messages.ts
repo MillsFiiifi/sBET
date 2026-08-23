@@ -29,49 +29,27 @@ export function withdrawalRequestedMessage(input: WithdrawalMessageInput): strin
 }
 
 /**
- * Sent once the money is genuinely on its way.
+ * Sent once the money is genuinely on its way — SMS and in-app both.
  *
- * Opens with the brand and describes the payout in our own words. The earlier
- * wording — "Payment received for GHS X from POWERSTAKEBET. Available Balance:
- * … Transaction fee: …" — copied the shape of a mobile-money receipt, and
- * Arkesel held every one of them at PENDING APPROVAL. Credits were charged,
- * nothing was delivered, and the send looked successful from our side.
- *
- * Narrowed down against the live API, same number and sender, seconds apart:
+ * ⚠️ Arkesel holds any message containing the phrase "Payment received" in a
+ * moderation queue. Tested four ways on the live API, same number and sender,
+ * seconds apart:
  *
  *   "Payment received for GHS X from POWERSTAKEBET. Available Balance..."  HELD
  *   "Payment received for GHS X from POWERSTAKEBET. Balance... Ref..."     HELD
  *   "PowerStakeBet: Payment received for GHS X. Balance... Ref..."         HELD
  *   "PowerStakeBet: Payment of GHS X sent to your mobile money..."         DELIVERED
  *
- * The trigger is the phrase "Payment received" itself, wherever it appears —
- * it is how mobile-money receipts open, and how fake credit alerts open too.
- * "Payment ... sent" clears. If the operator wants "Payment received" back,
- * Arkesel support has to whitelist that template for the sender ID; it is
- * their moderation and cannot be worked around from here.
+ * The operator has chosen this wording anyway, knowing that: it is the wording
+ * they want players to see, and Arkesel support can whitelist the template for
+ * the sender ID. Until they do, the API returns success and charges a credit
+ * while the text sits unsent — so if withdrawal SMS "stops working", this is
+ * the first thing to check, not the key and not the sender ID.
+ *
+ * A delivering alternative is one edit away: "Payment of X sent to your mobile
+ * money" clears the filter untouched.
  */
 export function withdrawalPaidMessage(input: WithdrawalMessageInput): string {
-  const amt = formatMoneyWithCurrency(input.amount, input.currency)
-  const bal =
-    input.balance != null
-      ? ` Balance: ${formatMoneyWithCurrency(input.balance, input.currency)}.`
-      : ''
-  return (
-    `PowerStakeBet: Payment of ${amt} sent to your mobile money.${bal} ` +
-    `Ref: ${input.reference}. Thank you for playing with PowerStakeBet.`
-  )
-}
-
-/**
- * The in-app version of the same news.
- *
- * Deliberately worded differently from the SMS above, and it is the only place
- * the two are allowed to diverge. Nothing moderates an in-app message — it is
- * our own database and our own screen — so the full receipt layout the
- * operator wants lives here, where it actually reaches the player. The SMS
- * keeps the wording Arkesel will deliver.
- */
-export function withdrawalPaidNotification(input: WithdrawalMessageInput): string {
   const amt = formatMoneyWithCurrency(input.amount, input.currency)
   const bal =
     input.balance != null
@@ -82,6 +60,14 @@ export function withdrawalPaidNotification(input: WithdrawalMessageInput): strin
     `Reference: ${input.reference}. Transaction fee: ${formatMoneyWithCurrency(0, input.currency)}. ` +
     `Thank you for playing with PowerStakeBet.`
   )
+}
+
+/**
+ * The in-app copy. Identical to the SMS by delegation rather than by
+ * duplication, so the two can never drift apart again.
+ */
+export function withdrawalPaidNotification(input: WithdrawalMessageInput): string {
+  return withdrawalPaidMessage(input)
 }
 
 /** Sent when a payout is turned down and the money goes back. */
