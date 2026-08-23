@@ -22,7 +22,7 @@ import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 import { emailWithdrawalPaid } from '@/lib/withdrawal-email'
 import { notify } from '@/lib/notifications-store'
-import { withdrawalPaidMessage, withdrawalRejectedMessage } from '@/lib/withdrawal-messages'
+import { withdrawalPaidNotification, withdrawalRejectedMessage } from '@/lib/withdrawal-messages'
 
 export type SettleOutcome =
   | { ok: true; amount: number; currency: string; refunded: boolean }
@@ -92,8 +92,9 @@ export async function markWithdrawalPaid(
         userId: payment.userId,
         kind: 'withdrawal',
         title: 'Withdrawal sent',
-        // Word for word what the SMS says, so the two cannot disagree.
-        body: withdrawalPaidMessage({
+        // The full receipt wording. Only lives here: Arkesel holds anything
+        // containing "Payment received", so the SMS says it differently.
+        body: withdrawalPaidNotification({
           amount: payment.amount,
           currency: payment.currency,
           reference: payment.reference,
