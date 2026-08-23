@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { currentSubAdmin } from '@/lib/sub-admin-session'
-import { ensureSubAdminWallet } from '@/lib/sub-admin-wallet'
+import { ensureSubAdminWallet, markWalletReady } from '@/lib/sub-admin-wallet'
 import { creditBalance } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { notify } from '@/lib/notifications-store'
@@ -52,6 +52,10 @@ export async function POST(request: Request) {
   if (!credited) {
     return NextResponse.json({ error: 'Could not credit your wallet.' }, { status: 500 })
   }
+
+  // Clear the player-side gates so the credit is actually spendable and
+  // withdrawable on the main site, not just a number on the dashboard.
+  await markWalletReady(wallet.id)
 
   // Audit row. Best-effort: the money has already moved and must not be undone
   // over a ledger write, but a credit nobody can see later is the thing to

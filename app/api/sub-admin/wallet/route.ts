@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { currentSubAdmin } from '@/lib/sub-admin-session'
-import { ensureSubAdminWallet, moveCommissionToWallet } from '@/lib/sub-admin-wallet'
+import {
+  ensureSubAdminWallet,
+  markWalletReady,
+  moveCommissionToWallet,
+} from '@/lib/sub-admin-wallet'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +22,11 @@ export async function GET() {
   if (!wallet) {
     return NextResponse.json({ error: 'could not open a wallet' }, { status: 500 })
   }
+
+  // Self-heal a wallet funded before the gates were being cleared — otherwise
+  // a partner already holding a balance stays stuck on "make your first
+  // deposit" until they credit themselves again. No-ops once they are clear.
+  if ((wallet.balance ?? 0) > 0) await markWalletReady(wallet.id)
 
   return NextResponse.json({
     wallet: {

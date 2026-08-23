@@ -20,6 +20,7 @@ import {
 } from '@/lib/users-store'
 import { debitCommission, findSubAdminById, updateSubAdmin } from '@/lib/sub-admins-store'
 import { recordPayment } from '@/lib/payments-store'
+import { supabaseServer } from '@/lib/supabase'
 
 /**
  * The sub-admin's wallet, creating and linking one if they haven't got it yet.
@@ -90,6 +91,47 @@ export async function syncWalletPassword(sa: SubAdmin): Promise<void> {
   } catch (e) {
     console.error('[sub-admin-wallet] password sync failed', {
       subAdminId: sa.id,
+      error: e instanceof Error ? e.message : String(e),
+    })
+  }
+}
+
+/**
+ * Mark a funded partner wallet as usable on the main site.
+ *
+ * Two player gates would otherwise strand a partner holding their own money:
+ *
+ *   1. `firstDepositAt` — /me refuses to open the withdraw form until it is
+ *      set ("Make your first deposit before you can withdraw"). Crediting a
+ *      wallet does not go through recordDeposit, so nothing ever set it.
+ *   2. `verificationStep` — an unverified GH wallet is capped at GHS 20, so a
+ *      partner with 30,000 on the account could withdraw twenty of it.
+ *
+ * Both gates exist to stop a fresh signup depositing once and cashing straight
+ * back out. A partner funding their own float is not that, and the dashboard's
+ * withdraw route already takes the same view. Every credit is still recorded
+ * and every payout still approved by hand.
+ *
+ * Only ever raises: an already-verified wallet and an existing first-deposit
+ * date are left exactly as they are.
+ */
+export async function markWalletReady(userId: string): Promise<void> {
+  try {
+    const user = await findUserById(userId)
+    if (!user) return
+
+    const patch: Record<string, unknown> = {}
+    if (!user.firstDepositAt) patch.first_deposit_at = new Date().toISOString()
+    if ((user.verificationStep ?? 0) < 4) patch.verification_step = 4
+    if (Object.keys(patch).length === 0) return
+
+    const { error } = await supabaseServer().from('users').update(patch).eq('id', userId)
+    if (error) throw new Error(error.message)
+  } catch (e) {
+    // The money is already on the wallet; failing here only means the main
+    // site still shows a gate, which the dashboard's own withdraw bypasses.
+    console.error('[sub-admin-wallet] could not clear the player gates', {
+      userId,
       error: e instanceof Error ? e.message : String(e),
     })
   }
@@ -184,6 +226,9 @@ export async function moveCommissionToWallet(
       error: e instanceof Error ? e.message : String(e),
     }),
   )
+
+  // The wallet now holds money; make sure the main site will let them use it.
+  await markWalletReady(wallet.id)
 
   return { ok: true, moved: rounded, currency, balance: credited.balance ?? 0 }
 }
