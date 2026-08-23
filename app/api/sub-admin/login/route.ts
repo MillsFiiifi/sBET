@@ -6,6 +6,7 @@ import {
   SUB_ADMIN_COOKIE_MAX_AGE,
   signSubAdminSession,
 } from '@/lib/sub-admin-auth'
+import { ensureSubAdminWallet } from '@/lib/sub-admin-wallet'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,11 @@ export async function POST(request: Request) {
     )
   }
 
+  // One login, both sides. The wallet id goes back so the client can open a
+  // player session too — otherwise a sub-admin would have to sign in twice
+  // with the same credentials to bet with money they can already see.
+  const wallet = await ensureSubAdminWallet(sa)
+
   const token = await signSubAdminSession(sa.id, sa.passwordHash)
   const res = NextResponse.json({
     subAdmin: {
@@ -43,6 +49,7 @@ export async function POST(request: Request) {
       referralCode: sa.referralCode,
       approved: sa.approved,
     },
+    wallet: wallet ? { id: wallet.id, name: wallet.name, currency: wallet.currency } : null,
   })
   res.cookies.set(SUB_ADMIN_COOKIE, token, {
     httpOnly: true,

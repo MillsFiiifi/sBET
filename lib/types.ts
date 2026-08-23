@@ -99,6 +99,11 @@ export interface SubAdmin {
   commissionBalances: Partial<Record<'GHS' | 'NGN' | 'KES' | 'ZAR', number>>
   /** Per-currency lifetime totals. */
   totalCommissionEarnedBy: Partial<Record<'GHS' | 'NGN' | 'KES' | 'ZAR', number>>
+  /**
+   * The sub-admin's own betting wallet — a row in `users`. Null until the
+   * first time they need one; see lib/sub-admin-wallet.ts.
+   */
+  userId: string | null
 }
 
 export interface AppUser {

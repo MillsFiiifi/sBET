@@ -14,6 +14,7 @@ interface SubAdminRow {
   total_commission_earned: number
   commission_balances: Record<string, number> | null
   total_commission_earned_by: Record<string, number> | null
+  user_id: string | null
   created_at: string
 }
 
@@ -42,6 +43,7 @@ function rowToSubAdmin(row: SubAdminRow): SubAdmin {
     totalCommissionEarned: Number(row.total_commission_earned),
     commissionBalances: sanitiseCurrencyMap(row.commission_balances),
     totalCommissionEarnedBy: sanitiseCurrencyMap(row.total_commission_earned_by),
+    userId: row.user_id ?? null,
   }
 }
 
@@ -109,7 +111,9 @@ export async function findSubAdminByReferralCode(
 export async function addSubAdmin(
   input: Omit<
     SubAdmin,
-    'id' | 'createdAt' | 'commissionBalance' | 'totalCommissionEarned' | 'commissionBalances' | 'totalCommissionEarnedBy'
+    // userId too: a new sub-admin has no wallet yet, and one is created the
+    // first time they ask for it rather than at signup.
+    'id' | 'createdAt' | 'commissionBalance' | 'totalCommissionEarned' | 'commissionBalances' | 'totalCommissionEarnedBy' | 'userId'
   >,
 ): Promise<SubAdmin> {
   const { data, error } = await supabaseServer()
@@ -146,6 +150,7 @@ export async function updateSubAdmin(
     dbPatch.commission_balances = patch.commissionBalances
   if (patch.totalCommissionEarnedBy !== undefined)
     dbPatch.total_commission_earned_by = patch.totalCommissionEarnedBy
+  if (patch.userId !== undefined) dbPatch.user_id = patch.userId
 
   if (Object.keys(dbPatch).length === 0) {
     return findSubAdminById(id)

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { saveUserSession } from '@/lib/user-session'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Loader2, UserPlus, ArrowLeft } from 'lucide-react'
@@ -26,6 +27,11 @@ export default function SubAdminRegisterPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      // Open the betting session with the same sign-in. A sub-admin's wallet is
+      // a normal player account, and the rest of the site reads its id from
+      // here — without this they would have to log in a second time, with the
+      // same credentials, to stake the commission they can already see.
+      if (data.wallet?.id) saveUserSession(data.wallet.id, data.wallet.name)
       router.push('/sub-admin/dashboard')
       router.refresh()
     } catch (e) {

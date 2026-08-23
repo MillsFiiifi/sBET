@@ -14,9 +14,12 @@ import {
   Banknote,
   Coins,
   AlertTriangle,
+  ArrowRightLeft,
+  Ticket,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/format-money'
+import { saveUserSession } from '@/lib/user-session'
 
 /** "GHS 12.34 · NGN 5,000.00" — single-line summary of a currency map. */
 function formatCurrencyMap(map: Record<string, number> | undefined): string {
@@ -75,11 +78,68 @@ interface MeResponse {
   }[]
 }
 
+interface WalletResponse {
+  wallet: { id: string; name: string; balance: number; currency: string }
+  /** Commission in the wallet's currency — the only part that can be moved. */
+  available: number
+}
+
 export default function SubAdminDashboardPage() {
   const router = useRouter()
   const [data, setData] = useState<MeResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<'code' | 'link' | null>(null)
+  const [wallet, setWallet] = useState<WalletResponse | null>(null)
+  const [topUp, setTopUp] = useState<number | ''>('')
+  const [moving, setMoving] = useState(false)
+  const [walletMsg, setWalletMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+
+  const loadWallet = async () => {
+    try {
+      const res = await fetch('/api/sub-admin/wallet', { cache: 'no-store' })
+      if (!res.ok) return
+      const w = (await res.json()) as WalletResponse
+      setWallet(w)
+      // The rest of the site reads the player session from here, so refreshing
+      // the dashboard is enough to make betting work in the same browser.
+      saveUserSession(w.wallet.id, w.wallet.name)
+    } catch {
+      /* the dashboard still works without it */
+    }
+  }
+
+  async function moveCommission() {
+    const amount = Number(topUp)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setWalletMsg({ tone: 'bad', text: 'Enter an amount greater than zero.' })
+      return
+    }
+    setMoving(true)
+    setWalletMsg(null)
+    try {
+      const res = await fetch('/api/sub-admin/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setWalletMsg({ tone: 'bad', text: d.error ?? 'Transfer failed.' })
+        return
+      }
+      setWalletMsg({
+        tone: 'ok',
+        text: `${d.currency} ${formatMoney(d.moved, d.currency)} moved to your betting wallet.`,
+      })
+      setTopUp('')
+      // Both numbers changed — commission down, wallet up.
+      await Promise.all([load(), loadWallet()])
+    } catch (e) {
+      setWalletMsg({ tone: 'bad', text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setMoving(false)
+    }
+  }
 
   const load = async () => {
     try {
@@ -100,6 +160,7 @@ export default function SubAdminDashboardPage() {
 
   useEffect(() => {
     void load()
+    void loadWallet()
     const t = setInterval(load, 30_000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -298,6 +359,102 @@ export default function SubAdminDashboardPage() {
             value={formatCurrencyMap(withdrawnByCurrency)}
             sub={`${withdrawnCount} paid out`}
           />
+        </section>
+
+        {/* My betting wallet */}
+        <section className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <header className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-primary" />
+                My betting wallet
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Move your commission here to stake it. Same account, same login.
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-lg font-bold tabular-nums">
+                {wallet
+                  ? `${wallet.wallet.currency} ${formatMoney(wallet.wallet.balance, wallet.wallet.currency)}`
+                  : '—'}
+              </p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">balance</p>
+            </div>
+          </header>
+
+          {wallet && (
+            <>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                    {wallet.wallet.currency}
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={wallet.available}
+                    value={topUp}
+                    onChange={(e) => {
+                      setWalletMsg(null)
+                      const n = Number(e.target.value)
+                      setTopUp(e.target.value === '' ? '' : Number.isFinite(n) ? n : '')
+                    }}
+                    placeholder={`Up to ${formatMoney(wallet.available, wallet.wallet.currency)}`}
+                    className="w-full h-11 pl-14 pr-3 rounded-xl border border-border bg-background text-foreground text-base font-semibold tabular-nums outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+                  />
+                </div>
+                <Button
+                  onClick={moveCommission}
+                  disabled={moving || wallet.available <= 0}
+                  className="h-11 px-4 font-semibold shrink-0"
+                >
+                  {moving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <ArrowRightLeft className="w-4 h-4" />
+                      Move to wallet
+                    </>
+                  )}
+                </Button>
+                <Button asChild variant="secondary" className="h-11 px-4 font-semibold shrink-0">
+                  <Link href="/">
+                    <Ticket className="w-4 h-4" />
+                    Place a bet
+                  </Link>
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {wallet.available > 0 ? (
+                  <>
+                    {wallet.wallet.currency}{' '}
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {formatMoney(wallet.available, wallet.wallet.currency)}
+                    </span>{' '}
+                    available to move.
+                  </>
+                ) : (
+                  <>
+                    No {wallet.wallet.currency} commission to move yet. Commission earned in other
+                    currencies is paid out by the admin.
+                  </>
+                )}
+              </p>
+
+              {walletMsg && (
+                <p
+                  className={`text-xs font-medium ${
+                    walletMsg.tone === 'ok' ? 'text-primary' : 'text-destructive'
+                  }`}
+                >
+                  {walletMsg.text}
+                </p>
+              )}
+            </>
+          )}
         </section>
 
         {/* Referred users table */}

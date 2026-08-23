@@ -63,5 +63,6 @@ export const config = {
     '/api/admin/:path*',
     '/sub-admin/dashboard/:path*',
     '/api/sub-admin/me',
+    '/api/sub-admin/wallet',
   ],
 }

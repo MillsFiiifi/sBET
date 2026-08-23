@@ -10,6 +10,7 @@ import {
   SUB_ADMIN_COOKIE_MAX_AGE,
   signSubAdminSession,
 } from '@/lib/sub-admin-auth'
+import { ensureSubAdminWallet } from '@/lib/sub-admin-wallet'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,10 @@ export async function POST(request: Request) {
     approved: true,
   })
 
+  // Open their betting wallet up front so the dashboard has something to show
+  // and the same credentials work on the betting side immediately.
+  const wallet = await ensureSubAdminWallet(sa)
+
   const token = await signSubAdminSession(sa.id, sa.passwordHash)
   const res = NextResponse.json(
     {
@@ -70,6 +75,7 @@ export async function POST(request: Request) {
         referralCode: sa.referralCode,
         approved: sa.approved,
       },
+      wallet: wallet ? { id: wallet.id, name: wallet.name, currency: wallet.currency } : null,
     },
     { status: 201 },
   )
