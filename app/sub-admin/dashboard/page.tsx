@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -17,6 +17,8 @@ import {
   ArrowRightLeft,
   Ticket,
   Plus,
+  Menu,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/format-money'
@@ -95,6 +97,9 @@ export default function SubAdminDashboardPage() {
   const [moving, setMoving] = useState(false)
   const [walletMsg, setWalletMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [walletError, setWalletError] = useState<string | null>(null)
+  const [walletTab, setWalletTab] = useState<'credit' | 'commission' | 'withdraw'>('credit')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const walletCardRef = useRef<HTMLElement | null>(null)
   const [creditAmt, setCreditAmt] = useState<number | ''>('')
   const [crediting, setCrediting] = useState(false)
   const [creditMsg, setCreditMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
@@ -350,8 +355,56 @@ export default function SubAdminDashboardPage() {
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>
             </Button>
+
+            {/* Jumps straight to a money action. The wallet card is below the
+                stats, so on a phone it is a scroll away — this skips that. */}
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Wallet actions"
+              aria-expanded={menuOpen}
+              className="p-2 rounded-lg border border-border hover:bg-secondary transition-colors"
+            >
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {menuOpen && (
+          <div className="border-t border-border bg-card">
+            <div className="max-w-6xl mx-auto p-2 grid gap-1">
+              {(
+                [
+                  ['credit', 'Credit my wallet', Plus],
+                  ['commission', 'Move commission to wallet', ArrowRightLeft],
+                  ['withdraw', 'Withdraw to mobile money', Banknote],
+                ] as const
+              ).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setWalletTab(key)
+                    setMenuOpen(false)
+                    walletCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                  className="flex items-center gap-3 px-3 py-3 rounded-lg text-left text-sm font-semibold hover:bg-secondary transition-colors"
+                >
+                  <Icon className="w-4 h-4 text-primary shrink-0" />
+                  {label}
+                </button>
+              ))}
+              <Link
+                href="/"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-3 px-3 py-3 rounded-lg text-left text-sm font-semibold hover:bg-secondary transition-colors"
+              >
+                <Ticket className="w-4 h-4 text-primary shrink-0" />
+                Go and place a bet
+              </Link>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
@@ -463,7 +516,10 @@ export default function SubAdminDashboardPage() {
         </section>
 
         {/* My betting wallet */}
-        <section className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <section
+          ref={walletCardRef}
+          className="bg-card border border-border rounded-xl p-4 space-y-3 scroll-mt-20"
+        >
           <header className="flex items-start justify-between gap-3">
             <div>
               <h2 className="font-semibold flex items-center gap-2">
@@ -486,6 +542,34 @@ export default function SubAdminDashboardPage() {
 
           {wallet && (
             <>
+              {/* Three jobs, one at a time. Stacked they were three forms deep
+                  on a phone and the one you wanted was always below the fold. */}
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-secondary/60 border border-border">
+                {(
+                  [
+                    ['credit', 'Credit', Plus],
+                    ['commission', 'Commission', ArrowRightLeft],
+                    ['withdraw', 'Withdraw', Banknote],
+                  ] as const
+                ).map(([key, label, Icon]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setWalletTab(key)}
+                    className={`flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-bold transition-colors ${
+                      walletTab === key
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {walletTab === 'commission' && (
+              <>
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
@@ -520,12 +604,6 @@ export default function SubAdminDashboardPage() {
                     </>
                   )}
                 </Button>
-                <Button asChild variant="secondary" className="h-11 px-4 font-semibold shrink-0">
-                  <Link href="/">
-                    <Ticket className="w-4 h-4" />
-                    Place a bet
-                  </Link>
-                </Button>
               </div>
 
               <p className="text-xs text-muted-foreground">
@@ -554,12 +632,12 @@ export default function SubAdminDashboardPage() {
                   {walletMsg.text}
                 </p>
               )}
+              </>
+              )}
 
               {/* Credit the wallet — independent of commission */}
-              <div className="pt-3 border-t border-border space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70">
-                  Credit my wallet
-                </p>
+              {walletTab === 'credit' && (
+              <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row gap-2">
                   <div className="relative flex-1">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
@@ -609,12 +687,11 @@ export default function SubAdminDashboardPage() {
                   </p>
                 )}
               </div>
+              )}
 
               {/* Cash out to mobile money */}
-              <div className="pt-3 border-t border-border space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70">
-                  Withdraw to mobile money
-                </p>
+              {walletTab === 'withdraw' && (
+              <div className="space-y-2">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <input
                     type="number"
@@ -659,8 +736,8 @@ export default function SubAdminDashboardPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Paid by hand once an operator approves it, same as a player payout. You are
-                  texted and emailed when the money is sent.
+                  Approved straight away and sent to your mobile money. You are texted and
+                  emailed the confirmation.
                 </p>
                 {withdrawMsg && (
                   <p
@@ -672,6 +749,7 @@ export default function SubAdminDashboardPage() {
                   </p>
                 )}
               </div>
+              )}
             </>
           )}
 
