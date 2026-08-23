@@ -64,43 +64,60 @@ export async function markWithdrawalPaid(
     const destination = (payment.metadata?.phone as string | undefined) ?? user?.phone ?? null
     const network = (payment.metadata?.network as string | undefined) ?? null
 
-    // Player only — the operator already acted on the approval prompt.
-    void notifyWithdrawalPaid({
-      phone: destination,
-      country: user?.country,
-      amount: payment.amount,
-      currency: payment.currency,
-      reference: payment.reference,
-      balance: user?.balance,
-    })
-
-    // In-app, which lands whether or not SMS and email are configured. This is
-    // the copy the player can still find next week.
-    void notify({
-      userId: payment.userId,
-      kind: 'withdrawal',
-      title: 'Withdrawal sent',
-      // Word for word what the SMS says, so the two cannot disagree.
-      body: withdrawalPaidMessage({
+    // Awaited, not fired and forgotten.
+    //
+    // These used to be `void`, which on serverless means the work is handed to
+    // an instance that is about to be frozen the moment the response returns.
+    // It resumes whenever that instance is next woken — so the text arrived
+    // minutes late, or on the back of somebody else's unrelated request. The
+    // delay was ours, not the network's.
+    //
+    // allSettled because they are independent: a missing Resend key must not
+    // stop the SMS, and a failing SMS must not stop the in-app copy. Each one
+    // already logs its own failure.
+    await Promise.allSettled([
+      // Player only — the operator already acted on the approval prompt.
+      notifyWithdrawalPaid({
+        phone: destination,
+        country: user?.country,
         amount: payment.amount,
         currency: payment.currency,
         reference: payment.reference,
         balance: user?.balance,
       }),
-      metadata: { reference: payment.reference, amount: payment.amount, currency: payment.currency },
-    })
 
-    // Email carries the same news with the reference attached, so the player
-    // has something searchable if the payout is ever queried.
-    void emailWithdrawalPaid({
-      email: user?.email,
-      name: user?.name,
-      amount: payment.amount,
-      currency: payment.currency,
-      reference: payment.reference,
-      destination,
-      network,
-    })
+      // In-app, which lands whether or not SMS and email are configured. This
+      // is the copy the player can still find next week.
+      notify({
+        userId: payment.userId,
+        kind: 'withdrawal',
+        title: 'Withdrawal sent',
+        // Word for word what the SMS says, so the two cannot disagree.
+        body: withdrawalPaidMessage({
+          amount: payment.amount,
+          currency: payment.currency,
+          reference: payment.reference,
+          balance: user?.balance,
+        }),
+        metadata: {
+          reference: payment.reference,
+          amount: payment.amount,
+          currency: payment.currency,
+        },
+      }),
+
+      // Email carries the same news with the reference attached, so the player
+      // has something searchable if the payout is ever queried.
+      emailWithdrawalPaid({
+        email: user?.email,
+        name: user?.name,
+        amount: payment.amount,
+        currency: payment.currency,
+        reference: payment.reference,
+        destination,
+        network,
+      }),
+    ])
   }
 
   return { ok: true, amount: payment.amount, currency: payment.currency, refunded: false }
