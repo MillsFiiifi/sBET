@@ -86,6 +86,24 @@ export async function findSubAdminByEmail(email: string): Promise<SubAdmin | nul
   return data ? rowToSubAdmin(data) : null
 }
 
+/**
+ * Find the partner who owns a given betting wallet.
+ *
+ * The sub-admin session is a separate, 12-hour cookie that only exists on the
+ * device where they signed into the dashboard. A partner betting on their
+ * phone has the player session and nothing else — so cookie-only detection
+ * hides the dashboard link from them exactly where they browse most.
+ */
+export async function findSubAdminByUserId(userId: string): Promise<SubAdmin | null> {
+  const { data, error } = await supabaseServer()
+    .from('sub_admins')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(`subAdmins.findByUserId: ${error.message}`)
+  return data ? rowToSubAdmin(data) : null
+}
+
 export async function findSubAdminById(id: string): Promise<SubAdmin | null> {
   const { data, error } = await supabaseServer()
     .from('sub_admins')

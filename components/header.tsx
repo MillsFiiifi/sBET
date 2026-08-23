@@ -19,14 +19,20 @@ export function Header() {
   const [isSubAdmin, setIsSubAdmin] = useState(false)
 
   useEffect(() => {
-    setUserId(getUserId())
+    const id = getUserId()
+    setUserId(id)
     setIsDark(document.documentElement.classList.contains('dark'))
 
     // Separate cookie from the player session, and httpOnly — the only way to
-    // know is to ask. Costs nothing for ordinary players: with no cookie to
-    // parse the route answers before it reaches the database.
+    // know is to ask. The userId goes along because a partner on their phone
+    // usually has the player session and no dashboard cookie; without it the
+    // link only ever appeared on the machine they last signed into the
+    // dashboard from, and only for twelve hours.
     let cancelled = false
-    void fetch('/api/sub-admin/session', { cache: 'no-store' })
+    const url = id
+      ? `/api/sub-admin/session?userId=${encodeURIComponent(id)}`
+      : '/api/sub-admin/session'
+    void fetch(url, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!cancelled && d?.isSubAdmin) setIsSubAdmin(true)
