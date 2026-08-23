@@ -74,8 +74,13 @@ const NETWORKS: { provider: 'mtn' | 'vod' | 'atl'; short: string; label: string 
 // The OTP and polling steps are identical either way — the two gateways expose
 // the same request and response shapes on purpose, so this is the only line
 // that needs to change.
+//
+// Written `null as InstantGateway | null` rather than a bare `null`: with a
+// bare one TypeScript narrows the const to the literal, decides the gateway
+// lookup below is unreachable, and types it `never` — so turning the tab off
+// breaks the compile of the code that only runs when it is on.
 type InstantGateway = 'flutterwave' | 'akwapay'
-const INSTANT_GATEWAY: InstantGateway | null = 'akwapay'
+const INSTANT_GATEWAY = null as InstantGateway | null
 
 // `card` is whether the gateway can also take a hosted card payment. The
 // checkout redirect is a Flutterwave product; AkwaPay is mobile money only, so
