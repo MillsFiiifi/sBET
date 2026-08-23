@@ -93,6 +93,7 @@ export default function SubAdminDashboardPage() {
   const [topUp, setTopUp] = useState<number | ''>('')
   const [moving, setMoving] = useState(false)
   const [walletMsg, setWalletMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+  const [walletError, setWalletError] = useState<string | null>(null)
   const [cashOut, setCashOut] = useState<number | ''>('')
   const [payoutPhone, setPayoutPhone] = useState('')
   const [payoutNetwork, setPayoutNetwork] = useState('mtn')
@@ -102,14 +103,25 @@ export default function SubAdminDashboardPage() {
   const loadWallet = async () => {
     try {
       const res = await fetch('/api/sub-admin/wallet', { cache: 'no-store' })
-      if (!res.ok) return
+      if (!res.ok) {
+        // An empty card with no explanation is worse than none — this is what
+        // a missing `sub_admins.user_id` column looks like from out here.
+        const d = await res.json().catch(() => ({}))
+        setWalletError(
+          d.error
+            ? `Wallet unavailable: ${d.error}`
+            : 'Your betting wallet could not be opened. Contact the admin.',
+        )
+        return
+      }
+      setWalletError(null)
       const w = (await res.json()) as WalletResponse
       setWallet(w)
       // The rest of the site reads the player session from here, so refreshing
       // the dashboard is enough to make betting work in the same browser.
       saveUserSession(w.wallet.id, w.wallet.name)
     } catch {
-      /* the dashboard still works without it */
+      setWalletError('Your betting wallet could not be reached. Try again shortly.')
     }
   }
 
@@ -284,10 +296,20 @@ export default function SubAdminDashboardPage() {
               {sa.name}
             </span>
           </div>
-          <Button onClick={handleLogout} variant="outline" size="sm" className="gap-2">
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Logout</span>
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* A partner is also a player. This is here rather than only inside
+                the wallet card so it survives the wallet failing to load. */}
+            <Button asChild size="sm" className="gap-2">
+              <Link href="/">
+                <Ticket className="w-4 h-4" />
+                <span className="hidden sm:inline">Bet</span>
+              </Link>
+            </Button>
+            <Button onClick={handleLogout} variant="outline" size="sm" className="gap-2">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -555,6 +577,12 @@ export default function SubAdminDashboardPage() {
                 )}
               </div>
             </>
+          )}
+
+          {!wallet && (
+            <p className="text-xs text-muted-foreground">
+              {walletError ?? 'Opening your wallet…'}
+            </p>
           )}
         </section>
 
