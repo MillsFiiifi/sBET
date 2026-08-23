@@ -93,6 +93,11 @@ export default function SubAdminDashboardPage() {
   const [topUp, setTopUp] = useState<number | ''>('')
   const [moving, setMoving] = useState(false)
   const [walletMsg, setWalletMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+  const [cashOut, setCashOut] = useState<number | ''>('')
+  const [payoutPhone, setPayoutPhone] = useState('')
+  const [payoutNetwork, setPayoutNetwork] = useState('mtn')
+  const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawMsg, setWithdrawMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
 
   const loadWallet = async () => {
     try {
@@ -138,6 +143,39 @@ export default function SubAdminDashboardPage() {
       setWalletMsg({ tone: 'bad', text: e instanceof Error ? e.message : String(e) })
     } finally {
       setMoving(false)
+    }
+  }
+
+  async function requestWithdrawal() {
+    const amount = Number(cashOut)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setWithdrawMsg({ tone: 'bad', text: 'Enter an amount greater than zero.' })
+      return
+    }
+    if (!payoutPhone.trim()) {
+      setWithdrawMsg({ tone: 'bad', text: 'Enter the mobile-money number to pay.' })
+      return
+    }
+    setWithdrawing(true)
+    setWithdrawMsg(null)
+    try {
+      const res = await fetch('/api/sub-admin/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, phone: payoutPhone.trim(), network: payoutNetwork }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setWithdrawMsg({ tone: 'bad', text: d.error ?? 'Withdrawal failed.' })
+        return
+      }
+      setWithdrawMsg({ tone: 'ok', text: d.message ?? 'Withdrawal requested.' })
+      setCashOut('')
+      await loadWallet()
+    } catch (e) {
+      setWithdrawMsg({ tone: 'bad', text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setWithdrawing(false)
     }
   }
 
@@ -453,6 +491,69 @@ export default function SubAdminDashboardPage() {
                   {walletMsg.text}
                 </p>
               )}
+
+              {/* Cash out to mobile money */}
+              <div className="pt-3 border-t border-border space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70">
+                  Withdraw to mobile money
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    value={cashOut}
+                    onChange={(e) => {
+                      setWithdrawMsg(null)
+                      const n = Number(e.target.value)
+                      setCashOut(e.target.value === '' ? '' : Number.isFinite(n) ? n : '')
+                    }}
+                    placeholder={`Amount (${wallet.wallet.currency})`}
+                    className="h-11 px-3 rounded-xl border border-border bg-background text-foreground text-base font-semibold tabular-nums outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+                  />
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={payoutPhone}
+                    onChange={(e) => {
+                      setWithdrawMsg(null)
+                      setPayoutPhone(e.target.value)
+                    }}
+                    placeholder="MoMo number"
+                    className="h-11 px-3 rounded-xl border border-border bg-background text-foreground text-base font-semibold outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+                  />
+                  <select
+                    value={payoutNetwork}
+                    onChange={(e) => setPayoutNetwork(e.target.value)}
+                    className="h-11 px-3 rounded-xl border border-border bg-background text-foreground text-sm font-semibold outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+                  >
+                    <option value="mtn">MTN MoMo</option>
+                    <option value="telecel">Telecel Cash</option>
+                    <option value="airteltigo">AirtelTigo</option>
+                  </select>
+                  <Button
+                    onClick={requestWithdrawal}
+                    disabled={withdrawing || (wallet.wallet.balance ?? 0) <= 0}
+                    variant="secondary"
+                    className="h-11 font-semibold"
+                  >
+                    {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Withdraw'}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Paid by hand once an operator approves it, same as a player payout. You are
+                  texted and emailed when the money is sent.
+                </p>
+                {withdrawMsg && (
+                  <p
+                    className={`text-xs font-medium ${
+                      withdrawMsg.tone === 'ok' ? 'text-primary' : 'text-destructive'
+                    }`}
+                  >
+                    {withdrawMsg.text}
+                  </p>
+                )}
+              </div>
             </>
           )}
         </section>

@@ -64,5 +64,6 @@ export const config = {
     '/sub-admin/dashboard/:path*',
     '/api/sub-admin/me',
     '/api/sub-admin/wallet',
+    '/api/sub-admin/withdraw',
   ],
 }
