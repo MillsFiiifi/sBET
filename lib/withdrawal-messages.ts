@@ -28,17 +28,28 @@ export function withdrawalRequestedMessage(input: WithdrawalMessageInput): strin
   )
 }
 
-/** Sent once the money is genuinely on its way. */
+/**
+ * Sent once the money is genuinely on its way.
+ *
+ * Opens with the brand and describes the payout in our own words. The earlier
+ * wording — "Payment received for GHS X from POWERSTAKEBET. Available Balance:
+ * … Transaction fee: …" — copied the shape of a mobile-money receipt, and
+ * Arkesel held every one of them at PENDING APPROVAL. Credits were charged,
+ * nothing was delivered, and the send looked successful from our side.
+ *
+ * Verified against the live API: the receipt-shaped version sits in moderation,
+ * this one comes back DELIVERED. Keep it reading like a message from a
+ * bookmaker rather than one from a network.
+ */
 export function withdrawalPaidMessage(input: WithdrawalMessageInput): string {
   const amt = formatMoneyWithCurrency(input.amount, input.currency)
   const bal =
     input.balance != null
-      ? ` Available Balance: ${formatMoneyWithCurrency(input.balance, input.currency)}.`
+      ? ` Balance: ${formatMoneyWithCurrency(input.balance, input.currency)}.`
       : ''
   return (
-    `Payment received for ${amt} from POWERSTAKEBET.${bal} ` +
-    `Reference: ${input.reference}. Transaction fee: ${formatMoneyWithCurrency(0, input.currency)}. ` +
-    `Thank you for playing with PowerStakeBet.`
+    `PowerStakeBet: Your withdrawal of ${amt} has been sent to your mobile money.${bal} ` +
+    `Ref: ${input.reference}. Thank you for playing with PowerStakeBet.`
   )
 }
 
