@@ -26,6 +26,8 @@ import { sendWithdrawalRequest } from '@/lib/telegram'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
 import { notify } from '@/lib/notifications-store'
 import { withdrawalRequestedMessage } from '@/lib/withdrawal-messages'
+import { findSubAdminByUserId } from '@/lib/sub-admins-store'
+import { markWithdrawalPaid } from '@/lib/withdrawal-settle'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,6 +63,36 @@ async function promptOperatorPayout(
     await sendWithdrawalRequest(input)
   } catch (e) {
     console.warn('[withdraw] operator payout prompt failed:', e)
+  }
+}
+
+/**
+ * Partners settle on request; players wait for approval.
+ *
+ * A sub-admin's wallet is an ordinary `users` row, so cashing out from /me
+ * lands in this route rather than the dashboard one — and used to be told
+ * "we'll message you when it's approved", by an operator who is themselves.
+ * Same rule as /api/sub-admin/withdraw, applied wherever the partner happens
+ * to be standing.
+ *
+ * Only safe on paths that already debited the balance. Returns true when it
+ * settled, so the caller skips the "requested" messages — markWithdrawalPaid
+ * has already sent the "payment received" ones.
+ */
+async function settleIfPartnerWallet(paymentId: string, userId: string): Promise<boolean> {
+  try {
+    const partner = await findSubAdminByUserId(userId)
+    if (!partner) return false
+    const settled = await markWithdrawalPaid(paymentId, `sub-admin self-payout (${partner.name})`)
+    if (settled.ok) return true
+    console.error('[withdraw] partner auto-settle failed, left pending', {
+      paymentId,
+      reason: settled.reason,
+    })
+    return false
+  } catch (e) {
+    console.error('[withdraw] partner lookup failed, leaving pending:', e)
+    return false
   }
 }
 
@@ -287,6 +319,14 @@ export async function POST(request: Request) {
         })
       }
 
+      // The balance is already debited on this path, so a partner can settle
+      // here and now. The operator prompt above still goes out — someone has
+      // to send the mobile money either way.
+      const partnerSettled = queued
+        ? await settleIfPartnerWallet(queued.id, userId)
+        : false
+
+      if (!partnerSettled) {
       void sendSms({
         phone: user.phone,
         country: user.country,
@@ -318,6 +358,7 @@ export async function POST(request: Request) {
         }),
         metadata: { amount: roundedAmount, currency: user.currency },
       })
+      }
 
       return NextResponse.json(
         {
