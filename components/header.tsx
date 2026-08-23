@@ -170,12 +170,16 @@ export function Header() {
             )}
 
             {isSubAdmin && (
+              // Visible on mobile too, not just desktop: burying the only way
+              // into the dashboard inside the hamburger meant partners on
+              // phones could not find it at all.
               <Link
                 href="/sub-admin/dashboard"
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/40 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+                aria-label="Partner dashboard"
+                className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-full bg-primary/10 border border-primary/40 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
               >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                Partner
+                <LayoutDashboard className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Partner</span>
               </Link>
             )}
 
