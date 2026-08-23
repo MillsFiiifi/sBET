@@ -9,7 +9,7 @@ import { markWithdrawalPaid } from '@/lib/withdrawal-settle'
 import { notifyWithdrawalRequested } from '@/lib/withdrawal-sms'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
 import { notify } from '@/lib/notifications-store'
-import { formatMoneyWithCurrency } from '@/lib/format-money'
+import { withdrawalRequestedMessage } from '@/lib/withdrawal-messages'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,7 +168,11 @@ export async function POST(request: Request) {
         userId: wallet.id,
         kind: 'withdrawal',
         title: 'Withdrawal requested',
-        body: `Your withdrawal of ${formatMoneyWithCurrency(amount, wallet.currency)} is being processed. You will be told as soon as it is sent.`,
+        body: withdrawalRequestedMessage({
+          amount: amount,
+          currency: wallet.currency,
+          reference,
+        }),
         metadata: { reference, amount, currency: wallet.currency },
       })
 

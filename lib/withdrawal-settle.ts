@@ -22,7 +22,7 @@ import { reverseCommissionOnWithdrawal } from '@/lib/withdrawal-commission'
 import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 import { emailWithdrawalPaid } from '@/lib/withdrawal-email'
 import { notify } from '@/lib/notifications-store'
-import { formatMoneyWithCurrency } from '@/lib/format-money'
+import { withdrawalPaidMessage, withdrawalRejectedMessage } from '@/lib/withdrawal-messages'
 
 export type SettleOutcome =
   | { ok: true; amount: number; currency: string; refunded: boolean }
@@ -80,7 +80,13 @@ export async function markWithdrawalPaid(
       userId: payment.userId,
       kind: 'withdrawal',
       title: 'Withdrawal sent',
-      body: `${formatMoneyWithCurrency(payment.amount, payment.currency)} has been sent to your mobile money${destination ? ` (${destination})` : ''}.`,
+      // Word for word what the SMS says, so the two cannot disagree.
+      body: withdrawalPaidMessage({
+        amount: payment.amount,
+        currency: payment.currency,
+        reference: payment.reference,
+        balance: user?.balance,
+      }),
       metadata: { reference: payment.reference, amount: payment.amount, currency: payment.currency },
     })
 
@@ -143,9 +149,13 @@ export async function rejectWithdrawal(
     userId: payment.userId,
     kind: 'withdrawal',
     title: reserved ? 'Withdrawal declined — money returned' : 'Withdrawal declined',
-    body: reserved
-      ? `Your withdrawal of ${formatMoneyWithCurrency(payment.amount, payment.currency)} could not be completed and the money is back in your balance.${note ? ` Reason: ${note}` : ''}`
-      : `Your withdrawal of ${formatMoneyWithCurrency(payment.amount, payment.currency)} could not be completed.${note ? ` Reason: ${note}` : ''}`,
+    body: withdrawalRejectedMessage({
+      amount: payment.amount,
+      currency: payment.currency,
+      reference: payment.reference,
+      refunded: reserved,
+      note,
+    }),
     metadata: { reference: payment.reference, amount: payment.amount, currency: payment.currency },
   })
 

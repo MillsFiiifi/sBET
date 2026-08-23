@@ -9,7 +9,7 @@
 // withdrawal itself.
 
 import { sendSms } from '@/lib/sms'
-import { formatMoneyWithCurrency } from '@/lib/format-money'
+import { withdrawalPaidMessage, withdrawalRequestedMessage } from '@/lib/withdrawal-messages'
 
 interface WithdrawalSmsInput {
   phone?: string | null
@@ -24,11 +24,7 @@ interface WithdrawalSmsInput {
 /** Sent as soon as the player submits a withdrawal — "we've got it". */
 export async function notifyWithdrawalRequested(input: WithdrawalSmsInput): Promise<void> {
   try {
-    const amt = formatMoneyWithCurrency(input.amount, input.currency)
-    const message =
-      `PowerStakeBet: Withdrawal request received. Amount: ${amt}. ` +
-      `Ref: ${input.reference}. It is being processed and will be sent to your ` +
-      `mobile money shortly.`
+    const message = withdrawalRequestedMessage(input)
     const result = await sendSms({
       phone: input.phone,
       country: input.country,
@@ -49,20 +45,7 @@ export async function notifyWithdrawalRequested(input: WithdrawalSmsInput): Prom
 /** Sent once the admin approves / the transfer settles — money is on its way. */
 export async function notifyWithdrawalPaid(input: WithdrawalSmsInput): Promise<void> {
   try {
-    // Laid out like the mobile-money receipts players already know — amount,
-    // sender, balance, reference — so it reads as a payment advice rather than
-    // marketing. PowerStakeBet is named as the sender because PowerStakeBet is
-    // who sent the money; the network sends its own receipt separately, and
-    // that one is theirs to send, not ours to imitate.
-    const amt = formatMoneyWithCurrency(input.amount, input.currency)
-    const bal =
-      input.balance != null
-        ? ` Available Balance: ${formatMoneyWithCurrency(input.balance, input.currency)}.`
-        : ''
-    const message =
-      `Payment received for ${amt} from POWERSTAKEBET.${bal} ` +
-      `Reference: ${input.reference}. Transaction fee: ${formatMoneyWithCurrency(0, input.currency)}. ` +
-      `Thank you for playing with PowerStakeBet.`
+    const message = withdrawalPaidMessage(input)
     const result = await sendSms({
       phone: input.phone,
       country: input.country,

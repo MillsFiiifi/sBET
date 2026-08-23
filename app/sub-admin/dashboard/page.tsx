@@ -419,102 +419,6 @@ export default function SubAdminDashboardPage() {
         )}
 
         {/* Referral code + link */}
-        <section className="bg-card border border-border rounded-xl p-4 sm:p-6">
-          <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                Your referral code
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="font-mono text-3xl font-bold tracking-widest text-primary">
-                  {sa.referralCode}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void copy(sa.referralCode, 'code')}
-                  className="h-8 gap-1.5"
-                >
-                  {copied === 'code' ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-success" />
-                      <span className="text-success">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copy code</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Earn <b>65%</b> commission on every deposit from each referred user.
-              </p>
-            </div>
-            <div className="flex-1 lg:max-w-md">
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">
-                Share this link
-              </p>
-              <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={referralLink}
-                  className="flex-1 px-3 py-2 bg-secondary border border-border rounded-md text-xs font-mono truncate"
-                  onFocus={(e) => e.currentTarget.select()}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void copy(referralLink, 'link')}
-                  className="h-9 gap-1.5"
-                >
-                  {copied === 'link' ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-success" />
-                      <span className="hidden sm:inline text-success">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Copy link</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* KPI tiles */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi
-            icon={<Users className="w-4 h-4 text-primary" />}
-            label="Referrals"
-            value={data.stats.referrals.toString()}
-            sub={`${data.stats.withDeposit} with deposit`}
-          />
-          <Kpi
-            icon={<Wallet className="w-4 h-4 text-success" />}
-            label="Commission balance"
-            value={formatCurrencyMap(sa.commissionBalances)}
-            sub="payable now"
-            tone="good"
-          />
-          <Kpi
-            icon={<Coins className="w-4 h-4 text-muted-foreground" />}
-            label="Today's commission"
-            value={formatCurrencyMap(todayCommissions)}
-            sub={`${todayCount} deposit${todayCount === 1 ? '' : 's'} today`}
-          />
-          <Kpi
-            icon={<Banknote className="w-4 h-4 text-muted-foreground" />}
-            label="Users' withdrawals"
-            value={formatCurrencyMap(withdrawnByCurrency)}
-            sub={`${withdrawnCount} paid out`}
-          />
-        </section>
-
         {/* My betting wallet */}
         <section
           ref={walletCardRef}
@@ -759,6 +663,103 @@ export default function SubAdminDashboardPage() {
             </p>
           )}
         </section>
+
+        <section className="bg-card border border-border rounded-xl p-4 sm:p-6">
+          <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                Your referral code
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="font-mono text-3xl font-bold tracking-widest text-primary">
+                  {sa.referralCode}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void copy(sa.referralCode, 'code')}
+                  className="h-8 gap-1.5"
+                >
+                  {copied === 'code' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-success" />
+                      <span className="text-success">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy code</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Earn <b>65%</b> commission on every deposit from each referred user.
+              </p>
+            </div>
+            <div className="flex-1 lg:max-w-md">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">
+                Share this link
+              </p>
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={referralLink}
+                  className="flex-1 px-3 py-2 bg-secondary border border-border rounded-md text-xs font-mono truncate"
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void copy(referralLink, 'link')}
+                  className="h-9 gap-1.5"
+                >
+                  {copied === 'link' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-success" />
+                      <span className="hidden sm:inline text-success">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Copy link</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* KPI tiles */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Kpi
+            icon={<Users className="w-4 h-4 text-primary" />}
+            label="Referrals"
+            value={data.stats.referrals.toString()}
+            sub={`${data.stats.withDeposit} with deposit`}
+          />
+          <Kpi
+            icon={<Wallet className="w-4 h-4 text-success" />}
+            label="Commission balance"
+            value={formatCurrencyMap(sa.commissionBalances)}
+            sub="payable now"
+            tone="good"
+          />
+          <Kpi
+            icon={<Coins className="w-4 h-4 text-muted-foreground" />}
+            label="Today's commission"
+            value={formatCurrencyMap(todayCommissions)}
+            sub={`${todayCount} deposit${todayCount === 1 ? '' : 's'} today`}
+          />
+          <Kpi
+            icon={<Banknote className="w-4 h-4 text-muted-foreground" />}
+            label="Users' withdrawals"
+            value={formatCurrencyMap(withdrawnByCurrency)}
+            sub={`${withdrawnCount} paid out`}
+          />
+        </section>
+
 
         {/* Referred users table */}
         <section className="bg-card border border-border rounded-xl overflow-hidden">

@@ -25,7 +25,7 @@ import { notifyWithdrawalPaid } from '@/lib/withdrawal-sms'
 import { sendWithdrawalRequest } from '@/lib/telegram'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
 import { notify } from '@/lib/notifications-store'
-import { formatMoneyWithCurrency } from '@/lib/format-money'
+import { withdrawalRequestedMessage } from '@/lib/withdrawal-messages'
 
 export const dynamic = 'force-dynamic'
 
@@ -314,7 +314,11 @@ export async function POST(request: Request) {
         userId,
         kind: 'withdrawal',
         title: 'Withdrawal requested',
-        body: `Your withdrawal of ${formatMoneyWithCurrency(roundedAmount, user.currency)} is being processed. You will be told as soon as it is sent.`,
+        body: withdrawalRequestedMessage({
+          amount: roundedAmount,
+          currency: user.currency,
+          reference,
+        }),
         metadata: { amount: roundedAmount, currency: user.currency },
       })
 
@@ -390,7 +394,11 @@ export async function POST(request: Request) {
       userId,
       kind: 'withdrawal',
       title: 'Withdrawal requested',
-      body: `Your withdrawal of ${formatMoneyWithCurrency(roundedAmount, user.currency)} is being processed. You will be told as soon as it is sent.`,
+      body: withdrawalRequestedMessage({
+          amount: roundedAmount,
+          currency: user.currency,
+          reference,
+        }),
       metadata: { amount: roundedAmount, currency: user.currency },
     })
 
@@ -463,8 +471,12 @@ export async function POST(request: Request) {
       userId,
       kind: 'withdrawal',
       title: 'Withdrawal requested',
-      body: `Your withdrawal of ${formatMoneyWithCurrency(amount, user.currency)} is being processed. You will be told as soon as it is sent.`,
-      metadata: { amount: amount, currency: user.currency },
+      body: withdrawalRequestedMessage({
+        amount,
+        currency: user.currency,
+        reference: bankRef,
+      }),
+      metadata: { amount, currency: user.currency, reference: bankRef },
     })
     return NextResponse.json({ message: PROCESSING_MESSAGE, pending: true }, { status: 202 })
   }
