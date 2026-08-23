@@ -32,7 +32,11 @@ export default function LoginPage() {
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
 
       saveUserSession(data.user.id, data.user.name)
-      router.push('/me')
+      // Home, not /me. Signing in is how someone starts a session, and the
+      // first thing they want is matches — /me is the account screen, so it
+      // opened on a balance and a Deposit button and read as a demand to pay
+      // before playing. Register already lands here.
+      router.push('/')
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
