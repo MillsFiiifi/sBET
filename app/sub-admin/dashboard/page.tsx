@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   Ticket,
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/format-money'
@@ -94,6 +95,9 @@ export default function SubAdminDashboardPage() {
   const [moving, setMoving] = useState(false)
   const [walletMsg, setWalletMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [walletError, setWalletError] = useState<string | null>(null)
+  const [creditAmt, setCreditAmt] = useState<number | ''>('')
+  const [crediting, setCrediting] = useState(false)
+  const [creditMsg, setCreditMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [cashOut, setCashOut] = useState<number | ''>('')
   const [payoutPhone, setPayoutPhone] = useState('')
   const [payoutNetwork, setPayoutNetwork] = useState('mtn')
@@ -155,6 +159,43 @@ export default function SubAdminDashboardPage() {
       setWalletMsg({ tone: 'bad', text: e instanceof Error ? e.message : String(e) })
     } finally {
       setMoving(false)
+    }
+  }
+
+  /**
+   * Put credit on the wallet. Nothing to do with commission — that transfer
+   * lives separately and is capped by what has been earned; this is float the
+   * partner adds to stake with.
+   */
+  async function creditWallet() {
+    const amount = Number(creditAmt)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setCreditMsg({ tone: 'bad', text: 'Enter an amount greater than zero.' })
+      return
+    }
+    setCrediting(true)
+    setCreditMsg(null)
+    try {
+      const res = await fetch('/api/sub-admin/wallet/credit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setCreditMsg({ tone: 'bad', text: d.error ?? 'Could not credit your wallet.' })
+        return
+      }
+      setCreditMsg({
+        tone: 'ok',
+        text: `${d.currency} ${formatMoney(d.credited, d.currency)} added. You can stake it now.`,
+      })
+      setCreditAmt('')
+      await loadWallet()
+    } catch (e) {
+      setCreditMsg({ tone: 'bad', text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setCrediting(false)
     }
   }
 
@@ -513,6 +554,61 @@ export default function SubAdminDashboardPage() {
                   {walletMsg.text}
                 </p>
               )}
+
+              {/* Credit the wallet — independent of commission */}
+              <div className="pt-3 border-t border-border space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70">
+                  Credit my wallet
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                      {wallet.wallet.currency}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      value={creditAmt}
+                      onChange={(e) => {
+                        setCreditMsg(null)
+                        const n = Number(e.target.value)
+                        setCreditAmt(e.target.value === '' ? '' : Number.isFinite(n) ? n : '')
+                      }}
+                      placeholder="Amount to add"
+                      className="w-full h-11 pl-14 pr-3 rounded-xl border border-border bg-background text-foreground text-base font-semibold tabular-nums outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+                    />
+                  </div>
+                  <Button
+                    onClick={creditWallet}
+                    disabled={crediting}
+                    className="h-11 px-4 font-semibold shrink-0"
+                  >
+                    {crediting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Credit wallet
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Adds credit straight to your betting balance. Separate from commission — this
+                  does not touch what you have earned. Every credit is recorded and visible to
+                  the admin.
+                </p>
+                {creditMsg && (
+                  <p
+                    className={`text-xs font-medium ${
+                      creditMsg.tone === 'ok' ? 'text-primary' : 'text-destructive'
+                    }`}
+                  >
+                    {creditMsg.text}
+                  </p>
+                )}
+              </div>
 
               {/* Cash out to mobile money */}
               <div className="pt-3 border-t border-border space-y-2">
