@@ -5,6 +5,7 @@ import { creditBalance, debitBalance } from '@/lib/users-store'
 import { recordPayment } from '@/lib/payments-store'
 import { getCountry, normalizePhone } from '@/lib/countries'
 import { sendWithdrawalRequest } from '@/lib/telegram'
+import { markWithdrawalPaid } from '@/lib/withdrawal-settle'
 import { notifyWithdrawalRequested } from '@/lib/withdrawal-sms'
 import { emailWithdrawalRequested } from '@/lib/withdrawal-email'
 import { notify } from '@/lib/notifications-store'
@@ -134,35 +135,59 @@ export async function POST(request: Request) {
       // Telegram outage must not lose it.
       console.warn('[sub-admin/withdraw] operator prompt failed:', e)
     }
+
+    // Settle it straight away rather than waiting for an approval tap.
+    //
+    // The approval step exists so an operator can vet a player's payout before
+    // money leaves. A partner cashing out their own float is the operator
+    // approving themselves, and the round trip only meant the confirmation
+    // never arrived. So the ledger closes here: the row goes to success,
+    // lifetime withdrawn is updated, and markWithdrawalPaid sends the "payment
+    // received" SMS, email and in-app message.
+    //
+    // The Telegram prompt above still goes out, because somebody does have to
+    // actually send the mobile money — settling the ledger does not move it.
+    // Its buttons become no-ops: markWithdrawalPaid only acts on a pending row.
+    const settled = await markWithdrawalPaid(queued.id, 'sub-admin self-payout')
+    if (!settled.ok) {
+      console.error('[sub-admin/withdraw] auto-settle failed, left pending', {
+        reference,
+        reason: settled.reason,
+      })
+      // Fall back to the two-step flow: say it is on its way, and the
+      // operator's Paid button still finishes it and sends the confirmation.
+      void notifyWithdrawalRequested({
+        phone,
+        country: wallet.country,
+        amount,
+        currency: wallet.currency,
+        reference,
+      })
+
+      void notify({
+        userId: wallet.id,
+        kind: 'withdrawal',
+        title: 'Withdrawal requested',
+        body: `Your withdrawal of ${formatMoneyWithCurrency(amount, wallet.currency)} is being processed. You will be told as soon as it is sent.`,
+        metadata: { reference, amount, currency: wallet.currency },
+      })
+
+      void emailWithdrawalRequested({
+        email: sa.email,
+        name: sa.name,
+        amount,
+        currency: wallet.currency,
+        reference,
+        destination: phone,
+        network,
+      })
+    }
+    // On the normal path markWithdrawalPaid has already sent the SMS, the
+    // email and the in-app message — sending a "requested" one first would
+    // just be two notifications a second apart saying different things.
   }
 
-  void notifyWithdrawalRequested({
-    phone,
-    country: wallet.country,
-    amount,
-    currency: wallet.currency,
-    reference,
-  })
-
-  void notify({
-    userId: wallet.id,
-    kind: 'withdrawal',
-    title: 'Withdrawal requested',
-    body: `Your withdrawal of ${formatMoneyWithCurrency(amount, wallet.currency)} is being processed. You will be told as soon as it is sent.`,
-    metadata: { reference, amount, currency: wallet.currency },
-  })
-
-  void emailWithdrawalRequested({
-    email: sa.email,
-    name: sa.name,
-    amount,
-    currency: wallet.currency,
-    reference,
-    destination: phone,
-    network,
-  })
-
-  console.log('[sub-admin/withdraw] queued', {
+  console.log('[sub-admin/withdraw] settled', {
     subAdminId: sa.id,
     amount,
     currency: wallet.currency,
@@ -171,13 +196,13 @@ export async function POST(request: Request) {
 
   return NextResponse.json(
     {
-      pending: true,
+      paid: true,
       reference,
       amount,
       currency: wallet.currency,
       balance: debited.user.balance ?? 0,
-      message: 'Withdrawal requested. You will be paid to your mobile money shortly.',
+      message: 'Withdrawal approved. The money is on its way to your mobile money.',
     },
-    { status: 202 },
+    { status: 200 },
   )
 }
