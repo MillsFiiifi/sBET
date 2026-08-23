@@ -39,7 +39,10 @@ export async function sendSms(input: {
   // configured. Recipients must be MSISDN without a leading "+".
   const arkeselKey = process.env.ARKESEL_API_KEY?.trim()
   if (arkeselKey) {
-    const sender = (process.env.ARKESEL_SENDER_ID || 'PluseAlerts').slice(0, 11)
+    // 'PulseAlerts', not 'Pluse' — the transposed spelling was the fallback
+    // here for months and Arkesel rejects an unregistered sender ID outright
+    // (code 111), so every send 403'd before it reached anyone.
+    const sender = (process.env.ARKESEL_SENDER_ID || 'PulseAlerts').slice(0, 11)
     const recipient = phone.replace(/^\+/, '')
     try {
       const res = await fetch('https://sms.arkesel.com/api/v2/sms/send', {

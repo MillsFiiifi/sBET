@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   // Presence only — never the values.
   const env = {
     ARKESEL_API_KEY: Boolean(process.env.ARKESEL_API_KEY?.trim()),
-    ARKESEL_SENDER_ID: process.env.ARKESEL_SENDER_ID?.trim() || '(default: PluseAlerts)',
+    ARKESEL_SENDER_ID: process.env.ARKESEL_SENDER_ID?.trim() || '(default: PulseAlerts)',
     SMS_PROVIDER: process.env.SMS_PROVIDER?.trim() || '(unset → twilio)',
     TWILIO_ACCOUNT_SID: Boolean(process.env.TWILIO_ACCOUNT_SID?.trim()),
   }
