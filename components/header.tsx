@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { Moon, Sun, Menu, X, Wallet, Bell } from 'lucide-react'
+import { Moon, Sun, Menu, X, Wallet, Bell, LayoutDashboard } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { getUserId } from '@/lib/user-session'
@@ -16,10 +16,27 @@ export function Header() {
   const [balance, setBalance] = useState<number | null>(null)
   const [currency, setCurrency] = useState<string>('GHS')
   const [unread, setUnread] = useState(0)
+  const [isSubAdmin, setIsSubAdmin] = useState(false)
 
   useEffect(() => {
     setUserId(getUserId())
     setIsDark(document.documentElement.classList.contains('dark'))
+
+    // Separate cookie from the player session, and httpOnly — the only way to
+    // know is to ask. Costs nothing for ordinary players: with no cookie to
+    // parse the route answers before it reaches the database.
+    let cancelled = false
+    void fetch('/api/sub-admin/session', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.isSubAdmin) setIsSubAdmin(true)
+      })
+      .catch(() => {
+        /* not a partner, or offline — either way, no link */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -152,6 +169,16 @@ export function Header() {
               </Link>
             )}
 
+            {isSubAdmin && (
+              <Link
+                href="/sub-admin/dashboard"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/40 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                Partner
+              </Link>
+            )}
+
             {userId && (
               <Link
                 href="/me/notifications"
@@ -272,6 +299,16 @@ export function Header() {
               >
                 Me
               </Link>
+              {isSubAdmin && (
+                <Link
+                  href="/sub-admin/dashboard"
+                  className="px-4 py-2 rounded-lg hover:bg-secondary transition-colors flex items-center gap-2 text-primary font-semibold"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  Partner dashboard
+                </Link>
+              )}
               {userId ? (
                 <div className="flex gap-2 mt-2 px-4">
                   <Link href={depositHref} className="flex-1" onClick={() => setIsMenuOpen(false)}>
