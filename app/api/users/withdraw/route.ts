@@ -32,9 +32,6 @@ export const dynamic = 'force-dynamic'
 const PROCESSING_MESSAGE =
   'Your withdrawal request has been received and is being processed. We will notify you shortly.'
 
-function buildWithdrawalRequestSms(amount: number, currency: string, network: string): string {
-  return `Your withdrawal request for ${currency} ${amount.toFixed(2)} to ${network.toUpperCase()} has been received. We will send you another message once your payment is approved.`
-}
 
 /**
  * Did Flutterwave refuse for a reason on *our* side rather than the player's?
@@ -65,10 +62,6 @@ async function promptOperatorPayout(
   } catch (e) {
     console.warn('[withdraw] operator payout prompt failed:', e)
   }
-}
-
-function buildWithdrawalApprovedSms(amount: number, currency: string, network: string): string {
-  return `Your withdrawal of ${currency} ${amount.toFixed(2)} to ${network.toUpperCase()} has been approved. The money is on its way to your mobile wallet.`
 }
 
 export async function POST(request: Request) {
@@ -297,8 +290,12 @@ export async function POST(request: Request) {
       void sendSms({
         phone: user.phone,
         country: user.country,
-        message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
-      }).catch((e) => console.error('[withdraw] request sms failed:', e))
+        message: withdrawalRequestedMessage({
+          amount: roundedAmount,
+          currency: user.currency,
+          reference: reference,
+        }),
+        }).catch((e) => console.error('[withdraw] request sms failed:', e))
 
       void emailWithdrawalRequested({
         email: user.email,
@@ -377,8 +374,12 @@ export async function POST(request: Request) {
     void sendSms({
       phone: user.phone,
       country: user.country,
-      message: buildWithdrawalRequestSms(roundedAmount, user.currency, network),
-    }).catch((e) => console.error('[withdraw] request sms failed:', e))
+      message: withdrawalRequestedMessage({
+        amount: roundedAmount,
+        currency: user.currency,
+        reference: reference,
+      }),
+      }).catch((e) => console.error('[withdraw] request sms failed:', e))
 
     void emailWithdrawalRequested({
       email: user.email,
@@ -454,7 +455,11 @@ export async function POST(request: Request) {
     void sendSms({
       phone: user.phone,
       country: user.country,
-      message: buildWithdrawalRequestSms(amount, user.currency, network),
+      message: withdrawalRequestedMessage({
+        amount,
+        currency: user.currency,
+        reference: bankRef,
+      }),
     }).catch((e) => console.error('[withdraw] request sms failed:', e))
 
     void emailWithdrawalRequested({
