@@ -12,7 +12,7 @@ Use PowerShell on Windows. No test framework is configured.
 - `npm run lint` — ESLint
 - `node scripts/create-team-flags-bucket.mjs` — one-shot, idempotent: creates the public `team-flags` Supabase Storage bucket used for custom-match crests
 - `node scripts/verify-flag-setup.mjs` — sanity-check the bucket exists and is public
-- Supabase migrations live in `supabase/migrations/*.sql`. There is no migration runner wired in — apply them by pasting into the Supabase SQL editor (`supabase/README.md` documents the project URL and first-run flow with `schema.sql`).
+- `npm run migrate` — applies pending `supabase/migrations/*.sql` in filename order, tracking what has run in a `schema_migrations` table. Needs `SUPABASE_ACCESS_TOKEN` (a personal access token from https://supabase.com/dashboard/account/tokens); the service-role key **cannot** do this, since it talks to PostgREST and PostgREST refuses DDL. `npm run migrate -- --dry` lists what would run. A migration is recorded only after its SQL succeeds, so a failure leaves it pending rather than silently skipped. Pasting into the SQL editor by hand still works (`supabase/README.md`), but then `schema_migrations` won't know — re-running is safe because every migration is written `if not exists`.
 
 ## Environment
 
