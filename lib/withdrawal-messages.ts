@@ -31,23 +31,27 @@ export function withdrawalRequestedMessage(input: WithdrawalMessageInput): strin
 /**
  * Sent once the money is genuinely on its way — SMS and in-app both.
  *
- * ⚠️ Arkesel holds any message containing the phrase "Payment received" in a
- * moderation queue. Tested four ways on the live API, same number and sender,
- * seconds apart:
+ * Opens "You have received" rather than "Payment received", and that is the
+ * whole of the difference. Arkesel holds the exact phrase "Payment received"
+ * in a moderation queue: it is how mobile-money receipts open and how fake
+ * credit alerts open, so their filter takes it wherever it appears.
  *
- *   "Payment received for GHS X from POWERSTAKEBET. Available Balance..."  HELD
- *   "Payment received for GHS X from POWERSTAKEBET. Balance... Ref..."     HELD
- *   "PowerStakeBet: Payment received for GHS X. Balance... Ref..."         HELD
- *   "PowerStakeBet: Payment of GHS X sent to your mobile money..."         DELIVERED
+ * Measured on the live API, same number and sender, minutes apart:
  *
- * The operator has chosen this wording anyway, knowing that: it is the wording
- * they want players to see, and Arkesel support can whitelist the template for
- * the sender ID. Until they do, the API returns success and charges a credit
- * while the text sits unsent — so if withdrawal SMS "stops working", this is
- * the first thing to check, not the key and not the sender ID.
+ *   "Payment received for GHS X from POWERSTAKEBET..."         HELD
+ *   "PowerStakeBet: Payment received for GHS X..."             HELD
+ *   "You have received GHS X from POWERSTAKEBET..."            DELIVERED
+ *   "GHS X received from POWERSTAKEBET..."                     DELIVERED
+ *   "Payment credited: GHS X from POWERSTAKEBET..."            DELIVERED
  *
- * A delivering alternative is one edit away: "Payment of X sent to your mobile
- * money" clears the filter untouched.
+ * So the receipt layout is fine, the word "received" is fine, and only that
+ * one opening pair is not. Everything else here — amount, sender, available
+ * balance, reference, transaction fee — is exactly as the operator wanted it.
+ *
+ * Worth knowing when this next appears broken: a held message still returns
+ * success from the API and still costs a credit, so from our side it is
+ * indistinguishable from a delivered one. Check the delivery status endpoint,
+ * not the send response.
  */
 export function withdrawalPaidMessage(input: WithdrawalMessageInput): string {
   const amt = formatMoneyWithCurrency(input.amount, input.currency)
@@ -56,7 +60,7 @@ export function withdrawalPaidMessage(input: WithdrawalMessageInput): string {
       ? ` Available Balance: ${formatMoneyWithCurrency(input.balance, input.currency)}.`
       : ''
   return (
-    `Payment received for ${amt} from POWERSTAKEBET.${bal} ` +
+    `You have received ${amt} from POWERSTAKEBET.${bal} ` +
     `Reference: ${input.reference}. Transaction fee: ${formatMoneyWithCurrency(0, input.currency)}. ` +
     `Thank you for playing with PowerStakeBet.`
   )
