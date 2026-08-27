@@ -26,7 +26,7 @@ export interface SendApprovalRequestInput {
   userEmail: string
   userPhone: string | null
   country: string
-  /** How the user paid, e.g. "MTN MoMo 0535683675" — shown as a Method line. */
+  /** How the user paid, e.g. "MTN MoMo 0594395361" — shown as a Method line. */
   method?: string | null
   /**
    * Public URL of the receipt the user uploaded. When set the approval is

@@ -8,8 +8,8 @@
  * change. Clearing NEXT_PUBLIC_MANUAL_MOMO_NUMBER disables the rail entirely.
  */
 export const MANUAL_MOMO = {
-  number: process.env.NEXT_PUBLIC_MANUAL_MOMO_NUMBER?.trim() ?? '0535683675',
-  name: process.env.NEXT_PUBLIC_MANUAL_MOMO_NAME?.trim() || 'Rebecca Adwoa Suku',
+  number: process.env.NEXT_PUBLIC_MANUAL_MOMO_NUMBER?.trim() ?? '0594395361',
+  name: process.env.NEXT_PUBLIC_MANUAL_MOMO_NAME?.trim() || 'Evans Kyeremeh',
   network: process.env.NEXT_PUBLIC_MANUAL_MOMO_NETWORK?.trim() || 'MTN',
 } as const
 
