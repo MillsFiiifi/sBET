@@ -394,18 +394,11 @@ function DepositForm() {
       })
       const data = await res.json()
       if (!res.ok) {
-        const message = data.error || 'Could not start the payment. Try again.'
-        // `detail` is only set when the gateway itself refused the charge — a
-        // limit, a flat wallet, a number it won't take. None of those get
-        // better by retrying the same rail, so point at the transfer tab,
-        // which has no gateway between the player and us. (Only when it's
-        // actually switched on: sending them to a tab that isn't there is
-        // worse than saying nothing.)
-        setError(
-          data.detail && momoAvailable
-            ? `${message} You can also pay by MoMo transfer — see the MoMo tab.`
-            : message,
-        )
+        // Just what went wrong. No pointing at the MoMo-transfer tab: a player
+        // sent there pays into an account an admin has to approve by hand, and
+        // we'd be routing them into that queue on a refusal they can often
+        // clear themselves by entering a smaller amount.
+        setError(data.error || 'Could not start the payment. Try again.')
         return
       }
       const reference = data.reference as string

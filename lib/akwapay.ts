@@ -277,8 +277,11 @@ export class AkwapayChargeRefused extends Error {
  * best-effort by design, and anything unmatched falls back to wording that is
  * true whatever went wrong.
  *
- * Says what happened, not what to do instead: only the deposit page knows
- * which other rails are switched on for this player, so it adds that part.
+ * Says what happened and, where the player can act on it themselves, what to
+ * try — a smaller amount, another network. It deliberately stops short of
+ * sending them to another deposit rail: the transfer tab needs an admin to
+ * approve each receipt by hand, so it isn't somewhere to push people on an
+ * error they can usually clear on their own.
  */
 export function playerFacingChargeError(raw: string): string {
   const m = raw.toLowerCase()
