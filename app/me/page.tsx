@@ -133,7 +133,10 @@ function MePageInner() {
       // Safety net: credit any deposits that settled while the customer was
       // away (redirect/poll/webhook missed) BEFORE reading the balance, so the
       // fresh totals include them. Idempotent and best-effort.
-      await fetch('/api/payments/flutterwave/reconcile', {
+      //
+      // Gateway-agnostic on purpose: it sweeps whichever provider took each
+      // deposit, so a pending row from the previous gateway still resolves.
+      await fetch('/api/payments/reconcile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
@@ -167,19 +170,23 @@ function MePageInner() {
     return () => window.removeEventListener('focus', onFocus)
   }, [loadProfile])
 
-  // Handle the redirect back from Moolre / Flutterwave. On success we re-fetch
-  // the profile so the new balance / verification step are reflected; on
-  // failure we surface the reason as a dismissible toast. Strip the query
-  // params after handling so a refresh doesn't replay them.
+  // Handle the redirect back from a gateway (Moolre / Flutterwave / AkwaPay).
+  // On success we re-fetch the profile so the new balance / verification step
+  // are reflected; on failure we surface the reason as a dismissible toast.
+  // Strip the query params after handling so a refresh doesn't replay them.
   useEffect(() => {
     const moolre = searchParams.get('moolre')
     const flw = searchParams.get('flw')
-    if (!moolre && !flw) return
+    // AkwaPay sends the customer back to ?akwapay=done&ref=..., which says only
+    // that they left the checkout page — never that the charge landed. The
+    // confirm poll below is what decides, same as Flutterwave.
+    const akwapay = searchParams.get('akwapay')
+    if (!moolre && !flw && !akwapay) return
     // Flutterwave can glue its own `?status=..&tx_ref=..` onto our redirect_url,
     // leaving `ref` as "PB-DEP-..?status=successful". Cut anything from a stray
     // `?` onward so the confirm poll below hits the real reference.
     const ref = (searchParams.get('ref') ?? '').split('?')[0].trim() || null
-    const reason = searchParams.get('reason') ?? flw ?? moolre
+    const reason = searchParams.get('reason') ?? flw ?? moolre ?? akwapay
     const success =
       moolre === 'success' || flw === 'success' || flw === 'already-credited'
     // Strip the params first so a refresh doesn't replay this handler.
@@ -197,7 +204,7 @@ function MePageInner() {
     // actually credits the wallet — before declaring failure. Terminal codes
     // like unknown-reference / failed stop the poll fast, so this only waits
     // when the charge is genuinely still pending.
-    if (flw && ref) {
+    if ((flw || akwapay) && ref) {
       setDepositToast({ kind: 'success', text: 'Confirming your payment…' })
       void (async () => {
         const final = await pollChargeStatus(ref)
@@ -315,12 +322,16 @@ function MePageInner() {
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 4000))
       try {
+        // Asks whichever provider actually opened this charge. Hardcoding one
+        // here is how a credited deposit ends up reading "not confirmed"
+        // forever: the wrong provider has never heard of the reference.
         const res = await fetch(
-          `/api/payments/flutterwave/status?reference=${encodeURIComponent(reference)}`,
+          `/api/payments/status?reference=${encodeURIComponent(reference)}`,
           { cache: 'no-store' },
         )
         const data = await res.json().catch(() => ({}))
         if (data.done) return 'success'
+        if (data.failed === true) return String(data.status ?? 'failed')
         if (typeof data.status === 'string' && terminalFail.has(data.status)) return data.status
       } catch {
         /* keep polling */
@@ -432,7 +443,11 @@ function MePageInner() {
     if (
       countryCfg.gateway === 'manual' ||
       countryCfg.gateway === 'paystack' ||
-      countryCfg.gateway === 'flutterwave'
+      countryCfg.gateway === 'flutterwave' ||
+      // AkwaPay too: the fallback below starts a *Flutterwave* charge, so any
+      // gateway missing from this list quietly gets billed through the wrong
+      // one.
+      countryCfg.gateway === 'akwapay'
     ) {
       window.location.href = `/users/first-deposit?userId=${profile.id}&purpose=verification`
       return

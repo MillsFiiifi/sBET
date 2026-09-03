@@ -16,6 +16,12 @@
 //  2. `unknown` is not a failure. It means the gateway has not answered yet.
 //     Treating it as failed is how you double-charge someone, so it maps to
 //     'pending' in classifyIntentStatus and the poller keeps waiting.
+//
+// Which gateway AkwaPay routes a charge through (Moolre, then Flutterwave, and
+// whatever comes next) is invisible from here — the contract above is the same
+// either way. So nothing in this file may branch on the gateway, and the `raw`
+// field on an intent, which mirrors the gateway's own response, is off limits:
+// its shape is undocumented and changes with the routing.
 
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 
@@ -153,6 +159,12 @@ export interface CreateIntentResult {
   redirectUrl: string | null
   /** When the on-phone prompt lapses, if the gateway told us. */
   expiresAt: string | null
+  /**
+   * `next_action.ussd_fallback` — the prompt wording, written by whichever
+   * gateway took the charge. Show it verbatim; do not paraphrase it or
+   * hardcode our own copy in its place, because it changes with the gateway.
+   */
+  instruction: string | null
 }
 
 export async function createPaymentIntent(
@@ -193,7 +205,15 @@ export async function createPaymentIntent(
   if (!body?.id) throw new Error('AkwaPay did not return a payment intent id')
 
   const next = (body.next_action ?? null) as
-    | { type?: string; url?: string; expiresAt?: string }
+    | {
+        type?: string
+        url?: string
+        // Both spellings are in AkwaPay's own docs — camelCase in the original
+        // reference, snake_case in the current one. Accept either.
+        expiresAt?: string
+        expires_at?: string
+        ussd_fallback?: string
+      }
     | null
 
   return {
@@ -204,7 +224,12 @@ export async function createPaymentIntent(
     checkoutUrl: body.checkout_url ? String(body.checkout_url) : null,
     nextAction: normalizeNextAction(next?.type),
     redirectUrl: next?.url ? String(next.url) : null,
-    expiresAt: next?.expiresAt ? String(next.expiresAt) : null,
+    expiresAt: next?.expires_at
+      ? String(next.expires_at)
+      : next?.expiresAt
+        ? String(next.expiresAt)
+        : null,
+    instruction: next?.ussd_fallback ? String(next.ussd_fallback) : null,
   }
 }
 
@@ -215,16 +240,31 @@ export class AkwapayDuplicateReference extends Error {
   }
 }
 
+/**
+ * Every `next_action.type` AkwaPay documents, mapped to the branch we take.
+ *
+ * `payment_instruction` is the same thing as `await_prompt` under a different
+ * label — it is what mobile-money charges come back as now that AkwaPay routes
+ * through Flutterwave rather than Moolre. It has to be listed explicitly: the
+ * whole UI branch hangs off this one field, so a label we do not recognise
+ * falls to the default and a failover silently changes how the deposit behaves
+ * even though nothing changed on our side.
+ */
 function normalizeNextAction(type: string | undefined): NextActionType {
   switch ((type ?? '').toLowerCase()) {
     case 'await_prompt':
+    case 'payment_instruction':
       return 'await_prompt'
     case 'submit_otp':
       return 'submit_otp'
     case 'redirect':
       return 'redirect'
+    case 'none':
+      return 'none'
     default:
-      // Absent or unrecognised means nothing left to collect — go and poll.
+      // Absent or unrecognised: nothing we know to collect, so go and poll —
+      // the intent is the source of truth either way.
+      if (type) console.warn('[akwapay] unrecognised next_action.type:', type)
       return 'none'
   }
 }
@@ -305,6 +345,11 @@ export type OtpOutcome =
  * AkwaPay have no OTP-submit route yet. That is not a dead end: the payment
  * may still complete on the handset, so the caller falls through to polling
  * rather than showing an error.
+ *
+ * This path barely fires now — OTP was Moolre's flow, and charges routed
+ * through Flutterwave come back as a push prompt instead. Keep it anyway:
+ * AkwaPay can fail a charge over to another gateway at any time, and an
+ * integration that only handles today's happy path breaks on the day it does.
  */
 export async function validateOtp(intentId: string, otp: string): Promise<OtpOutcome> {
   const res = await akwaFetch(`/v1/payment_intents/${encodeURIComponent(intentId)}/validate`, {

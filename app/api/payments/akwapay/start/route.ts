@@ -107,7 +107,9 @@ export async function POST(request: Request) {
       amount,
       network,
       phone,
-      returnUrl: `${origin}/me?akwapay=done`,
+      // Carries the reference back so /me can finish confirming a charge that
+      // is still settling when the customer lands — mobile money often does.
+      returnUrl: `${origin}/me?akwapay=done&ref=${encodeURIComponent(reference)}`,
       // Stored on AkwaPay's side for their dashboard only — we deliberately do
       // not depend on it coming back.
       metadata: { userId, purpose },
@@ -136,9 +138,17 @@ export async function POST(request: Request) {
         // Same key the Flutterwave route uses, so the deposit page's existing
         // branch works unchanged.
         otpRequired: intent.nextAction === 'submit_otp',
-        redirect: intent.nextAction === 'redirect' ? intent.redirectUrl ?? undefined : undefined,
+        // A redirect with no url of its own still has somewhere to go: the
+        // hosted checkout page handles every next_action type itself.
+        redirect:
+          intent.nextAction === 'redirect'
+            ? intent.redirectUrl ?? intent.checkoutUrl ?? undefined
+            : undefined,
         checkoutUrl: intent.checkoutUrl ?? undefined,
         expiresAt: intent.expiresAt ?? undefined,
+        // The gateway's own wording for the prompt, passed through untouched.
+        // Whoever handled the charge writes this, so it is display text to us.
+        instruction: intent.instruction ?? undefined,
       },
       { status: 201 },
     )
