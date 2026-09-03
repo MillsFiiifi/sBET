@@ -200,7 +200,14 @@ export async function createPaymentIntent(
     if (code === 'duplicate_reference') {
       throw new AkwapayDuplicateReference(input.reference)
     }
-    throw new Error(errorMessage(body, `AkwaPay returned ${res.status}`))
+    // An answered refusal: AkwaPay reached the gateway and it said no, so no
+    // charge exists. Distinct from the throw below (and from akwaFetch giving
+    // up), where we never learned whether a charge was created.
+    throw new AkwapayChargeRefused(
+      errorMessage(body, `AkwaPay returned ${res.status}`),
+      code,
+      res.status,
+    )
   }
   if (!body?.id) throw new Error('AkwaPay did not return a payment intent id')
 
@@ -238,6 +245,59 @@ export class AkwapayDuplicateReference extends Error {
     super(`AkwaPay already has an intent for reference ${reference}`)
     this.name = 'AkwapayDuplicateReference'
   }
+}
+
+/**
+ * The gateway answered and declined the charge. Nothing was created, so the
+ * pending row can be closed and the player can safely try again.
+ *
+ * `message` is the gateway's own text, e.g. "Flutterwave: Transaction limit has
+ * been exceeded. Please contact support". Keep it for logs and the ledger —
+ * it names the gateway that took the charge, which is exactly what support
+ * needs — but don't put it in front of a player: they never chose Flutterwave,
+ * and "contact support" means AkwaPay's support, not ours. Run it through
+ * playerFacingChargeError first.
+ */
+export class AkwapayChargeRefused extends Error {
+  readonly code: string | null
+  readonly httpStatus: number
+  constructor(message: string, code: string | null, httpStatus: number) {
+    super(message)
+    this.name = 'AkwapayChargeRefused'
+    this.code = code
+    this.httpStatus = httpStatus
+  }
+}
+
+/**
+ * Turn a gateway refusal into a sentence a player can act on.
+ *
+ * Matching is on the message text because the gateway writes it and AkwaPay
+ * passes it through — there is no stable error code underneath these. So it is
+ * best-effort by design, and anything unmatched falls back to wording that is
+ * true whatever went wrong.
+ *
+ * Says what happened, not what to do instead: only the deposit page knows
+ * which other rails are switched on for this player, so it adds that part.
+ */
+export function playerFacingChargeError(raw: string): string {
+  const m = raw.toLowerCase()
+
+  // The limit can be the player's own wallet cap or the merchant account's,
+  // and nothing here can tell which — so the wording has to fit both.
+  if (m.includes('limit')) {
+    return 'That amount is over the limit for a single mobile-money payment right now. Try a smaller amount.'
+  }
+  if (m.includes('insufficient') || m.includes('balance')) {
+    return 'There isn’t enough money in that mobile-money wallet for this payment.'
+  }
+  if (m.includes('msisdn') || m.includes('phone') || m.includes('number')) {
+    return 'That mobile-money number was rejected. Check it and try again.'
+  }
+  if (m.includes('network') || m.includes('operator')) {
+    return 'That network can’t take the payment right now. Try another network.'
+  }
+  return 'The payment couldn’t be started. Try again in a moment.'
 }
 
 /**

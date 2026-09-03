@@ -78,7 +78,12 @@ export async function POST(request: Request) {
   // guaranteed to run. Delivery is at-least-once and this is idempotent, so a
   // timeout just means AkwaPay retries into a no-op.
   try {
-    const result = await verifyAndCreditAkwapay(reference)
+    // The intent id is passed as a hint, not as truth: it rescues a payment
+    // whose /start call timed out before we could stash the id. What actually
+    // decides the credit is still GET /v1/payment_intents/{id}.
+    const result = await verifyAndCreditAkwapay(reference, {
+      intentIdHint: event.data?.intent_id,
+    })
     if (!result.ok) {
       console.error('[akwapay/webhook] credit did not complete', { reference, status: result.status })
     } else {

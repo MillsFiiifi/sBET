@@ -24,8 +24,9 @@ export interface AkwapayCreditResult {
 
 export async function verifyAndCreditAkwapay(
   reference: string,
-  opts: { credit: boolean } = { credit: true },
+  opts: { credit?: boolean; intentIdHint?: string } = {},
 ): Promise<AkwapayCreditResult> {
+  const credit = opts.credit !== false
   if (!reference) return { status: 'missing-reference', ok: false, reference }
 
   const pending = await findPaymentByReference(reference)
@@ -34,9 +35,27 @@ export async function verifyAndCreditAkwapay(
     return { status: 'already-credited', ok: true, reference }
   }
 
-  // The intent id was stashed on the row at /start. Without it there is
-  // nothing to poll — the intent was never created, so the row is stale.
-  const intentId = (pending.metadata?.akwapayIntentId as string | undefined)?.trim()
+  // The intent id is normally stashed on the row at /start.
+  //
+  // `intentIdHint` covers the case where it isn't: /start timed out after
+  // AkwaPay had already created the intent, so we never learned the id — and
+  // then the customer approved the prompt anyway. The webhook carries the id,
+  // and it is the only way back to that payment. Without this the money is
+  // taken and never credited, which is the worst outcome in the system.
+  //
+  // The hint is only ever trusted to identify an intent we then go and read
+  // from the API; nothing is credited on the strength of the webhook body.
+  let intentId = (pending.metadata?.akwapayIntentId as string | undefined)?.trim()
+  if (!intentId && opts.intentIdHint?.trim()) {
+    intentId = opts.intentIdHint.trim()
+    console.warn('[akwapay-credit] row had no intent id — adopting the one from the event', {
+      reference,
+      intentId,
+    })
+    await updatePayment(pending.id, { metadata: { akwapayIntentId: intentId } }).catch((e) =>
+      console.error('[akwapay-credit] could not stash the adopted intent id:', e),
+    )
+  }
   if (!intentId) {
     return { status: 'no-intent', ok: false, reference }
   }
@@ -69,7 +88,7 @@ export async function verifyAndCreditAkwapay(
     return { status: 'amount-mismatch', ok: false, reference }
   }
 
-  if (opts.credit && !pending.userId) {
+  if (credit && !pending.userId) {
     return { status: 'no-user', ok: false, reference }
   }
 
@@ -79,7 +98,7 @@ export async function verifyAndCreditAkwapay(
     return { status: 'already-credited', ok: true, reference }
   }
 
-  if (opts.credit && pending.userId) {
+  if (credit && pending.userId) {
     try {
       await applyDepositCredit(pending.userId, pending.amount)
     } catch (e) {

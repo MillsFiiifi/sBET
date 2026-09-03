@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { findUserById } from '@/lib/users-store'
 import { recordPayment, findPaymentByReference, updatePayment } from '@/lib/payments-store'
 import {
+  AkwapayChargeRefused,
   AkwapayDuplicateReference,
   createPaymentIntent,
   isAkwapayConfigured,
+  playerFacingChargeError,
   toAkwapayNetwork,
 } from '@/lib/akwapay'
 import { getMinFirstDeposit } from '@/lib/countries'
@@ -160,9 +162,43 @@ export async function POST(request: Request) {
       console.warn('[akwapay/start] duplicate reference — falling through to polling', reference)
       return NextResponse.json({ reference, status: 'requires_action' }, { status: 201 })
     }
+
+    // The gateway answered and said no — a limit, a bad number, an empty
+    // wallet. No charge exists, so close the pending row now: left open it
+    // sits in the player's history as a deposit that never arrives, and the
+    // reconcile sweep re-checks it for a week for nothing.
+    if (e instanceof AkwapayChargeRefused) {
+      console.error('[akwapay/start] gateway refused the charge:', {
+        reference,
+        code: e.code,
+        gatewayMessage: e.message,
+      })
+      const id = pendingId ?? (await findPaymentByReference(reference).catch(() => null))?.id ?? null
+      if (id) {
+        await updatePayment(id, {
+          status: 'failed',
+          // The gateway's own words, kept for support — it names which gateway
+          // took the charge, which is the first thing AkwaPay will ask for.
+          metadata: { failureReason: e.message, failureCode: e.code ?? undefined },
+        }).catch((err) => console.error('[akwapay/start] could not close the pending row:', err))
+      }
+      return NextResponse.json(
+        { error: playerFacingChargeError(e.message), detail: e.message, reference },
+        { status: 400 },
+      )
+    }
+
+    // We never got an answer — a timeout or a network fault. A charge may well
+    // have been created on the far side, so the row stays PENDING: the webhook
+    // (which carries the intent id we never got to stash) or the next sweep can
+    // still resolve it. Failing it here is how a payment that lands goes
+    // uncredited.
     console.error('[akwapay/start] intent creation failed:', e)
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Mobile-money charge failed.' },
+      {
+        error: 'Could not reach the payment service. If your phone shows a prompt, approve it — otherwise try again.',
+        reference,
+      },
       { status: 502 },
     )
   }
