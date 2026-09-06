@@ -8,23 +8,21 @@
  * change. Clearing NEXT_PUBLIC_MANUAL_MOMO_NUMBER disables the rail entirely.
  */
 export const MANUAL_MOMO = {
-  number: process.env.NEXT_PUBLIC_MANUAL_MOMO_NUMBER?.trim() ?? '0594395361',
-  name: process.env.NEXT_PUBLIC_MANUAL_MOMO_NAME?.trim() || 'Evans Kyeremeh',
+  number: process.env.NEXT_PUBLIC_MANUAL_MOMO_NUMBER?.trim() ?? '0558359103',
+  name: process.env.NEXT_PUBLIC_MANUAL_MOMO_NAME?.trim() || 'Roger Tabimi Ukpan',
   network: process.env.NEXT_PUBLIC_MANUAL_MOMO_NETWORK?.trim() || 'MTN',
 } as const
 
 /**
- * Master switch for the manual MoMo rail. Off: players deposit through the
- * Instant tab (AkwaPay charges the phone directly) or USDT, and nothing new
- * lands in the pay-then-upload queue an admin has to approve by hand.
+ * Master switch for the manual MoMo rail. On: players pay the account above
+ * from their own MoMo app, upload the receipt, and an admin approves it on
+ * /admin/deposits.
  *
- * Set back to `true` to bring it straight back — the account details above,
- * the deposit tab, the upload route and the admin approval screen are all
- * still here and still wired up. Deposits already submitted are unaffected:
- * this only stops new ones, so anything pending still shows on /admin/deposits
- * and can still be approved.
+ * With the Instant tab switched off (`INSTANT_GATEWAY` on the deposit page)
+ * this is the only cedi rail there is, so turning it off again means Ghanaian
+ * players have no way to deposit but USDT. Move the two together.
  */
-const MANUAL_MOMO_ENABLED = false
+const MANUAL_MOMO_ENABLED = true
 
 /**
  * Countries the manual MoMo rail is offered to. The account above is a Ghana
